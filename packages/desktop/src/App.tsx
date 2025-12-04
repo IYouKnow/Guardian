@@ -2,6 +2,7 @@ import { useState } from "react";
 import "./App.css";
 import { PasswordEntry } from "./types";
 import Login from "./components/Login";
+import Register from "./components/Register";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import PasswordGrid from "./components/PasswordGrid";
@@ -10,6 +11,8 @@ import AddPasswordModal from "./components/AddPasswordModal";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [passwords, setPasswords] = useState<PasswordEntry[]>([
     {
       id: "1",
@@ -126,11 +129,36 @@ function App() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setSelectedPassword(null);
+    setVaultPath(null);
   };
+
+  const handleRegister = (path: string) => {
+    setVaultPath(path);
+    setIsLoggedIn(true);
+    setShowRegister(false);
+  };
+
+  // Register Page
+  if (showRegister) {
+    return (
+      <Register
+        onRegister={handleRegister}
+        onBackToLogin={() => setShowRegister(false)}
+      />
+    );
+  }
 
   // Login Page
   if (!isLoggedIn) {
-    return <Login onLogin={() => setIsLoggedIn(true)} />;
+    return (
+      <Login
+        onLogin={(path) => {
+          setVaultPath(path);
+          setIsLoggedIn(true);
+        }}
+        onRegister={() => setShowRegister(true)}
+      />
+    );
   }
 
   // Main App
