@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Guardian",
+  "version": "0.1.0",
+  "description": "Your forever password vault",
+  "action": { "default_popup": "index.html" },
+  "permissions": []
+}
