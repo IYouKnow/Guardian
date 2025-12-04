@@ -1,0 +1,8 @@
+{
+  "name": "@guardian/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./crypto/index.ts",
+  "types": "./crypto/index.ts"
+}
+
