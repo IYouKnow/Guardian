@@ -1,0 +1,98 @@
+import { PasswordEntry } from "../types";
+
+interface SidebarProps {
+  categories: string[];
+  activeCategory: string;
+  onCategoryChange: (category: string) => void;
+  onAddPassword: () => void;
+  onLogout: () => void;
+}
+
+export default function Sidebar({
+  categories,
+  activeCategory,
+  onCategoryChange,
+  onAddPassword,
+  onLogout,
+}: SidebarProps) {
+  return (
+    <aside className="w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col">
+      <div className="p-8 border-b border-[#1a1a1a]">
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-1">Guardian</h1>
+            <p className="text-sm text-gray-400">Password Manager</p>
+          </div>
+          <button
+            onClick={onLogout}
+            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+            title="Lock vault"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <nav className="flex-1 p-4 overflow-y-auto">
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3">
+            Categories
+          </h3>
+          <ul className="space-y-1">
+            {categories.map((category) => (
+              <li key={category}>
+                <button
+                  onClick={() => onCategoryChange(category)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
+                    activeCategory === category
+                      ? "bg-[#1a1a1a] text-yellow-400"
+                      : "text-gray-400 hover:text-white hover:bg-[#111111]"
+                  }`}
+                >
+                  {category === "all" ? "All Passwords" : category}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="border-t border-[#1a1a1a] pt-4">
+          <ul className="space-y-1">
+            <li>
+              <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-[#111111] transition-all flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                Favorites
+              </button>
+            </li>
+            <li>
+              <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-[#111111] transition-all flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Settings
+              </button>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <div className="p-4 border-t border-[#1a1a1a]">
+        <button
+          onClick={onAddPassword}
+          className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-yellow-400/20"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Add Password
+        </button>
+      </div>
+    </aside>
+  );
+}
+
