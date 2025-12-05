@@ -268,36 +268,33 @@ async function deriveKeyFallback(password: string, salt: Uint8Array): Promise<Ui
 }
 
 /**
- * Derives a key from a password using Argon2id
- * 
- * Fixed configuration:
- * - Memory: 194 MiB (198656 KiB)
- * - Iterations: 3
- * - Parallelism: 4
- * - Hash size: 32 bytes
+ * Internal helper function to derive a key with specific Argon2 parameters
+ * Used for backward compatibility when trying different parameter sets
  * 
  * @param password - The master password
  * @param salt - Random salt of 16 bytes
+ * @param memoryCost - Memory cost in KiB (must match encryption parameters)
  * @returns Derived key of 32 bytes
  */
-export async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
+async function deriveKeyWithParams(
+  password: string,
+  salt: Uint8Array,
+  memoryCost: number
+): Promise<Uint8Array> {
   if (salt.length !== 16) {
     throw new Error('Salt must be exactly 16 bytes');
   }
   
   // Tries to use Argon2 WASM
   try {
-      console.log('[Argon2] Deriving key using Argon2id...');
       const argon2 = await loadArgon2Module();
       const passwordBytes = new TextEncoder().encode(password);
       
-      // Fixed parameters as specified
+      // Fixed parameters - MUST match encryption parameters
       // NOTE: WebAssembly does not support real threads, so parallelism must be 1
-      // With parallelism = 1, we can use much more memory (memoryCost * 1 * 1024)
-      let memoryCost = 64 * 1024; // 64 MiB → works in ALL browsers
-      const timeCost = 4; // 4 iterations (slower = more secure)
-      const parallelism = 1; // WASM does not support real threads
-      const hashLength = 32; // 32 bytes output
+      const timeCost = 4; // 4 iterations - FIXED
+      const parallelism = 1; // WASM does not support real threads - FIXED
+      const hashLength = 32; // 32 bytes output - FIXED
       
       // Gets exported functions from WASM
       // Tries different common function names
@@ -337,78 +334,54 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Uin
         throw new Error(`argon2id function not found. Available exports: ${exports.join(', ')}`);
       }
       
-      // Checks the maximum allowed memory
-      const memoryMaxPages = (memory as any).maximum || null;
-      const maxMemoryBytes = memoryMaxPages !== null ? memoryMaxPages * 65536 : null;
-      
-      // Checks if memory is sufficient for memoryCost
+      // Ensure sufficient memory for fixed parameters
       // Argon2 needs approximately memoryCost * parallelism * 1024 bytes
-      // But also needs additional memory for buffers and overhead
+      // Plus additional memory for buffers and overhead
       const requiredMemory = memoryCost * parallelism * 1024;
       const overheadMemory = 10 * 1024 * 1024; // 10 MiB overhead
       const totalRequiredMemory = requiredMemory + overheadMemory;
       const availableMemory = memory.buffer.byteLength;
       
-      // If memory is not sufficient, tries to expand to maximum possible
+      // Try to expand memory if needed, but DO NOT adjust memoryCost
+      // memoryCost MUST remain fixed for key derivation consistency
       if (totalRequiredMemory > availableMemory) {
-        const currentPages = memory.buffer.byteLength / 65536;
-        let maxPages = maxMemoryBytes !== null ? Math.floor(maxMemoryBytes / 65536) : null;
-        let detectedMaxBytes: number | null = null;
+        // Calculate current pages as integer (floor to get complete pages)
+        const currentPages = Math.floor(memory.buffer.byteLength / 65536);
+        const memoryMaxPages = (memory as any).maximum || null;
+        const maxPages = memoryMaxPages !== null ? Math.floor(memoryMaxPages) : null;
         
-        // If we don't know the maximum, tries to discover by expanding incrementally
-        if (maxPages === null) {
-          let testPages = 100;
-          let lastSuccessfulPages = currentPages;
-          
-          while (testPages > 0) {
-            try {
-              memory.grow(testPages);
-              lastSuccessfulPages += testPages;
-              testPages = Math.min(testPages * 2, 10000);
-            } catch {
-              if (testPages > 1) {
-                testPages = Math.floor(testPages / 2);
-              } else {
-                break;
-              }
-            }
-          }
-          
-          maxPages = lastSuccessfulPages;
-          detectedMaxBytes = maxPages * 65536;
-        } else {
-          detectedMaxBytes = maxMemoryBytes;
-        }
+        // Calculate how many pages we need (ceil to ensure we have enough)
+        const requiredPages = Math.ceil(totalRequiredMemory / 65536);
         
-        // Calculates how many pages we can add
-        const additionalPages = maxPages !== null ? Math.max(0, maxPages - currentPages) : 0;
+        // Calculate additional pages needed, ensuring it's an integer
+        // Use ceil to ensure we don't under-allocate due to rounding
+        const pagesNeeded = Math.ceil(requiredPages - currentPages);
+        const additionalPages = maxPages !== null 
+          ? Math.max(0, Math.min(pagesNeeded, maxPages - currentPages))
+          : Math.max(0, pagesNeeded);
         
-        if (additionalPages > 0) {
+        // Ensure additionalPages is an integer (should already be, but be explicit)
+        const additionalPagesInt = Math.ceil(additionalPages);
+        
+        if (additionalPagesInt > 0) {
           try {
-            memory.grow(additionalPages);
-            
-            // Recalculates after expansion
-            const newMaxBytes = maxPages! * 65536;
-            const newTotalRequiredMemory = memoryCost * parallelism * 1024 + overheadMemory;
-            
-            if (newTotalRequiredMemory > newMaxBytes) {
-              const maxUsableMemory = newMaxBytes - overheadMemory;
-              const maxMemoryCost = Math.max(1, Math.floor(maxUsableMemory / (parallelism * 1024)));
-              memoryCost = maxMemoryCost;
-            }
+            memory.grow(additionalPagesInt);
           } catch (e) {
-            // When expansion fails, adjusts memoryCost to fit in current memory
-            const currentMaxBytes = memory.buffer.byteLength;
-            const maxUsableMemory = currentMaxBytes - overheadMemory;
-            const maxMemoryCost = Math.max(1, Math.floor(maxUsableMemory / (parallelism * 1024)));
-            memoryCost = maxMemoryCost;
+            // If we can't expand memory, throw an error
+            // We cannot reduce memoryCost as it would break key derivation consistency
+            throw new Error(
+              `Insufficient memory for Argon2. Required: ${Math.ceil(totalRequiredMemory / 1024 / 1024)} MiB, ` +
+              `Available: ${Math.floor(availableMemory / 1024 / 1024)} MiB. ` +
+              `Cannot adjust parameters as they must remain fixed for key derivation consistency.`
+            );
           }
-        } else {
-          // Cannot expand more (already at maximum), adjusts memoryCost
-          const effectiveMaxBytes = detectedMaxBytes ?? maxMemoryBytes ?? memory.buffer.byteLength;
-          const maxUsableMemory = effectiveMaxBytes - overheadMemory;
-          const maxMemoryCost = Math.max(1, Math.floor(maxUsableMemory / (parallelism * 1024)));
-          memoryCost = maxMemoryCost;
+        } else if (totalRequiredMemory > availableMemory) {
+          // Cannot expand and don't have enough memory
+          throw new Error(
+            `Insufficient memory for Argon2. Required: ${Math.ceil(totalRequiredMemory / 1024 / 1024)} MiB, ` +
+            `Available: ${Math.floor(availableMemory / 1024 / 1024)} MiB. ` +
+            `Cannot adjust parameters as they must remain fixed for key derivation consistency.`
+          );
         }
       }
       
@@ -502,18 +475,61 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Uin
       // Marks Argon2 as available
       argon2Available = true;
       
-      console.log('[Argon2] Key derived successfully using Argon2id');
       return hash;
     } catch (error) {
-      // Marks Argon2 as unavailable
-      argon2Available = false;
-      
-      // Fallback to PBKDF2 if WASM fails
-      console.log('[Argon2] Using PBKDF2 as fallback...');
-      const fallbackKey = await deriveKeyFallback(password, salt);
-      console.log('[Argon2] Key derived successfully using PBKDF2');
-      return fallbackKey;
+      // Re-throw error - let caller handle fallback
+      throw error;
     }
+}
+
+/**
+ * Derives a key from a password using Argon2id
+ * 
+ * Fixed configuration:
+ * - Memory: 32 MiB (current standard)
+ * - Iterations: 4
+ * - Parallelism: 1
+ * - Hash size: 32 bytes
+ * 
+ * @param password - The master password
+ * @param salt - Random salt of 16 bytes
+ * @returns Derived key of 32 bytes
+ */
+export async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  // Use current standard parameters (32 MiB)
+  const memoryCost = 32 * 1024; // 32 MiB - current standard
+  
+  try {
+    return await deriveKeyWithParams(password, salt, memoryCost);
+  } catch (error) {
+    // Marks Argon2 as unavailable
+    argon2Available = false;
+    
+    // Fallback to PBKDF2 if WASM fails
+    const fallbackKey = await deriveKeyFallback(password, salt);
+    return fallbackKey;
+  }
+}
+
+/**
+ * Derives a key using Argon2id with legacy 64 MiB parameters
+ * Used for backward compatibility with vaults encrypted with older parameters
+ * 
+ * @param password - The master password
+ * @param salt - Random salt of 16 bytes
+ * @returns Derived key of 32 bytes
+ */
+export async function deriveKeyLegacy(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  // Use legacy parameters (64 MiB) for backward compatibility
+  const memoryCost = 64 * 1024; // 64 MiB - legacy parameter
+  
+  try {
+    return await deriveKeyWithParams(password, salt, memoryCost);
+  } catch (error) {
+    // If legacy Argon2 fails, don't fallback to PBKDF2 here
+    // Let the caller handle the error (they may want to try PBKDF2 separately)
+    throw error;
+  }
 }
 
 /**

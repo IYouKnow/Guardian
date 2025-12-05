@@ -16,8 +16,41 @@
  * }
  */
 
-import { deriveKey, generateSalt } from './argon2';
+import { deriveKey, deriveKeyLegacy, generateSalt } from './argon2';
 import { encrypt, decrypt, generateNonce } from './chacha20';
+
+// Import the fallback function for compatibility
+async function deriveKeyPBKDF2(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  const passwordBytes = new TextEncoder().encode(password);
+  
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    passwordBytes,
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  
+  const iterations = 100000;
+  const saltBuffer = new Uint8Array(salt).buffer;
+  
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBuffer,
+      iterations: iterations,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256 // 32 bytes = 256 bits
+  );
+  
+  const buffer = derivedBits instanceof ArrayBuffer 
+    ? derivedBits 
+    : new Uint8Array(derivedBits).buffer;
+  
+  return new Uint8Array(buffer);
+}
 
 // Format constants
 const MAGIC_HEADER = new TextEncoder().encode('GUARDIAN'); // 8 bytes
@@ -116,8 +149,6 @@ export async function openVault(
   password: string,
   vaultData: Uint8Array
 ): Promise<VaultData> {
-  let offset = 0;
-  
   // Checks minimum size
   const minSize = MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + TAG_LENGTH;
   if (vaultData.length < minSize) {
@@ -125,52 +156,96 @@ export async function openVault(
   }
   
   // Bytes 0-7: Verifies the magic header "GUARDIAN"
-  const magic = vaultData.slice(offset, offset + MAGIC_HEADER.length);
-  if (!magic.every((byte, i) => byte === MAGIC_HEADER[i])) {
+  const magic = new TextDecoder().decode(vaultData.slice(0, MAGIC_HEADER.length));
+  if (magic !== 'GUARDIAN') {
     throw new Error('Invalid vault format: incorrect magic header');
   }
-  offset += MAGIC_HEADER.length;
   
   // Byte 8: Reads the version
-  const version = vaultData[offset];
-  offset += 1;
-  
+  const version = vaultData[8];
   if (version !== VERSION) {
     throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}`);
   }
   
   // Bytes 9-24: Reads the salt (16 bytes)
-  const salt = vaultData.slice(offset, offset + SALT_LENGTH);
-  offset += SALT_LENGTH;
+  const salt = new Uint8Array(vaultData.slice(9, 9 + SALT_LENGTH));
   
   // Bytes 25-36: Reads the nonce (12 bytes)
-  const nonce = vaultData.slice(offset, offset + NONCE_LENGTH);
-  offset += NONCE_LENGTH;
+  const nonce = new Uint8Array(vaultData.slice(25, 25 + NONCE_LENGTH));
   
   // Bytes 37+: Reads the ciphertext + tag
-  const ciphertextWithTag = vaultData.slice(offset);
+  const ciphertextWithTag = vaultData.slice(37);
   
-  // Derives the key using Argon2id
-  const key = await deriveKey(password, salt);
+  // Helper function to attempt decryption with a given key derivation function
+  const tryDecrypt = async (deriveKeyFn: (password: string, salt: Uint8Array) => Promise<Uint8Array>): Promise<VaultData> => {
+    const key = await deriveKeyFn(password, salt);
+    const plaintext = await decrypt(key, nonce, ciphertextWithTag);
+    const decryptedString = new TextDecoder().decode(plaintext);
+    let data: VaultData;
+    try {
+      data = JSON.parse(decryptedString) as VaultData;
+    } catch (parseError) {
+      throw new Error('Decrypted data is not valid JSON');
+    }
+    
+    // Handle legacy vault format where entries was incorrectly nested
+    if (data.entries && typeof data.entries === 'object' && !Array.isArray(data.entries)) {
+      const nestedData = data.entries as any;
+      if (nestedData.entries && Array.isArray(nestedData.entries)) {
+        data = {
+          entries: nestedData.entries,
+          createdAt: nestedData.createdAt || data.createdAt || new Date().toISOString(),
+          lastModified: nestedData.lastModified || data.lastModified || new Date().toISOString()
+        };
+      }
+    }
+    
+    if (!data.entries || !Array.isArray(data.entries) || !data.createdAt || !data.lastModified) {
+      throw new Error('Invalid vault format: incorrect data structure');
+    }
+    
+    return data;
+  };
   
-  // Decrypts data using ChaCha20-Poly1305
-  // The decrypt function expects ciphertext + tag (16 bytes) concatenated
-  const plaintext = await decrypt(key, nonce, ciphertextWithTag);
+  // Helper function to check if an error is an authentication/decryption error
+  const isAuthOrDecryptError = (error: unknown): boolean => {
+    if (!(error instanceof Error)) return false;
+    const message = error.message;
+    return (
+      message.includes('Authentication failed') ||
+      message.includes('Decrypted data is not valid JSON') ||
+      message.includes('Invalid vault format: incorrect data structure')
+    );
+  };
   
-  // Parses JSON
-  const jsonString = new TextDecoder().decode(plaintext);
-  const data = JSON.parse(jsonString) as VaultData;
-  
-  // Validates data structure
-  if (!data.entries || !Array.isArray(data.entries)) {
-    throw new Error('Invalid vault format: incorrect data structure');
+  // Try 1: Argon2id with current parameters (32 MiB)
+  try {
+    return await tryDecrypt(deriveKey);
+  } catch (error) {
+    // If it's not an authentication/decryption error, re-throw immediately
+    if (!isAuthOrDecryptError(error)) {
+      throw error;
+    }
+    // Otherwise, continue to try legacy parameters
   }
   
-  if (!data.createdAt || !data.lastModified) {
-    throw new Error('Invalid vault format: missing date fields');
+  // Try 2: Argon2id with legacy parameters (64 MiB) for backward compatibility
+  try {
+    return await tryDecrypt(deriveKeyLegacy);
+  } catch (error) {
+    // If it's not an authentication/decryption error, re-throw immediately
+    if (!isAuthOrDecryptError(error)) {
+      throw error;
+    }
+    // Otherwise, continue to PBKDF2 fallback
   }
   
-  return data;
+  // Try 3: PBKDF2 fallback (for very old vaults that were encrypted with PBKDF2)
+  try {
+    return await tryDecrypt(deriveKeyPBKDF2);
+  } catch (error) {
+    throw new Error('Authentication failed: Invalid master password or corrupted vault file.');
+  }
 }
 
 /**
