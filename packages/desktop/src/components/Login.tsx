@@ -57,9 +57,14 @@ export default function Login({ onLogin, onRegister }: LoginProps) {
     try {
       // Read vault file as binary
       const vaultData = await readFile(vaultPath);
+      
+      // Ensure we have a Uint8Array (Tauri readFile should return this, but ensure compatibility)
+      const vaultBytes = vaultData instanceof Uint8Array 
+        ? vaultData 
+        : new Uint8Array(vaultData);
 
       // Try to decrypt vault
-      await loadVault(masterPassword, new Uint8Array(vaultData));
+      await loadVault(masterPassword, vaultBytes);
 
       // Success - vault decrypted correctly
       onLogin(vaultPath);

@@ -63,18 +63,15 @@ export default function Register({ onRegister, onBackToLogin }: RegisterProps) {
     setIsCreating(true);
 
     try {
-      console.log('[Register] Creating vault...');
-      
       // Create initial vault data
       const vaultData = createEmptyVault();
 
       // Encrypt vault with master password
-      const encryptedVault = await createVault(masterPassword, vaultData);
+      // createVault expects entries array, not the full VaultData object
+      const encryptedVault = await createVault(masterPassword, vaultData.entries);
 
       // Write encrypted vault file as binary
-      await writeFile(vaultPath, encryptedVault);
-
-      console.log('[Register] Vault created successfully');
+      await writeFile(vaultPath, encryptedVault, { createNew: true });
       
       // Callback with vault path
       onRegister(vaultPath);
