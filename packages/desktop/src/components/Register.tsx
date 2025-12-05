@@ -63,6 +63,8 @@ export default function Register({ onRegister, onBackToLogin }: RegisterProps) {
     setIsCreating(true);
 
     try {
+      console.log('[Register] Creating vault...');
+      
       // Create initial vault data
       const vaultData = createEmptyVault();
 
@@ -72,6 +74,8 @@ export default function Register({ onRegister, onBackToLogin }: RegisterProps) {
       // Write encrypted vault file as binary
       await writeFile(vaultPath, encryptedVault);
 
+      console.log('[Register] Vault created successfully');
+      
       // Callback with vault path
       onRegister(vaultPath);
     } catch (err) {
