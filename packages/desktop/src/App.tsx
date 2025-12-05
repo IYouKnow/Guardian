@@ -96,9 +96,7 @@ function App() {
     },
   ]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPassword, setSelectedPassword] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({});
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
@@ -113,22 +111,27 @@ function App() {
 
   const categories = ["all", ...Array.from(new Set(passwords.map((p) => p.category).filter((c): c is string => Boolean(c))))];
 
-  const togglePasswordVisibility = (id: string) => {
-    setShowPassword((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // You could add a toast notification here if needed
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
   };
 
-  const toggleFavorite = (id: string) => {
-    setPasswords((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, favorite: !p.favorite } : p))
-    );
+  const handleCopyUsername = (username: string) => {
+    copyToClipboard(username);
+  };
+
+  const handleCopyPassword = (password: string) => {
+    // Note: In a real app, you'd decrypt the password here
+    // For now, we'll copy the actual password value
+    copyToClipboard(password);
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
-    setSelectedPassword(null);
     setVaultPath(null);
   };
 
@@ -200,20 +203,14 @@ function App() {
           ) : viewMode === "grid" ? (
             <PasswordGrid
               passwords={filteredPasswords}
-              selectedPassword={selectedPassword}
-              showPasswords={showPassword}
-              onSelectPassword={setSelectedPassword}
-              onToggleFavorite={toggleFavorite}
-              onTogglePasswordVisibility={togglePasswordVisibility}
+              onCopyUsername={handleCopyUsername}
+              onCopyPassword={handleCopyPassword}
             />
           ) : (
             <PasswordTable
               passwords={filteredPasswords}
-              selectedPassword={selectedPassword}
-              showPasswords={showPassword}
-              onSelectPassword={setSelectedPassword}
-              onToggleFavorite={toggleFavorite}
-              onTogglePasswordVisibility={togglePasswordVisibility}
+              onCopyUsername={handleCopyUsername}
+              onCopyPassword={handleCopyPassword}
             />
           )}
         </div>
