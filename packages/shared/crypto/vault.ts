@@ -1,14 +1,14 @@
 /**
- * Vault - Formato binário .guardian
+ * Vault - Binary .guardian format
  * 
- * Formato do arquivo .guardian:
+ * .guardian file format:
  * - Bytes 0-7: "GUARDIAN" (ASCII, 8 bytes)
- * - Byte 8: versão (1 byte, valor: 1)
- * - Bytes 9-24: salt aleatório (16 bytes)
+ * - Byte 8: version (1 byte, value: 1)
+ * - Bytes 9-24: random salt (16 bytes)
  * - Bytes 25-36: nonce (12 bytes)
  * - Bytes 37+: ciphertext + Poly1305 tag (16 bytes)
  * 
- * Os dados encriptados são um JSON com:
+ * Encrypted data is a JSON with:
  * {
  *   entries: [],
  *   createdAt: string (ISO 8601),
@@ -19,7 +19,7 @@
 import { deriveKey, generateSalt } from './argon2';
 import { encrypt, decrypt, generateNonce } from './chacha20';
 
-// Constantes do formato
+// Format constants
 const MAGIC_HEADER = new TextEncoder().encode('GUARDIAN'); // 8 bytes
 const VERSION = 1; // 1 byte
 const SALT_LENGTH = 16; // 16 bytes
@@ -44,24 +44,24 @@ export interface VaultData {
 }
 
 /**
- * Cria um vault encriptado no formato binário .guardian
+ * Creates an encrypted vault in binary .guardian format
  * 
- * @param password - Senha mestra para derivar a chave
- * @param entries - Array de entradas do vault
- * @returns Vault encriptado como Uint8Array
+ * @param password - Master password to derive the key
+ * @param entries - Array of vault entries
+ * @returns Encrypted vault as Uint8Array
  */
 export async function createVault(
   password: string,
   entries: VaultEntry[]
 ): Promise<Uint8Array> {
-  // Gera salt e nonce aleatórios
+  // Generates random salt and nonce
   const salt = generateSalt();
   const nonce = generateNonce();
   
-  // Deriva a chave usando Argon2id
+  // Derives the key using Argon2id
   const key = await deriveKey(password, salt);
   
-  // Prepara os dados para encriptar
+  // Prepares data for encryption
   const data: VaultData = {
     entries: entries,
     createdAt: new Date().toISOString(),
@@ -71,12 +71,12 @@ export async function createVault(
   const jsonData = JSON.stringify(data);
   const plaintext = new TextEncoder().encode(jsonData);
   
-  // Encripta os dados usando ChaCha20-Poly1305
-  // A função encrypt retorna ciphertext + tag (16 bytes) concatenados
+  // Encrypts data using ChaCha20-Poly1305
+  // The encrypt function returns ciphertext + tag (16 bytes) concatenated
   const ciphertextWithTag = await encrypt(key, nonce, plaintext);
   
-  // Constrói o formato binário .guardian
-  // Tamanho total: 8 (magic) + 1 (version) + 16 (salt) + 12 (nonce) + ciphertextWithTag.length
+  // Constructs the binary .guardian format
+  // Total size: 8 (magic) + 1 (version) + 16 (salt) + 12 (nonce) + ciphertextWithTag.length
   const vault = new Uint8Array(
     MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + ciphertextWithTag.length
   );
@@ -87,7 +87,7 @@ export async function createVault(
   vault.set(MAGIC_HEADER, offset);
   offset += MAGIC_HEADER.length;
   
-  // Byte 8: versão
+  // Byte 8: version
   vault[offset] = VERSION;
   offset += 1;
   
@@ -106,11 +106,11 @@ export async function createVault(
 }
 
 /**
- * Abre e desencripta um vault no formato binário .guardian
+ * Opens and decrypts a vault in binary .guardian format
  * 
- * @param password - Senha mestra para derivar a chave
- * @param vaultData - Dados binários do vault
- * @returns Dados desencriptados do vault
+ * @param password - Master password to derive the key
+ * @param vaultData - Binary vault data
+ * @returns Decrypted vault data
  */
 export async function openVault(
   password: string,
@@ -118,68 +118,68 @@ export async function openVault(
 ): Promise<VaultData> {
   let offset = 0;
   
-  // Verifica o tamanho mínimo
+  // Checks minimum size
   const minSize = MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + TAG_LENGTH;
   if (vaultData.length < minSize) {
-    throw new Error('Formato de vault inválido: arquivo muito curto');
+    throw new Error('Invalid vault format: file too short');
   }
   
-  // Bytes 0-7: Verifica o magic header "GUARDIAN"
+  // Bytes 0-7: Verifies the magic header "GUARDIAN"
   const magic = vaultData.slice(offset, offset + MAGIC_HEADER.length);
   if (!magic.every((byte, i) => byte === MAGIC_HEADER[i])) {
-    throw new Error('Formato de vault inválido: magic header incorreto');
+    throw new Error('Invalid vault format: incorrect magic header');
   }
   offset += MAGIC_HEADER.length;
   
-  // Byte 8: Lê a versão
+  // Byte 8: Reads the version
   const version = vaultData[offset];
   offset += 1;
   
   if (version !== VERSION) {
-    throw new Error(`Versão de vault não suportada: ${version}. Versão esperada: ${VERSION}`);
+    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}`);
   }
   
-  // Bytes 9-24: Lê o salt (16 bytes)
+  // Bytes 9-24: Reads the salt (16 bytes)
   const salt = vaultData.slice(offset, offset + SALT_LENGTH);
   offset += SALT_LENGTH;
   
-  // Bytes 25-36: Lê o nonce (12 bytes)
+  // Bytes 25-36: Reads the nonce (12 bytes)
   const nonce = vaultData.slice(offset, offset + NONCE_LENGTH);
   offset += NONCE_LENGTH;
   
-  // Bytes 37+: Lê o ciphertext + tag
+  // Bytes 37+: Reads the ciphertext + tag
   const ciphertextWithTag = vaultData.slice(offset);
   
-  // Deriva a chave usando Argon2id
+  // Derives the key using Argon2id
   const key = await deriveKey(password, salt);
   
-  // Desencripta os dados usando ChaCha20-Poly1305
-  // A função decrypt espera ciphertext + tag (16 bytes) concatenados
+  // Decrypts data using ChaCha20-Poly1305
+  // The decrypt function expects ciphertext + tag (16 bytes) concatenated
   const plaintext = await decrypt(key, nonce, ciphertextWithTag);
   
-  // Parse do JSON
+  // Parses JSON
   const jsonString = new TextDecoder().decode(plaintext);
   const data = JSON.parse(jsonString) as VaultData;
   
-  // Valida a estrutura dos dados
+  // Validates data structure
   if (!data.entries || !Array.isArray(data.entries)) {
-    throw new Error('Formato de vault inválido: estrutura de dados incorreta');
+    throw new Error('Invalid vault format: incorrect data structure');
   }
   
   if (!data.createdAt || !data.lastModified) {
-    throw new Error('Formato de vault inválido: campos de data ausentes');
+    throw new Error('Invalid vault format: missing date fields');
   }
   
   return data;
 }
 
 /**
- * Alias para openVault - mantém compatibilidade com código existente
+ * Alias for openVault - maintains compatibility with existing code
  */
 export const loadVault = openVault;
 
 /**
- * Cria dados de vault vazios
+ * Creates empty vault data
  */
 export function createEmptyVault(): VaultData {
   return {

@@ -1,54 +1,54 @@
 /**
- * ChaCha20-Poly1305 - Implementação pura em TypeScript
+ * ChaCha20-Poly1305 - Pure TypeScript implementation
  * 
- * Implementação completa de ChaCha20-Poly1305 sem dependências externas.
- * Baseada no algoritmo padrão RFC 8439.
- * Compatível com Tauri, Capacitor e Web Extensions.
+ * Complete implementation of ChaCha20-Poly1305 without external dependencies.
+ * Based on the standard RFC 8439 algorithm.
+ * Compatible with Tauri, Capacitor and Web Extensions.
  */
 
-// Constantes do ChaCha20
+// ChaCha20 constants
 const CHACHA20_KEY_SIZE = 32; // 256 bits
 const CHACHA20_NONCE_SIZE = 12; // 96 bits
 const CHACHA20_BLOCK_SIZE = 64; // 512 bits
 const POLY1305_TAG_SIZE = 16; // 128 bits
 
-// Constantes do ChaCha20 (palavra "expand 32-byte k" em ASCII)
+// ChaCha20 constants (word "expand 32-byte k" in ASCII)
 const CHACHA20_CONSTANTS = new Uint32Array([
   0x61707865, 0x3320646e, 0x79622d32, 0x6b206574
 ]);
 
 /**
- * Rotaciona um valor de 32 bits para a esquerda
+ * Rotates a 32-bit value to the left
  */
 function rotateLeft(value: number, shift: number): number {
   return ((value << shift) | (value >>> (32 - shift))) >>> 0;
 }
 
 /**
- * Adiciona dois valores de 32 bits com wraparound
+ * Adds two 32-bit values with wraparound
  */
 function add32(a: number, b: number): number {
   return (a + b) >>> 0;
 }
 
 /**
- * Inicializa o estado do ChaCha20
+ * Initializes the ChaCha20 state
  */
 function chacha20Init(key: Uint8Array, nonce: Uint8Array, counter: number): Uint32Array {
   const state = new Uint32Array(16);
   
-  // Copia as constantes
+  // Copies constants
   state.set(CHACHA20_CONSTANTS, 0);
   
-  // Copia a chave (8 palavras de 32 bits)
+  // Copies the key (8 words of 32 bits)
   for (let i = 0; i < 8; i++) {
     state[i + 4] = (key[i * 4] | (key[i * 4 + 1] << 8) | (key[i * 4 + 2] << 16) | (key[i * 4 + 3] << 24)) >>> 0;
   }
   
-  // Contador
+  // Counter
   state[12] = counter >>> 0;
   
-  // Nonce (3 palavras de 32 bits)
+  // Nonce (3 words of 32 bits)
   for (let i = 0; i < 3; i++) {
     state[i + 13] = (nonce[i * 4] | (nonce[i * 4 + 1] << 8) | (nonce[i * 4 + 2] << 16) | (nonce[i * 4 + 3] << 24)) >>> 0;
   }
@@ -57,7 +57,7 @@ function chacha20Init(key: Uint8Array, nonce: Uint8Array, counter: number): Uint
 }
 
 /**
- * Realiza uma rodada quaternária do ChaCha20
+ * Performs a ChaCha20 quarter round
  */
 function chacha20QuarterRound(state: Uint32Array, a: number, b: number, c: number, d: number): void {
   state[a] = add32(state[a], state[b]);
@@ -74,27 +74,27 @@ function chacha20QuarterRound(state: Uint32Array, a: number, b: number, c: numbe
 }
 
 /**
- * Gera um bloco do ChaCha20
+ * Generates a ChaCha20 block
  */
 function chacha20Block(state: Uint32Array): Uint8Array {
   const workingState = new Uint32Array(state);
   
-  // 20 rodadas (10 duplas)
+  // 20 rounds (10 double rounds)
   for (let i = 0; i < 10; i++) {
-    // Rodadas coluna
+    // Column rounds
     chacha20QuarterRound(workingState, 0, 4, 8, 12);
     chacha20QuarterRound(workingState, 1, 5, 9, 13);
     chacha20QuarterRound(workingState, 2, 6, 10, 14);
     chacha20QuarterRound(workingState, 3, 7, 11, 15);
     
-    // Rodadas diagonal
+    // Diagonal rounds
     chacha20QuarterRound(workingState, 0, 5, 10, 15);
     chacha20QuarterRound(workingState, 1, 6, 11, 12);
     chacha20QuarterRound(workingState, 2, 7, 8, 13);
     chacha20QuarterRound(workingState, 3, 4, 9, 14);
   }
   
-  // Adiciona o estado original ao estado trabalhado
+  // Adds the original state to the working state
   const output = new Uint8Array(CHACHA20_BLOCK_SIZE);
   for (let i = 0; i < 16; i++) {
     const result = add32(workingState[i], state[i]);
@@ -108,7 +108,7 @@ function chacha20Block(state: Uint32Array): Uint8Array {
 }
 
 /**
- * Gera a chave do Poly1305 usando ChaCha20
+ * Generates the Poly1305 key using ChaCha20
  */
 function poly1305KeyGen(key: Uint8Array, nonce: Uint8Array): Uint8Array {
   const zeroNonce = new Uint8Array(CHACHA20_NONCE_SIZE);
@@ -118,11 +118,11 @@ function poly1305KeyGen(key: Uint8Array, nonce: Uint8Array): Uint8Array {
 }
 
 /**
- * Implementação do Poly1305 MAC
- * Baseada no RFC 8439
+ * Poly1305 MAC implementation
+ * Based on RFC 8439
  */
 function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
-  // Clamp da chave r (primeiros 16 bytes)
+  // Clamp key r (first 16 bytes)
   const r = new Uint8Array(16);
   r.set(key.slice(0, 16));
   r[3] &= 0x0f;
@@ -133,31 +133,32 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
   r[12] &= 0xfc;
   r[15] &= 0x0f;
   
-  // Converte r para números de 26 bits (little-endian)
+  // Converts r to 26-bit numbers (little-endian)
   const r0 = r[0] | (r[1] << 8) | (r[2] << 16) | ((r[3] & 0x03) << 24);
   const r1 = (r[3] >>> 2) | (r[4] << 6) | (r[5] << 14) | ((r[6] & 0x0f) << 22);
   const r2 = (r[6] >>> 4) | (r[7] << 4) | (r[8] << 12) | ((r[9] & 0x3f) << 20);
   const r3 = (r[9] >>> 6) | (r[10] << 2) | (r[11] << 10) | (r[12] << 18);
   const r4 = r[13] | (r[14] << 8) | (r[15] << 16);
   
-  // Inicializa o acumulador (5 palavras de 26 bits)
+  // Initializes accumulator (5 words of 26 bits)
   let h0 = 0, h1 = 0, h2 = 0, h3 = 0, h4 = 0;
   
-  // Processa os dados em blocos de 16 bytes
+  // Processes data in blocks of 16 bytes
   const blockSize = 16;
   let offset = 0;
+  let carry = 0; // Declares carry in function scope
   
   while (offset < data.length) {
     const block = new Uint8Array(blockSize);
     const copyLen = Math.min(blockSize, data.length - offset);
     block.set(data.slice(offset, offset + copyLen));
     
-    // Adiciona bit 1 ao final se não for o último bloco completo
+    // Adds bit 1 at the end if not the last complete block
     if (copyLen < blockSize) {
       block[copyLen] = 1;
     }
     
-    // Converte o bloco para número (little-endian, 130 bits)
+    // Converts block to number (little-endian, 130 bits)
     const block0 = block[0] | (block[1] << 8) | (block[2] << 16) | ((block[3] & 0x03) << 24);
     const block1 = (block[3] >>> 2) | (block[4] << 6) | (block[5] << 14) | ((block[6] & 0x0f) << 22);
     const block2 = (block[6] >>> 4) | (block[7] << 4) | (block[8] << 12) | ((block[9] & 0x3f) << 20);
@@ -171,15 +172,15 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
     h3 = (h3 + block3) >>> 0;
     h4 = (h4 + block4) >>> 0;
     
-    // h *= r (multiplicação modular)
+    // h *= r (modular multiplication)
     let d0 = (h0 * r0 + h1 * (r4 * 5) + h2 * (r3 * 5) + h3 * (r2 * 5) + h4 * (r1 * 5)) >>> 0;
     let d1 = (h0 * r1 + h1 * r0 + h2 * (r4 * 5) + h3 * (r3 * 5) + h4 * (r2 * 5)) >>> 0;
     let d2 = (h0 * r2 + h1 * r1 + h2 * r0 + h3 * (r4 * 5) + h4 * (r3 * 5)) >>> 0;
     let d3 = (h0 * r3 + h1 * r2 + h2 * r1 + h3 * r0 + h4 * (r4 * 5)) >>> 0;
     let d4 = (h0 * r4 + h1 * r3 + h2 * r2 + h3 * r1 + h4 * r0) >>> 0;
     
-    // Reduz módulo 2^130 - 5
-    let carry = d0 >>> 26;
+    // Reduces modulo 2^130 - 5
+    carry = d0 >>> 26;
     h0 = d0 & 0x3ffffff;
     d1 += carry;
     carry = d1 >>> 26;
@@ -201,7 +202,7 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
     offset += blockSize;
   }
   
-  // Redução final
+  // Final reduction
   carry = h1 >>> 26;
   h1 &= 0x3ffffff;
   h2 += carry;
@@ -218,7 +219,7 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
   h0 &= 0x3ffffff;
   h1 += carry;
   
-  // Aplica redução final se necessário (h >= 2^130 - 5)
+  // Applies final reduction if necessary (h >= 2^130 - 5)
   const g0 = h0 + 5;
   carry = g0 >>> 26;
   const g1 = h1 + carry;
@@ -236,7 +237,7 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
   h3 = (h3 & ~mask) | (g3 & mask);
   h4 = (h4 & ~mask) | (g4 & mask);
   
-  // h += s (segunda metade da chave, 16 bytes)
+  // h += s (second half of key, 16 bytes)
   const s = new Uint8Array(16);
   s.set(key.slice(16, 32));
   const s0 = s[0] | (s[1] << 8) | (s[2] << 16) | (s[3] << 24);
@@ -250,7 +251,7 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
   let t3 = (h3 + (s3 & 0x3ffffff) + (t2 >>> 26)) >>> 0;
   let t4 = (h4 + (t3 >>> 26)) >>> 0;
   
-  // Converte para bytes (little-endian, 16 bytes)
+  // Converts to bytes (little-endian, 16 bytes)
   const tag = new Uint8Array(POLY1305_TAG_SIZE);
   t0 &= 0x3ffffff;
   t1 &= 0x3ffffff;
@@ -279,7 +280,7 @@ function poly1305(key: Uint8Array, data: Uint8Array): Uint8Array {
 }
 
 /**
- * Comparação em tempo constante para evitar timing attacks
+ * Constant-time comparison to avoid timing attacks
  */
 function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) {
@@ -293,11 +294,11 @@ function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /**
- * Encripta dados usando ChaCha20-Poly1305
- * @param key - Chave de 32 bytes
- * @param nonce - Nonce de 12 bytes
- * @param plaintext - Dados para encriptar
- * @returns Ciphertext + tag Poly1305 (16 bytes) concatenados
+ * Encrypts data using ChaCha20-Poly1305
+ * @param key - 32-byte key
+ * @param nonce - 12-byte nonce
+ * @param plaintext - Data to encrypt
+ * @returns Ciphertext + Poly1305 tag (16 bytes) concatenated
  */
 export async function encrypt(
   key: Uint8Array,
@@ -305,16 +306,16 @@ export async function encrypt(
   plaintext: Uint8Array
 ): Promise<Uint8Array> {
   if (key.length !== CHACHA20_KEY_SIZE) {
-    throw new Error('A chave deve ter 32 bytes');
+    throw new Error('Key must be 32 bytes');
   }
   if (nonce.length !== CHACHA20_NONCE_SIZE) {
-    throw new Error('O nonce deve ter 12 bytes');
+    throw new Error('Nonce must be 12 bytes');
   }
   
-  // Gera a chave do Poly1305
+  // Generates the Poly1305 key
   const polyKey = poly1305KeyGen(key, nonce);
   
-  // Encripta o plaintext com ChaCha20
+  // Encrypts plaintext with ChaCha20
   const state = chacha20Init(key, nonce, 1);
   const ciphertext = new Uint8Array(plaintext.length);
   
@@ -334,10 +335,10 @@ export async function encrypt(
     blockCounter++;
   }
   
-  // Calcula a tag Poly1305
+  // Calculates the Poly1305 tag
   const tag = poly1305(polyKey, ciphertext);
   
-  // Retorna ciphertext + tag
+  // Returns ciphertext + tag
   const result = new Uint8Array(ciphertext.length + POLY1305_TAG_SIZE);
   result.set(ciphertext, 0);
   result.set(tag, ciphertext.length);
@@ -346,11 +347,11 @@ export async function encrypt(
 }
 
 /**
- * Desencripta dados usando ChaCha20-Poly1305
- * @param key - Chave de 32 bytes
- * @param nonce - Nonce de 12 bytes
- * @param ciphertext - Ciphertext + tag (16 bytes) concatenados
- * @returns Plaintext desencriptado
+ * Decrypts data using ChaCha20-Poly1305
+ * @param key - 32-byte key
+ * @param nonce - 12-byte nonce
+ * @param ciphertext - Ciphertext + tag (16 bytes) concatenated
+ * @returns Decrypted plaintext
  */
 export async function decrypt(
   key: Uint8Array,
@@ -358,29 +359,29 @@ export async function decrypt(
   ciphertext: Uint8Array
 ): Promise<Uint8Array> {
   if (key.length !== CHACHA20_KEY_SIZE) {
-    throw new Error('A chave deve ter 32 bytes');
+    throw new Error('Key must be 32 bytes');
   }
   if (nonce.length !== CHACHA20_NONCE_SIZE) {
-    throw new Error('O nonce deve ter 12 bytes');
+    throw new Error('Nonce must be 12 bytes');
   }
   if (ciphertext.length < POLY1305_TAG_SIZE) {
-    throw new Error('O ciphertext é muito curto');
+    throw new Error('Ciphertext is too short');
   }
   
-  // Separa o ciphertext da tag
+  // Separates ciphertext from tag
   const tag = ciphertext.slice(ciphertext.length - POLY1305_TAG_SIZE);
   const encryptedData = ciphertext.slice(0, ciphertext.length - POLY1305_TAG_SIZE);
   
-  // Gera a chave do Poly1305
+  // Generates the Poly1305 key
   const polyKey = poly1305KeyGen(key, nonce);
   
-  // Verifica a tag
+  // Verifies the tag
   const expectedTag = poly1305(polyKey, encryptedData);
   if (!constantTimeEqual(tag, expectedTag)) {
-    throw new Error('Falha na autenticação: tag inválida');
+    throw new Error('Authentication failed: invalid tag');
   }
   
-  // Desencripta com ChaCha20
+  // Decrypts with ChaCha20
   const plaintext = new Uint8Array(encryptedData.length);
   
   let offset = 0;
@@ -403,7 +404,7 @@ export async function decrypt(
 }
 
 /**
- * Gera um nonce aleatório
+ * Generates a random nonce
  */
 export function generateNonce(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(CHACHA20_NONCE_SIZE));

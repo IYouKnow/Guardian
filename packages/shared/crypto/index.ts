@@ -12,3 +12,6 @@ export * from "./argon2";
 export * from "./chacha20";
 export * from "./vault";
 
+// Exports Argon2 diagnostic functions
+export { isArgon2Available, getArgon2Status } from "./argon2";
+
