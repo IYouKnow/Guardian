@@ -8,6 +8,7 @@ interface SidebarProps {
   onLogout: () => void;
   onSettings: () => void;
   showSettings: boolean;
+  theme: "dark" | "half-dark" | "light";
 }
 
 export default function Sidebar({
@@ -18,18 +19,61 @@ export default function Sidebar({
   onLogout,
   onSettings,
   showSettings,
+  theme,
 }: SidebarProps) {
+  const getThemeClasses = () => {
+    if (theme === "light") {
+      return {
+        bg: "bg-gray-50",
+        text: "text-gray-900",
+        textSecondary: "text-gray-600",
+        textTertiary: "text-gray-500",
+        border: "border-gray-200",
+        cardBg: "bg-gray-100",
+        hoverBg: "hover:bg-gray-200",
+        hoverText: "hover:text-gray-900",
+        activeBg: "bg-gray-200",
+      };
+    } else if (theme === "half-dark") {
+      return {
+        bg: "bg-gray-900",
+        text: "text-gray-100",
+        textSecondary: "text-gray-400",
+        textTertiary: "text-gray-500",
+        border: "border-gray-700",
+        cardBg: "bg-gray-800",
+        hoverBg: "hover:bg-gray-800",
+        hoverText: "hover:text-gray-100",
+        activeBg: "bg-gray-800",
+      };
+    } else {
+      return {
+        bg: "bg-[#0a0a0a]",
+        text: "text-white",
+        textSecondary: "text-gray-400",
+        textTertiary: "text-gray-500",
+        border: "border-[#1a1a1a]",
+        cardBg: "bg-[#1a1a1a]",
+        hoverBg: "hover:bg-[#111111]",
+        hoverText: "hover:text-white",
+        activeBg: "bg-[#1a1a1a]",
+      };
+    }
+  };
+
+  const themeClasses = getThemeClasses();
+
   return (
-    <aside className="w-72 bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col">
-      <div className="p-8 border-b border-[#1a1a1a]">
+    <aside className={`w-72 ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col`}>
+      <div className={`p-8 border-b ${themeClasses.border}`}>
         <div className="flex items-center justify-between mb-1">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1">Guardian</h1>
-            <p className="text-sm text-gray-400">Password Manager</p>
+            <h1 className={`text-3xl font-bold ${themeClasses.text} mb-1`}>Guardian</h1>
+            <p className={`text-sm ${themeClasses.textSecondary}`}>Password Manager</p>
           </div>
           <button
             onClick={onLogout}
-            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+            className={`p-2 ${themeClasses.textTertiary} hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all`}
             title="Lock vault"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,7 +85,7 @@ export default function Sidebar({
 
       <nav className="flex-1 p-4 overflow-y-auto">
         <div className="mb-6">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-3">
+          <h3 className={`text-xs font-semibold ${themeClasses.textTertiary} uppercase tracking-wider mb-3 px-3`}>
             Categories
           </h3>
           <ul className="space-y-1">
@@ -53,8 +97,8 @@ export default function Sidebar({
                   }}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
                     activeCategory === category && !showSettings
-                      ? "bg-[#1a1a1a] text-yellow-400"
-                      : "text-gray-400 hover:text-white hover:bg-[#111111]"
+                      ? `${themeClasses.activeBg} text-yellow-400`
+                      : `${themeClasses.textSecondary} ${themeClasses.hoverBg} ${themeClasses.hoverText}`
                   }`}
                 >
                   {category === "all" ? "All Passwords" : category}
@@ -64,10 +108,10 @@ export default function Sidebar({
           </ul>
         </div>
 
-        <div className="border-t border-[#1a1a1a] pt-4">
+        <div className={`border-t ${themeClasses.border} pt-4`}>
           <ul className="space-y-1">
             <li>
-              <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-[#111111] transition-all flex items-center gap-2">
+              <button className={`w-full text-left px-3 py-2 rounded-lg text-sm ${themeClasses.textSecondary} ${themeClasses.hoverBg} ${themeClasses.hoverText} transition-all flex items-center gap-2`}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                 </svg>
@@ -79,8 +123,8 @@ export default function Sidebar({
                 onClick={onSettings}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
                   showSettings
-                    ? "bg-[#1a1a1a] text-yellow-400"
-                    : "text-gray-400 hover:text-white hover:bg-[#111111]"
+                    ? `${themeClasses.activeBg} text-yellow-400`
+                    : `${themeClasses.textSecondary} ${themeClasses.hoverBg} ${themeClasses.hoverText}`
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +138,7 @@ export default function Sidebar({
         </div>
       </nav>
 
-      <div className="p-4 border-t border-[#1a1a1a]">
+      <div className={`p-4 border-t ${themeClasses.border}`}>
         <button
           onClick={onAddPassword}
           className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-yellow-400/20"

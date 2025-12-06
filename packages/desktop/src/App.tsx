@@ -58,6 +58,7 @@ function App() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showSettings, setShowSettings] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "half-dark" | "light">("dark");
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; passwordId: string | null; passwordTitle: string }>({
     isOpen: false,
     passwordId: null,
@@ -238,6 +239,44 @@ function App() {
     }
   };
 
+  // Theme classes based on theme state
+  const getThemeClasses = () => {
+    if (theme === "light") {
+      return {
+        bg: "bg-white",
+        text: "text-gray-900",
+        cardBg: "bg-gray-50",
+        border: "border-gray-200",
+        inputBg: "bg-gray-100",
+        headerBg: "bg-gray-50",
+        sidebarBg: "bg-gray-50",
+      };
+    } else if (theme === "half-dark") {
+      return {
+        bg: "bg-gray-900",
+        text: "text-gray-100",
+        cardBg: "bg-gray-800",
+        border: "border-gray-700",
+        inputBg: "bg-gray-800",
+        headerBg: "bg-gray-900",
+        sidebarBg: "bg-gray-900",
+      };
+    } else {
+      // dark (default)
+      return {
+        bg: "bg-black",
+        text: "text-white",
+        cardBg: "bg-[#0a0a0a]",
+        border: "border-[#1a1a1a]",
+        inputBg: "bg-[#1a1a1a]",
+        headerBg: "bg-[#0a0a0a]",
+        sidebarBg: "bg-[#0a0a0a]",
+      };
+    }
+  };
+
+  const themeClasses = getThemeClasses();
+
   // Register Page
   if (showRegister) {
     return (
@@ -260,7 +299,7 @@ function App() {
 
   // Main App
   return (
-    <div className="flex h-screen bg-black text-white">
+    <div className={`flex h-screen ${themeClasses.bg} ${themeClasses.text}`}>
       <Sidebar
         categories={categories}
         activeCategory={activeCategory}
@@ -272,13 +311,16 @@ function App() {
         onLogout={handleLogout}
         onSettings={() => setShowSettings(!showSettings)}
         showSettings={showSettings}
+        theme={theme}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden bg-black">
+      <main className={`flex-1 flex flex-col overflow-hidden ${themeClasses.bg}`}>
         {showSettings ? (
           <Settings
             viewMode={viewMode}
             onViewModeChange={setViewMode}
+            theme={theme}
+            onThemeChange={setTheme}
           />
         ) : (
           <>
@@ -287,20 +329,29 @@ function App() {
               passwordCount={filteredPasswords.length}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              theme={theme}
             />
 
             <div className="flex-1 overflow-y-auto p-6">
               {filteredPasswords.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className="w-20 h-20 rounded-full bg-[#1a1a1a] flex items-center justify-center mb-6">
-                    <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className={`w-20 h-20 rounded-full ${
+                    theme === "light" ? "bg-gray-200" : theme === "half-dark" ? "bg-gray-800" : "bg-[#1a1a1a]"
+                  } flex items-center justify-center mb-6`}>
+                    <svg className={`w-10 h-10 ${
+                      theme === "light" ? "text-gray-500" : theme === "half-dark" ? "text-gray-500" : "text-gray-600"
+                    }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                   </div>
-                  <p className="text-gray-400 text-lg mb-2">
+                  <p className={`${
+                    theme === "light" ? "text-gray-600" : theme === "half-dark" ? "text-gray-400" : "text-gray-400"
+                  } text-lg mb-2`}>
                     {searchQuery ? "No passwords found" : "No passwords yet"}
                   </p>
-                  <p className="text-gray-500 text-sm">
+                  <p className={`${
+                    theme === "light" ? "text-gray-500" : theme === "half-dark" ? "text-gray-500" : "text-gray-500"
+                  } text-sm`}>
                     {searchQuery ? "Try a different search term" : "Add your first password to get started"}
                   </p>
                 </div>
@@ -310,6 +361,7 @@ function App() {
                   onCopyUsername={handleCopyUsername}
                   onCopyPassword={handleCopyPassword}
                   onDelete={handleDeletePassword}
+                  theme={theme}
                 />
               ) : (
                 <PasswordTable
@@ -317,6 +369,7 @@ function App() {
                   onCopyUsername={handleCopyUsername}
                   onCopyPassword={handleCopyPassword}
                   onDelete={handleDeletePassword}
+                  theme={theme}
                 />
               )}
             </div>

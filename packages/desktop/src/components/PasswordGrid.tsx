@@ -6,6 +6,7 @@ interface PasswordGridProps {
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
+  theme: "dark" | "half-dark" | "light";
 }
 
 export default function PasswordGrid({
@@ -13,6 +14,7 @@ export default function PasswordGrid({
   onCopyUsername,
   onCopyPassword,
   onDelete,
+  theme,
 }: PasswordGridProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -23,6 +25,7 @@ export default function PasswordGrid({
           onCopyUsername={() => onCopyUsername(password.username)}
           onCopyPassword={() => onCopyPassword(password.password)}
           onDelete={() => onDelete(password.id)}
+          theme={theme}
         />
       ))}
     </div>
