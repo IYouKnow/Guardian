@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 import type { PasswordEntry } from "./types";
 import Login from "./components/Login";
@@ -7,6 +7,7 @@ import Settings from "./components/Settings";
 import type { VaultEntry } from "../../shared/crypto";
 import { loadVault, createVault } from "../../shared/crypto";
 import { Filesystem, Directory } from "@capacitor/filesystem";
+import { App as CapacitorApp } from "@capacitor/app";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -158,6 +159,25 @@ function App() {
       console.error("Failed to load vault:", err);
     }
   };
+
+  // Handle Android back button
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (showSettings) {
+        // If on settings page, go back to main app
+        setShowSettings(false);
+      } else {
+        // If on main app, exit the app
+        CapacitorApp.exitApp();
+      }
+    });
+
+    return () => {
+      backButtonListener.then(listener => listener.remove());
+    };
+  }, [isLoggedIn, showSettings]);
 
   // Login Page
   if (!isLoggedIn) {
