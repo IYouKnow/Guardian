@@ -41,7 +41,7 @@ export default function Settings({ onBack, onLogout, theme, onThemeChange }: Set
 
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
-      <div className={`flex items-center gap-4 p-4 border-b ${themeClasses.border}`}>
+      <div className={`flex items-center gap-4 px-4 pb-4 pt-12 border-b ${themeClasses.border}`}>
         <button
           onClick={onBack}
           className={`p-2 transition-colors ${

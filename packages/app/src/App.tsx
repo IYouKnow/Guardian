@@ -219,7 +219,7 @@ function App() {
       ) : (
         <>
           {/* Header with Search */}
-          <header className={`${themeClasses.headerBg} border-b ${themeClasses.border} px-4 py-3 flex-shrink-0`}>
+          <header className={`${themeClasses.headerBg} border-b ${themeClasses.border} px-4 pb-3 pt-12 flex-shrink-0`}>
             <div className="relative">
               <input
                 type="text"

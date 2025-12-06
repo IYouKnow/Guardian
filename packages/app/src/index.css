@@ -11,6 +11,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  
+  /* Safe area support for mobile devices */
+  :root {
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  }
 }
 
 /* Custom Scrollbar */
