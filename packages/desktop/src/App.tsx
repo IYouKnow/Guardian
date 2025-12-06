@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { PasswordEntry } from "./types";
 import Login from "./components/Login";
@@ -59,6 +59,10 @@ function App() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<"dark" | "half-dark" | "light">("dark");
+  const [itemSize, setItemSize] = useState<"small" | "medium" | "large">("medium");
+  const [sidebarWidth, setSidebarWidth] = useState(288); // Default 72 * 4 = 288px (w-72)
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; passwordId: string | null; passwordTitle: string }>({
     isOpen: false,
     passwordId: null,
@@ -277,6 +281,39 @@ function App() {
 
   const themeClasses = getThemeClasses();
 
+  // Sidebar resize handlers
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const newWidth = e.clientX;
+      const minWidth = 200;
+      const maxWidth = 600;
+      
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing]);
+
   // Register Page
   if (showRegister) {
     return (
@@ -299,28 +336,49 @@ function App() {
 
   // Main App
   return (
-    <div className={`flex h-screen ${themeClasses.bg} ${themeClasses.text}`}>
-      <Sidebar
-        categories={categories}
-        activeCategory={activeCategory}
-        onCategoryChange={(category) => {
-          setActiveCategory(category);
-          setShowSettings(false); // Close settings when selecting category
-        }}
-        onAddPassword={() => setShowAddModal(true)}
-        onLogout={handleLogout}
-        onSettings={() => setShowSettings(!showSettings)}
-        showSettings={showSettings}
-        theme={theme}
-      />
+    <div className={`flex h-screen overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}>
+      <div ref={sidebarRef} style={{ width: `${sidebarWidth}px` }} className="flex-shrink-0 relative">
+        <Sidebar
+          categories={categories}
+          activeCategory={activeCategory}
+          onCategoryChange={(category) => {
+            setActiveCategory(category);
+            setShowSettings(false); // Close settings when selecting category
+          }}
+          onAddPassword={() => setShowAddModal(true)}
+          onLogout={handleLogout}
+          onSettings={() => setShowSettings(!showSettings)}
+          showSettings={showSettings}
+          theme={theme}
+        />
+        {/* Resize handle - wider hit area for easier grabbing */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+          className={`absolute top-0 right-0 h-full cursor-col-resize z-10 group ${
+            isResizing ? "bg-yellow-400/20" : ""
+          }`}
+          style={{ width: '4px', marginRight: '-2px' }}
+        >
+          <div className={`absolute top-0 right-1/2 h-full w-0.5 transition-all ${
+            isResizing 
+              ? "bg-yellow-400" 
+              : "bg-transparent group-hover:bg-yellow-400/40"
+          }`} />
+        </div>
+      </div>
 
-      <main className={`flex-1 flex flex-col overflow-hidden ${themeClasses.bg}`}>
+      <main className={`flex-1 flex flex-col overflow-hidden min-w-0 ${themeClasses.bg}`}>
         {showSettings ? (
           <Settings
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             theme={theme}
             onThemeChange={setTheme}
+            itemSize={itemSize}
+            onItemSizeChange={setItemSize}
           />
         ) : (
           <>
@@ -332,7 +390,7 @@ function App() {
               theme={theme}
             />
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
               {filteredPasswords.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className={`w-20 h-20 rounded-full ${
@@ -362,6 +420,7 @@ function App() {
                   onCopyPassword={handleCopyPassword}
                   onDelete={handleDeletePassword}
                   theme={theme}
+                  itemSize={itemSize}
                 />
               ) : (
                 <PasswordTable
@@ -370,6 +429,7 @@ function App() {
                   onCopyPassword={handleCopyPassword}
                   onDelete={handleDeletePassword}
                   theme={theme}
+                  itemSize={itemSize}
                 />
               )}
             </div>

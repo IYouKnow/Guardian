@@ -64,7 +64,7 @@ export default function Sidebar({
   const themeClasses = getThemeClasses();
 
   return (
-    <aside className={`w-72 ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col`}>
+    <aside className={`w-full h-full ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col`}>
       <div className={`p-8 border-b ${themeClasses.border}`}>
         <div className="flex items-center justify-between mb-1">
           <div>

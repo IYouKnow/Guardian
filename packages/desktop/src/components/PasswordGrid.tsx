@@ -7,6 +7,7 @@ interface PasswordGridProps {
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
   theme: "dark" | "half-dark" | "light";
+  itemSize: "small" | "medium" | "large";
 }
 
 export default function PasswordGrid({
@@ -15,9 +16,30 @@ export default function PasswordGrid({
   onCopyPassword,
   onDelete,
   theme,
+  itemSize,
 }: PasswordGridProps) {
+  const getGridCols = () => {
+    if (itemSize === "small") {
+      return "grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7";
+    } else if (itemSize === "large") {
+      return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+    } else {
+      return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+    }
+  };
+
+  const getGap = () => {
+    if (itemSize === "small") {
+      return "gap-3";
+    } else if (itemSize === "large") {
+      return "gap-6";
+    } else {
+      return "gap-4";
+    }
+  };
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+    <div className={`grid ${getGridCols()} ${getGap()} w-full min-w-0`}>
       {passwords.map((password) => (
         <PasswordCard
           key={password.id}
@@ -26,6 +48,7 @@ export default function PasswordGrid({
           onCopyPassword={() => onCopyPassword(password.password)}
           onDelete={() => onDelete(password.id)}
           theme={theme}
+          itemSize={itemSize}
         />
       ))}
     </div>

@@ -6,6 +6,7 @@ interface PasswordTableProps {
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
   theme: "dark" | "half-dark" | "light";
+  itemSize: "small" | "medium" | "large";
 }
 
 export default function PasswordTable({
@@ -14,7 +15,43 @@ export default function PasswordTable({
   onCopyPassword,
   onDelete,
   theme,
+  itemSize,
 }: PasswordTableProps) {
+  const getSizeClasses = () => {
+    if (itemSize === "small") {
+      return {
+        headerPadding: "py-2 px-3",
+        cellPadding: "py-2 px-3",
+        iconSize: "w-8 h-8",
+        iconText: "text-sm",
+        textSize: "text-xs",
+        headerTextSize: "text-xs",
+        gap: "gap-2",
+      };
+    } else if (itemSize === "large") {
+      return {
+        headerPadding: "py-4 px-4",
+        cellPadding: "py-5 px-4",
+        iconSize: "w-12 h-12",
+        iconText: "text-lg",
+        textSize: "text-sm",
+        headerTextSize: "text-sm",
+        gap: "gap-4",
+      };
+    } else {
+      return {
+        headerPadding: "py-3 px-4",
+        cellPadding: "py-4 px-4",
+        iconSize: "w-10 h-10",
+        iconText: "text-base",
+        textSize: "text-sm",
+        headerTextSize: "text-xs",
+        gap: "gap-3",
+      };
+    }
+  };
+
+  const sizeClasses = getSizeClasses();
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
@@ -58,16 +95,16 @@ export default function PasswordTable({
   const themeClasses = getThemeClasses();
 
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full border-collapse">
+    <div className="w-full overflow-x-auto min-w-0">
+      <table className="w-full border-collapse min-w-full">
         <thead>
           <tr className={`border-b ${themeClasses.border}`}>
-            <th className={`text-left py-3 px-4 text-xs font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Service</th>
-            <th className={`text-left py-3 px-4 text-xs font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Username</th>
-            <th className={`text-left py-3 px-4 text-xs font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Website</th>
-            <th className={`text-left py-3 px-4 text-xs font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Password</th>
-            <th className={`text-left py-3 px-4 text-xs font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Category</th>
-            <th className={`text-left py-3 px-4 text-xs font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Actions</th>
+            <th className={`text-left ${sizeClasses.headerPadding} ${sizeClasses.headerTextSize} font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Service</th>
+            <th className={`text-left ${sizeClasses.headerPadding} ${sizeClasses.headerTextSize} font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Username</th>
+            <th className={`text-left ${sizeClasses.headerPadding} ${sizeClasses.headerTextSize} font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Website</th>
+            <th className={`text-left ${sizeClasses.headerPadding} ${sizeClasses.headerTextSize} font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Password</th>
+            <th className={`text-left ${sizeClasses.headerPadding} ${sizeClasses.headerTextSize} font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Category</th>
+            <th className={`text-left ${sizeClasses.headerPadding} ${sizeClasses.headerTextSize} font-semibold ${themeClasses.headerText} uppercase tracking-wider`}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -76,17 +113,17 @@ export default function PasswordTable({
               key={password.id}
               className={`border-b ${themeClasses.border} ${themeClasses.hoverBg} transition-colors group`}
             >
-              <td className="py-4 px-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-yellow-400/20 to-yellow-500/10 border ${themeClasses.iconBorder} flex items-center justify-center text-yellow-400 font-bold`}>
+              <td className={sizeClasses.cellPadding}>
+                <div className={`flex items-center ${sizeClasses.gap}`}>
+                  <div className={`${sizeClasses.iconSize} rounded-lg bg-gradient-to-br from-yellow-400/20 to-yellow-500/10 border ${themeClasses.iconBorder} flex items-center justify-center text-yellow-400 font-bold ${sizeClasses.iconText}`}>
                     {password.title.charAt(0).toUpperCase()}
                   </div>
-                  <span className={`font-medium ${themeClasses.text}`}>{password.title}</span>
+                  <span className={`font-medium ${themeClasses.text} ${sizeClasses.textSize}`}>{password.title}</span>
                 </div>
               </td>
-              <td className="py-4 px-4">
-                <div className="flex items-center gap-2 group/username">
-                  <span className={`${themeClasses.textSecondary} text-sm`}>{password.username}</span>
+              <td className={sizeClasses.cellPadding}>
+                <div className={`flex items-center ${sizeClasses.gap} group/username`}>
+                  <span className={`${themeClasses.textSecondary} ${sizeClasses.textSize}`}>{password.username}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -101,10 +138,10 @@ export default function PasswordTable({
                   </button>
                 </div>
               </td>
-              <td className={`py-4 px-4 ${themeClasses.textSecondary} text-sm`}>{password.website}</td>
-              <td className="py-4 px-4">
-                <div className="flex items-center gap-2 group/password">
-                  <span className={`${themeClasses.textTertiary} font-mono text-sm`}>••••••••</span>
+              <td className={`${sizeClasses.cellPadding} ${themeClasses.textSecondary} ${sizeClasses.textSize}`}>{password.website}</td>
+              <td className={sizeClasses.cellPadding}>
+                <div className={`flex items-center ${sizeClasses.gap} group/password`}>
+                  <span className={`${themeClasses.textTertiary} font-mono ${sizeClasses.textSize}`}>••••••••</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -119,10 +156,10 @@ export default function PasswordTable({
                   </button>
                 </div>
               </td>
-              <td className="py-4 px-4">
-                <span className={`px-2 py-1 ${themeClasses.badgeBg} ${themeClasses.badgeText} text-xs rounded`}>{password.category}</span>
+              <td className={sizeClasses.cellPadding}>
+                <span className={`px-2 py-1 ${themeClasses.badgeBg} ${themeClasses.badgeText} ${sizeClasses.textSize} rounded`}>{password.category}</span>
               </td>
-              <td className="py-4 px-4">
+              <td className={sizeClasses.cellPadding}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

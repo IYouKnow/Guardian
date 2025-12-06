@@ -56,15 +56,15 @@ export default function Header({
   const themeClasses = getThemeClasses();
 
   return (
-    <header className={`${themeClasses.bg} border-b ${themeClasses.border} p-6`}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className={`text-2xl font-bold ${themeClasses.text} mb-1`}>
+    <header className={`${themeClasses.bg} border-b ${themeClasses.border} p-6 overflow-x-hidden`}>
+      <div className="flex items-center justify-between mb-6 min-w-0">
+        <div className="min-w-0 flex-1">
+          <h2 className={`text-2xl font-bold ${themeClasses.text} mb-1 truncate`}>
             {activeCategory === "all" ? "All Passwords" : activeCategory}
           </h2>
           <p className={`text-sm ${themeClasses.textSecondary}`}>{passwordCount} passwords</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <button className={`px-4 py-2 ${themeClasses.buttonBg} ${themeClasses.buttonHover} ${themeClasses.text} rounded-lg text-sm font-medium transition-all border ${themeClasses.buttonBorder}`}>
             Import
           </button>

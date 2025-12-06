@@ -3,9 +3,11 @@ interface SettingsProps {
   onViewModeChange: (mode: "grid" | "table") => void;
   theme: "dark" | "half-dark" | "light";
   onThemeChange: (theme: "dark" | "half-dark" | "light") => void;
+  itemSize: "small" | "medium" | "large";
+  onItemSizeChange: (size: "small" | "medium" | "large") => void;
 }
 
-export default function Settings({ viewMode, onViewModeChange, theme, onThemeChange }: SettingsProps) {
+export default function Settings({ viewMode, onViewModeChange, theme, onThemeChange, itemSize, onItemSizeChange }: SettingsProps) {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
@@ -40,8 +42,8 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
   const themeClasses = getThemeClasses();
 
   return (
-    <div className={`flex-1 overflow-y-auto p-6 ${themeClasses.bg} ${themeClasses.text}`}>
-      <div className="max-w-3xl mx-auto">
+    <div className={`flex-1 overflow-y-auto overflow-x-hidden p-6 ${themeClasses.bg} ${themeClasses.text}`}>
+      <div className="max-w-3xl mx-auto min-w-0">
         <div className="mb-8">
           <h1 className={`text-3xl font-bold mb-2 ${
             theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
@@ -144,6 +146,67 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
                   <option value="grid">Grid View</option>
                   <option value="table">Table View</option>
                 </select>
+              </div>
+
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  theme === "light" ? "text-gray-700" : theme === "half-dark" ? "text-gray-300" : "text-gray-300"
+                }`}>
+                  Item Size
+                </label>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => onItemSizeChange("small")}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                      itemSize === "small"
+                        ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
+                        : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Small</span>
+                      {itemSize === "small" && (
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => onItemSizeChange("medium")}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                      itemSize === "medium"
+                        ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
+                        : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Medium</span>
+                      {itemSize === "medium" && (
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => onItemSizeChange("large")}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                      itemSize === "large"
+                        ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
+                        : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Large</span>
+                      {itemSize === "large" && (
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                </div>
               </div>
 
               <div className={`${theme === "light" ? "bg-gray-100" : theme === "half-dark" ? "bg-gray-700" : "bg-[#111111]"} border ${themeClasses.border} rounded-lg p-4`}>

@@ -6,6 +6,7 @@ interface PasswordCardProps {
   onCopyPassword: () => void;
   onDelete: () => void;
   theme: "dark" | "half-dark" | "light";
+  itemSize: "small" | "medium" | "large";
 }
 
 export default function PasswordCard({
@@ -14,7 +15,43 @@ export default function PasswordCard({
   onCopyPassword,
   onDelete,
   theme,
+  itemSize,
 }: PasswordCardProps) {
+  const getSizeClasses = () => {
+    if (itemSize === "small") {
+      return {
+        padding: "p-3",
+        iconSize: "w-8 h-8",
+        iconText: "text-base",
+        titleSize: "text-sm",
+        textSize: "text-xs",
+        gap: "gap-2",
+        mb: "mb-2",
+      };
+    } else if (itemSize === "large") {
+      return {
+        padding: "p-6",
+        iconSize: "w-16 h-16",
+        iconText: "text-2xl",
+        titleSize: "text-lg",
+        textSize: "text-sm",
+        gap: "gap-4",
+        mb: "mb-5",
+      };
+    } else {
+      return {
+        padding: "p-5",
+        iconSize: "w-12 h-12",
+        iconText: "text-xl",
+        titleSize: "text-base",
+        textSize: "text-sm",
+        gap: "gap-3",
+        mb: "mb-4",
+      };
+    }
+  };
+
+  const sizeClasses = getSizeClasses();
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
@@ -62,11 +99,11 @@ export default function PasswordCard({
 
   return (
     <div className={`bg-gradient-to-br ${themeClasses.cardBgGradient} rounded-xl border ${themeClasses.border} ${themeClasses.hoverBorder} hover:shadow-lg hover:shadow-yellow-400/10 transition-all group relative`}>
-      <div className="p-5">
+      <div className={sizeClasses.padding}>
         {/* Header with icon and title */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className={`flex items-center ${sizeClasses.gap} ${sizeClasses.mb}`}>
           <div className="relative flex-shrink-0">
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400/30 to-yellow-500/20 border-2 ${themeClasses.iconBorder} flex items-center justify-center text-yellow-400 font-bold text-xl shadow-lg`}>
+            <div className={`${sizeClasses.iconSize} rounded-xl bg-gradient-to-br from-yellow-400/30 to-yellow-500/20 border-2 ${themeClasses.iconBorder} flex items-center justify-center text-yellow-400 font-bold ${sizeClasses.iconText} shadow-lg`}>
               {password.title.charAt(0).toUpperCase()}
             </div>
             {password.breached && (
@@ -77,7 +114,7 @@ export default function PasswordCard({
               </div>
             )}
           </div>
-          <h3 className={`font-bold ${themeClasses.text} text-base truncate flex-1`}>{password.title}</h3>
+          <h3 className={`font-bold ${themeClasses.text} ${sizeClasses.titleSize} truncate flex-1`}>{password.title}</h3>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -93,9 +130,9 @@ export default function PasswordCard({
         </div>
 
         {/* Username with hover copy icon */}
-        <div className="mb-3">
-          <div className="flex items-center gap-2">
-            <p className={`text-sm ${themeClasses.textSecondary} truncate flex-1`}>{password.username}</p>
+        <div className={itemSize === "small" ? "mb-2" : itemSize === "large" ? "mb-4" : "mb-3"}>
+          <div className={`flex items-center ${sizeClasses.gap}`}>
+            <p className={`${sizeClasses.textSize} ${themeClasses.textSecondary} truncate flex-1`}>{password.username}</p>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -112,8 +149,8 @@ export default function PasswordCard({
         </div>
 
         {/* Password with hover copy icon */}
-        <div className="flex items-center gap-2">
-          <p className={`text-sm ${themeClasses.textTertiary} font-mono flex-1`}>••••••••</p>
+        <div className={`flex items-center ${sizeClasses.gap}`}>
+          <p className={`${sizeClasses.textSize} ${themeClasses.textTertiary} font-mono flex-1`}>••••••••</p>
           <button
             onClick={(e) => {
               e.stopPropagation();
