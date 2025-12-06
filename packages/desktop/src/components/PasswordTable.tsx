@@ -1,12 +1,14 @@
-import { PasswordEntry } from "../types";
+import { PasswordEntry, Theme, AccentColor } from "../types";
+import { getAccentColorClasses } from "../utils/accentColors";
 
 interface PasswordTableProps {
   passwords: PasswordEntry[];
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
-  theme: "dark" | "half-dark" | "light";
+  theme: Theme;
   itemSize: "small" | "medium" | "large";
+  accentColor: AccentColor;
 }
 
 export default function PasswordTable({
@@ -16,6 +18,7 @@ export default function PasswordTable({
   onDelete,
   theme,
   itemSize,
+  accentColor,
 }: PasswordTableProps) {
   const getSizeClasses = () => {
     if (itemSize === "small") {
@@ -55,17 +58,17 @@ export default function PasswordTable({
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
-        border: "border-gray-200",
-        hoverBg: "hover:bg-gray-50",
-        text: "text-gray-900",
+        border: "border-gray-300",
+        hoverBg: "hover:bg-gray-200",
+        text: "text-gray-800",
         textSecondary: "text-gray-600",
         textTertiary: "text-gray-500",
         headerText: "text-gray-500",
-        badgeBg: "bg-gray-100",
-        badgeText: "text-gray-600",
-        iconBorder: "border-yellow-400/20",
+        badgeBg: "bg-gray-200",
+        badgeText: "text-gray-700",
+        iconBorder: "",
       };
-    } else if (theme === "half-dark") {
+    } else if (theme === "slate") {
       return {
         border: "border-gray-700",
         hoverBg: "hover:bg-gray-800",
@@ -75,9 +78,34 @@ export default function PasswordTable({
         headerText: "text-gray-500",
         badgeBg: "bg-gray-700",
         badgeText: "text-gray-300",
-        iconBorder: "border-yellow-400/20",
+        iconBorder: "",
+      };
+    } else if (theme === "editor") {
+      return {
+        border: "border-[#3e3e42]",
+        hoverBg: "hover:bg-[#252526]",
+        text: "text-[#d4d4d4]",
+        textSecondary: "text-[#858585]",
+        textTertiary: "text-[#6a6a6a]",
+        headerText: "text-[#6a6a6a]",
+        badgeBg: "bg-[#2a2d2e]",
+        badgeText: "text-[#858585]",
+        iconBorder: "",
+      };
+    } else if (theme === "violet") {
+      return {
+        border: "border-[#6272a4]/60",
+        hoverBg: "hover:bg-[#44475a]",
+        text: "text-[#f8f8f2]",
+        textSecondary: "text-[#c9a0dc]",
+        textTertiary: "text-[#6272a4]",
+        headerText: "text-[#6272a4]",
+        badgeBg: "bg-[#282a36]",
+        badgeText: "text-[#c9a0dc]",
+        iconBorder: "",
       };
     } else {
+      // dark (default)
       return {
         border: "border-[#1a1a1a]",
         hoverBg: "hover:bg-[#0a0a0a]",
@@ -87,12 +115,13 @@ export default function PasswordTable({
         headerText: "text-gray-500",
         badgeBg: "bg-[#1a1a1a]",
         badgeText: "text-gray-400",
-        iconBorder: "border-yellow-400/20",
+        iconBorder: "",
       };
     }
   };
 
   const themeClasses = getThemeClasses();
+  const accentClasses = getAccentColorClasses(accentColor);
 
   return (
     <div className="w-full overflow-x-auto min-w-0">
@@ -115,7 +144,7 @@ export default function PasswordTable({
             >
               <td className={sizeClasses.cellPadding}>
                 <div className={`flex items-center ${sizeClasses.gap}`}>
-                  <div className={`${sizeClasses.iconSize} rounded-lg bg-gradient-to-br from-yellow-400/20 to-yellow-500/10 border ${themeClasses.iconBorder} flex items-center justify-center text-yellow-400 font-bold ${sizeClasses.iconText}`}>
+                  <div className={`${sizeClasses.iconSize} rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold ${sizeClasses.iconText}`}>
                     {password.title.charAt(0).toUpperCase()}
                   </div>
                   <span className={`font-medium ${themeClasses.text} ${sizeClasses.textSize}`}>{password.title}</span>
@@ -129,7 +158,7 @@ export default function PasswordTable({
                       e.stopPropagation();
                       onCopyUsername(password.username);
                     }}
-                    className="opacity-0 group-hover/username:opacity-100 p-1.5 text-gray-500 hover:text-yellow-400 hover:bg-yellow-400/10 rounded transition-all"
+                    className={`opacity-0 group-hover/username:opacity-100 p-1.5 text-gray-500 ${accentClasses.hoverTextClass} ${accentClasses.hoverBgClass} rounded transition-all`}
                     title="Copy username"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +176,7 @@ export default function PasswordTable({
                       e.stopPropagation();
                       onCopyPassword(password.password);
                     }}
-                    className="opacity-0 group-hover/password:opacity-100 p-1.5 text-gray-500 hover:text-yellow-400 hover:bg-yellow-400/10 rounded transition-all"
+                    className={`opacity-0 group-hover/password:opacity-100 p-1.5 text-gray-500 ${accentClasses.hoverTextClass} ${accentClasses.hoverBgClass} rounded transition-all`}
                     title="Copy password"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

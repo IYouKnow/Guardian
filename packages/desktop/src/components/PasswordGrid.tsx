@@ -1,4 +1,4 @@
-import { PasswordEntry } from "../types";
+import { PasswordEntry, Theme, AccentColor } from "../types";
 import PasswordCard from "./PasswordCard";
 
 interface PasswordGridProps {
@@ -6,8 +6,9 @@ interface PasswordGridProps {
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
-  theme: "dark" | "half-dark" | "light";
+  theme: Theme;
   itemSize: "small" | "medium" | "large";
+  accentColor: AccentColor;
 }
 
 export default function PasswordGrid({
@@ -17,6 +18,7 @@ export default function PasswordGrid({
   onDelete,
   theme,
   itemSize,
+  accentColor,
 }: PasswordGridProps) {
   const getGridCols = () => {
     if (itemSize === "small") {
@@ -49,6 +51,7 @@ export default function PasswordGrid({
           onDelete={() => onDelete(password.id)}
           theme={theme}
           itemSize={itemSize}
+          accentColor={accentColor}
         />
       ))}
     </div>

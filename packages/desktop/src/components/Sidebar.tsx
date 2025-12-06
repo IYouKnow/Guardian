@@ -1,4 +1,5 @@
-import { PasswordEntry } from "../types";
+import { PasswordEntry, Theme, AccentColor } from "../types";
+import { getAccentColorClasses } from "../utils/accentColors";
 
 interface SidebarProps {
   categories: string[];
@@ -8,7 +9,8 @@ interface SidebarProps {
   onLogout: () => void;
   onSettings: () => void;
   showSettings: boolean;
-  theme: "dark" | "half-dark" | "light";
+  theme: Theme;
+  accentColor: AccentColor;
 }
 
 export default function Sidebar({
@@ -20,21 +22,22 @@ export default function Sidebar({
   onSettings,
   showSettings,
   theme,
+  accentColor,
 }: SidebarProps) {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
-        bg: "bg-gray-50",
-        text: "text-gray-900",
+        bg: "bg-gray-100",
+        text: "text-gray-800",
         textSecondary: "text-gray-600",
         textTertiary: "text-gray-500",
-        border: "border-gray-200",
-        cardBg: "bg-gray-100",
+        border: "border-gray-300",
+        cardBg: "bg-gray-200",
         hoverBg: "hover:bg-gray-200",
-        hoverText: "hover:text-gray-900",
+        hoverText: "hover:text-gray-800",
         activeBg: "bg-gray-200",
       };
-    } else if (theme === "half-dark") {
+    } else if (theme === "slate") {
       return {
         bg: "bg-gray-900",
         text: "text-gray-100",
@@ -46,7 +49,32 @@ export default function Sidebar({
         hoverText: "hover:text-gray-100",
         activeBg: "bg-gray-800",
       };
+    } else if (theme === "editor") {
+      return {
+        bg: "bg-[#252526]",
+        text: "text-[#d4d4d4]",
+        textSecondary: "text-[#858585]",
+        textTertiary: "text-[#6a6a6a]",
+        border: "border-[#3e3e42]",
+        cardBg: "bg-[#2a2d2e]",
+        hoverBg: "hover:bg-[#2a2d2e]",
+        hoverText: "hover:text-[#d4d4d4]",
+        activeBg: "bg-[#2a2d2e]",
+      };
+    } else if (theme === "violet") {
+      return {
+        bg: "bg-[#282a36]",
+        text: "text-[#f8f8f2]",
+        textSecondary: "text-[#c9a0dc]",
+        textTertiary: "text-[#6272a4]",
+        border: "border-[#6272a4]/60",
+        cardBg: "bg-[#44475a]",
+        hoverBg: "hover:bg-[#44475a]",
+        hoverText: "hover:text-[#f8f8f2]",
+        activeBg: "bg-[#44475a]",
+      };
     } else {
+      // dark (default)
       return {
         bg: "bg-[#0a0a0a]",
         text: "text-white",
@@ -62,6 +90,7 @@ export default function Sidebar({
   };
 
   const themeClasses = getThemeClasses();
+  const accentClasses = getAccentColorClasses(accentColor);
 
   return (
     <aside className={`w-full h-full ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col`}>
@@ -97,7 +126,7 @@ export default function Sidebar({
                   }}
                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
                     activeCategory === category && !showSettings
-                      ? `${themeClasses.activeBg} text-yellow-400`
+                      ? `${themeClasses.activeBg} ${accentClasses.textClass}`
                       : `${themeClasses.textSecondary} ${themeClasses.hoverBg} ${themeClasses.hoverText}`
                   }`}
                 >
@@ -123,7 +152,7 @@ export default function Sidebar({
                 onClick={onSettings}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
                   showSettings
-                    ? `${themeClasses.activeBg} text-yellow-400`
+                    ? `${themeClasses.activeBg} ${accentClasses.textClass}`
                     : `${themeClasses.textSecondary} ${themeClasses.hoverBg} ${themeClasses.hoverText}`
                 }`}
               >
@@ -141,7 +170,7 @@ export default function Sidebar({
       <div className={`p-4 border-t ${themeClasses.border}`}>
         <button
           onClick={onAddPassword}
-          className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-yellow-400/20"
+          className={`w-full ${accentClasses.bgClass} ${accentClasses.bgHoverClass} text-black font-semibold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg ${accentClasses.shadowClass}`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

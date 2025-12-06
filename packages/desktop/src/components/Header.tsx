@@ -1,9 +1,13 @@
+import { Theme, AccentColor } from "../types";
+import { getAccentColorClasses } from "../utils/accentColors";
+
 interface HeaderProps {
   activeCategory: string;
   passwordCount: number;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  theme: "dark" | "half-dark" | "light";
+  theme: Theme;
+  accentColor: AccentColor;
 }
 
 export default function Header({
@@ -12,21 +16,22 @@ export default function Header({
   searchQuery,
   onSearchChange,
   theme,
+  accentColor,
 }: HeaderProps) {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
-        bg: "bg-gray-50",
-        text: "text-gray-900",
+        bg: "bg-gray-100",
+        text: "text-gray-800",
         textSecondary: "text-gray-600",
-        border: "border-gray-200",
-        inputBg: "bg-gray-100",
-        buttonBg: "bg-gray-100",
-        buttonHover: "hover:bg-gray-200",
-        buttonBorder: "border-gray-200",
+        border: "border-gray-300",
+        inputBg: "bg-gray-200",
+        buttonBg: "bg-gray-200",
+        buttonHover: "hover:bg-gray-300",
+        buttonBorder: "border-gray-300",
         iconColor: "text-gray-500",
       };
-    } else if (theme === "half-dark") {
+    } else if (theme === "slate") {
       return {
         bg: "bg-gray-900",
         text: "text-gray-100",
@@ -38,7 +43,32 @@ export default function Header({
         buttonBorder: "border-gray-700",
         iconColor: "text-gray-500",
       };
+    } else if (theme === "editor") {
+      return {
+        bg: "bg-[#2a2d2e]",
+        text: "text-[#d4d4d4]",
+        textSecondary: "text-[#858585]",
+        border: "border-[#3e3e42]",
+        inputBg: "bg-[#1e1e1e]",
+        buttonBg: "bg-[#1e1e1e]",
+        buttonHover: "hover:bg-[#2a2d2e]",
+        buttonBorder: "border-[#3e3e42]",
+        iconColor: "text-[#858585]",
+      };
+    } else if (theme === "violet") {
+      return {
+        bg: "bg-[#44475a]",
+        text: "text-[#f8f8f2]",
+        textSecondary: "text-[#c9a0dc]",
+        border: "border-[#6272a4]/60",
+        inputBg: "bg-[#282a36]",
+        buttonBg: "bg-[#282a36]",
+        buttonHover: "hover:bg-[#44475a]",
+        buttonBorder: "border-[#6272a4]/60",
+        iconColor: "text-[#c9a0dc]",
+      };
     } else {
+      // dark (default)
       return {
         bg: "bg-[#0a0a0a]",
         text: "text-white",
@@ -54,6 +84,7 @@ export default function Header({
   };
 
   const themeClasses = getThemeClasses();
+  const accentClasses = getAccentColorClasses(accentColor);
 
   return (
     <header className={`${themeClasses.bg} border-b ${themeClasses.border} p-6 overflow-x-hidden`}>
@@ -89,7 +120,7 @@ export default function Header({
           placeholder="Search passwords..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className={`w-full pl-12 pr-4 py-3 ${themeClasses.inputBg} border ${themeClasses.border} rounded-lg ${themeClasses.text} placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all`}
+          className={`w-full pl-12 pr-4 py-3 ${themeClasses.inputBg} border ${themeClasses.border} rounded-lg ${themeClasses.text} placeholder-gray-500 focus:outline-none focus:ring-2 ${accentClasses.focusRingClass} ${accentClasses.focusBorderClass} transition-all`}
         />
       </div>
     </header>

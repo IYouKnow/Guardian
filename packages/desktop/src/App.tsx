@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
-import { PasswordEntry } from "./types";
+import { PasswordEntry, Theme, AccentColor } from "./types";
+import { getAccentColorClasses } from "./utils/accentColors";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Sidebar from "./components/Sidebar";
@@ -58,7 +59,8 @@ function App() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showSettings, setShowSettings] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "half-dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>("dark");
+  const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
   const [itemSize, setItemSize] = useState<"small" | "medium" | "large">("medium");
   const [sidebarWidth, setSidebarWidth] = useState(288); // Default 72 * 4 = 288px (w-72)
   const [isResizing, setIsResizing] = useState(false);
@@ -247,29 +249,54 @@ function App() {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
-        bg: "bg-white",
-        text: "text-gray-900",
-        cardBg: "bg-gray-50",
-        border: "border-gray-200",
-        inputBg: "bg-gray-100",
-        headerBg: "bg-gray-50",
-        sidebarBg: "bg-gray-50",
+        bg: "bg-[#fafafa]",
+        text: "text-gray-800",
+        textSecondary: "text-gray-600",
+        cardBg: "bg-gray-100",
+        border: "border-gray-300",
+        inputBg: "bg-gray-200",
+        headerBg: "bg-gray-100",
+        sidebarBg: "bg-gray-100",
       };
-    } else if (theme === "half-dark") {
+    } else if (theme === "slate") {
       return {
         bg: "bg-gray-900",
         text: "text-gray-100",
+        textSecondary: "text-gray-400",
         cardBg: "bg-gray-800",
         border: "border-gray-700",
         inputBg: "bg-gray-800",
         headerBg: "bg-gray-900",
         sidebarBg: "bg-gray-900",
       };
+    } else if (theme === "editor") {
+      return {
+        bg: "bg-[#1e1e1e]",
+        text: "text-[#d4d4d4]",
+        textSecondary: "text-[#858585]",
+        cardBg: "bg-[#252526]",
+        border: "border-[#3e3e42]",
+        inputBg: "bg-[#2a2d2e]",
+        headerBg: "bg-[#2a2d2e]",
+        sidebarBg: "bg-[#252526]",
+      };
+    } else if (theme === "violet") {
+      return {
+        bg: "bg-[#282a36]",
+        text: "text-[#f8f8f2]",
+        textSecondary: "text-[#c9a0dc]",
+        cardBg: "bg-[#44475a]",
+        border: "border-[#6272a4]/60",
+        inputBg: "bg-[#44475a]",
+        headerBg: "bg-[#44475a]",
+        sidebarBg: "bg-[#282a36]",
+      };
     } else {
       // dark (default)
       return {
         bg: "bg-black",
         text: "text-white",
+        textSecondary: "text-gray-400",
         cardBg: "bg-[#0a0a0a]",
         border: "border-[#1a1a1a]",
         inputBg: "bg-[#1a1a1a]",
@@ -338,7 +365,7 @@ function App() {
   return (
     <div className={`flex h-screen overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}>
       <div ref={sidebarRef} style={{ width: `${sidebarWidth}px` }} className="flex-shrink-0 relative">
-        <Sidebar
+            <Sidebar
           categories={categories}
           activeCategory={activeCategory}
           onCategoryChange={(category) => {
@@ -350,6 +377,7 @@ function App() {
           onSettings={() => setShowSettings(!showSettings)}
           showSettings={showSettings}
           theme={theme}
+          accentColor={accentColor}
         />
         {/* Resize handle - wider hit area for easier grabbing */}
         <div
@@ -358,14 +386,14 @@ function App() {
             setIsResizing(true);
           }}
           className={`absolute top-0 right-0 h-full cursor-col-resize z-10 group ${
-            isResizing ? "bg-yellow-400/20" : ""
+            isResizing ? getAccentColorClasses(accentColor).lightClass : ""
           }`}
           style={{ width: '4px', marginRight: '-2px' }}
         >
           <div className={`absolute top-0 right-1/2 h-full w-0.5 transition-all ${
             isResizing 
-              ? "bg-yellow-400" 
-              : "bg-transparent group-hover:bg-yellow-400/40"
+              ? getAccentColorClasses(accentColor).bgClass
+              : `bg-transparent ${getAccentColorClasses(accentColor).hoverBgLightClass}`
           }`} />
         </div>
       </div>
@@ -379,6 +407,8 @@ function App() {
             onThemeChange={setTheme}
             itemSize={itemSize}
             onItemSizeChange={setItemSize}
+            accentColor={accentColor}
+            onAccentColorChange={setAccentColor}
           />
         ) : (
           <>
@@ -388,28 +418,21 @@ function App() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               theme={theme}
+              accentColor={accentColor}
             />
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
               {filteredPasswords.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className={`w-20 h-20 rounded-full ${
-                    theme === "light" ? "bg-gray-200" : theme === "half-dark" ? "bg-gray-800" : "bg-[#1a1a1a]"
-                  } flex items-center justify-center mb-6`}>
-                    <svg className={`w-10 h-10 ${
-                      theme === "light" ? "text-gray-500" : theme === "half-dark" ? "text-gray-500" : "text-gray-600"
-                    }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className={`w-20 h-20 rounded-full ${themeClasses.cardBg} flex items-center justify-center mb-6`}>
+                    <svg className={`w-10 h-10 ${themeClasses.textSecondary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                   </div>
-                  <p className={`${
-                    theme === "light" ? "text-gray-600" : theme === "half-dark" ? "text-gray-400" : "text-gray-400"
-                  } text-lg mb-2`}>
+                  <p className={`${themeClasses.textSecondary} text-lg mb-2`}>
                     {searchQuery ? "No passwords found" : "No passwords yet"}
                   </p>
-                  <p className={`${
-                    theme === "light" ? "text-gray-500" : theme === "half-dark" ? "text-gray-500" : "text-gray-500"
-                  } text-sm`}>
+                  <p className={`${themeClasses.textSecondary} text-sm`}>
                     {searchQuery ? "Try a different search term" : "Add your first password to get started"}
                   </p>
                 </div>
@@ -421,6 +444,7 @@ function App() {
                   onDelete={handleDeletePassword}
                   theme={theme}
                   itemSize={itemSize}
+                  accentColor={accentColor}
                 />
               ) : (
                 <PasswordTable
@@ -430,6 +454,7 @@ function App() {
                   onDelete={handleDeletePassword}
                   theme={theme}
                   itemSize={itemSize}
+                  accentColor={accentColor}
                 />
               )}
             </div>

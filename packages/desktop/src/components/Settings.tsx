@@ -1,266 +1,376 @@
+import { Theme, AccentColor } from "../types";
+import { getAccentColorClasses } from "../utils/accentColors";
+
 interface SettingsProps {
   viewMode: "grid" | "table";
   onViewModeChange: (mode: "grid" | "table") => void;
-  theme: "dark" | "half-dark" | "light";
-  onThemeChange: (theme: "dark" | "half-dark" | "light") => void;
+  theme: Theme;
+  onThemeChange: (theme: Theme) => void;
   itemSize: "small" | "medium" | "large";
   onItemSizeChange: (size: "small" | "medium" | "large") => void;
+  accentColor: AccentColor;
+  onAccentColorChange: (color: AccentColor) => void;
 }
 
-export default function Settings({ viewMode, onViewModeChange, theme, onThemeChange, itemSize, onItemSizeChange }: SettingsProps) {
+export default function Settings({ viewMode, onViewModeChange, theme, onThemeChange, itemSize, onItemSizeChange, accentColor, onAccentColorChange }: SettingsProps) {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
-        bg: "bg-white",
-        text: "text-gray-900",
-        cardBg: "bg-gray-50",
-        border: "border-gray-200",
+        bg: "bg-[#fafafa]",
+        text: "text-gray-800",
+        sectionBg: "bg-gray-100/50",
+        divider: "border-gray-300",
         textSecondary: "text-gray-600",
         textTertiary: "text-gray-500",
+        hoverBg: "hover:bg-gray-200/50",
+        activeBg: "bg-gray-200",
+        activeText: "text-gray-800",
+        radioBorder: "border-gray-400",
       };
-    } else if (theme === "half-dark") {
+    } else if (theme === "slate") {
       return {
         bg: "bg-gray-900",
         text: "text-gray-100",
-        cardBg: "bg-gray-800",
-        border: "border-gray-700",
+        sectionBg: "bg-gray-800/30",
+        divider: "border-gray-700",
         textSecondary: "text-gray-400",
         textTertiary: "text-gray-500",
+        hoverBg: "hover:bg-gray-800/50",
+        activeBg: "bg-gray-800/60",
+        activeText: "text-gray-100",
+        radioBorder: "border-gray-600",
+      };
+    } else if (theme === "editor") {
+      return {
+        bg: "bg-[#1e1e1e]",
+        text: "text-[#d4d4d4]",
+        sectionBg: "bg-[#252526]/50",
+        divider: "border-[#3e3e42]",
+        textSecondary: "text-[#858585]",
+        textTertiary: "text-[#6a6a6a]",
+        hoverBg: "hover:bg-[#2a2d2e]/70",
+        activeBg: "bg-[#2a2d2e]/80",
+        activeText: "text-[#d4d4d4]",
+        radioBorder: "border-[#3e3e42]",
+      };
+    } else if (theme === "violet") {
+      return {
+        bg: "bg-[#282a36]",
+        text: "text-[#f8f8f2]",
+        sectionBg: "bg-[#44475a]/40",
+        divider: "border-[#6272a4]/60",
+        textSecondary: "text-[#c9a0dc]",
+        textTertiary: "text-[#6272a4]",
+        hoverBg: "hover:bg-[#44475a]/60",
+        activeBg: "bg-[#44475a]/70",
+        activeText: "text-[#f8f8f2]",
+        radioBorder: "border-[#6272a4]/60",
       };
     } else {
+      // dark (default)
       return {
         bg: "bg-black",
         text: "text-white",
-        cardBg: "bg-[#0a0a0a]",
-        border: "border-[#1a1a1a]",
+        sectionBg: "bg-[#0a0a0a]/50",
+        divider: "border-[#1a1a1a]",
         textSecondary: "text-gray-400",
         textTertiary: "text-gray-500",
+        hoverBg: "hover:bg-[#0a0a0a]/70",
+        activeBg: "bg-[#0a0a0a]/80",
+        activeText: "text-white",
+        radioBorder: "border-gray-600",
       };
     }
   };
 
   const themeClasses = getThemeClasses();
+  const accentClasses = getAccentColorClasses(accentColor);
 
   return (
-    <div className={`flex-1 overflow-y-auto overflow-x-hidden p-6 ${themeClasses.bg} ${themeClasses.text}`}>
-      <div className="max-w-3xl mx-auto min-w-0">
-        <div className="mb-8">
-          <h1 className={`text-3xl font-bold mb-2 ${
-            theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-          }`}>Settings</h1>
-          <p className={themeClasses.textSecondary}>Manage your password manager preferences</p>
+    <div className={`flex-1 overflow-y-auto overflow-x-hidden ${themeClasses.bg} ${themeClasses.text}`}>
+      <div className="max-w-4xl mx-auto min-w-0 px-8 py-12">
+        {/* Header */}
+        <div className="mb-16">
+          <h1 className={`text-4xl font-bold mb-3 ${themeClasses.text}`}>Settings</h1>
+          <p className={`text-base ${themeClasses.textSecondary}`}>Manage your password manager preferences</p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-16">
           {/* Theme Setting */}
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-6`}>
-            <div className="mb-4">
-              <h2 className={`text-xl font-semibold mb-2 ${
-                theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-              }`}>Theme</h2>
+          <section>
+            <div className="mb-6">
+              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Theme</h2>
               <p className={`text-sm ${themeClasses.textSecondary}`}>
                 Customize the appearance of your password manager
               </p>
             </div>
 
-            <div className="space-y-2">
-              <button
-                onClick={() => onThemeChange("dark")}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  theme === "dark"
-                    ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                    : theme === "light"
-                    ? "border border-gray-200 text-gray-600 hover:text-gray-900"
-                    : "border border-gray-700 text-gray-400 hover:text-gray-100"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Dark Mode</span>
-                  {theme === "dark" && (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("half-dark")}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  theme === "half-dark"
-                    ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                    : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Half Dark Mode</span>
-                  {theme === "half-dark" && (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </button>
+            <div className="space-y-3">
               <button
                 onClick={() => onThemeChange("light")}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
                   theme === "light"
-                    ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                    : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                    theme === "light"
+                      ? accentClasses.baseClass
+                      : themeClasses.radioBorder
+                  }`}>
+                    {theme === "light" && (
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                    )}
+                  </div>
                   <span className="text-sm font-medium">Light Mode</span>
-                  {theme === "light" && (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
+                </div>
+              </button>
+              <button
+                onClick={() => onThemeChange("dark")}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
+                  theme === "dark"
+                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                    theme === "dark"
+                      ? accentClasses.baseClass
+                      : themeClasses.radioBorder
+                  }`}>
+                    {theme === "dark" && (
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">Dark Mode</span>
+                </div>
+              </button>
+              <button
+                onClick={() => onThemeChange("slate")}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
+                  theme === "slate"
+                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                    theme === "slate"
+                      ? accentClasses.baseClass
+                      : themeClasses.radioBorder
+                  }`}>
+                    {theme === "slate" && (
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">Slate</span>
+                </div>
+              </button>
+              <button
+                onClick={() => onThemeChange("editor")}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
+                  theme === "editor"
+                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                    theme === "editor"
+                      ? accentClasses.baseClass
+                      : themeClasses.radioBorder
+                  }`}>
+                    {theme === "editor" && (
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">Editor</span>
+                </div>
+              </button>
+              <button
+                onClick={() => onThemeChange("violet")}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
+                  theme === "violet"
+                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                    theme === "violet"
+                      ? accentClasses.baseClass
+                      : themeClasses.radioBorder
+                  }`}>
+                    {theme === "violet" && (
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">Violet</span>
                 </div>
               </button>
             </div>
-          </div>
+          </section>
 
-          {/* View Mode Setting */}
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-6`}>
-            <div className="mb-4">
-              <h2 className={`text-xl font-semibold mb-2 ${
-                theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-              }`}>Display Preferences</h2>
+          {/* Divider */}
+          <div className={`border-t ${themeClasses.divider}`} />
+
+          {/* Accent Color Setting */}
+          <section>
+            <div className="mb-6">
+              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Accent Color</h2>
+              <p className={`text-sm ${themeClasses.textSecondary}`}>
+                Choose your preferred accent color for buttons and highlights
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3">
+              {(["yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"] as AccentColor[]).map((color) => {
+                const colorClasses = getAccentColorClasses(color);
+                return (
+                  <button
+                    key={color}
+                    onClick={() => onAccentColorChange(color)}
+                    className={`relative aspect-square rounded-lg border-2 transition-all ${
+                      accentColor === color
+                        ? `${colorClasses.baseClass} ${colorClasses.lightClass}`
+                        : `${themeClasses.border} ${themeClasses.sectionBg} ${themeClasses.hoverBg}`
+                    }`}
+                  >
+                    <div className={`w-full h-full rounded-md ${colorClasses.bgClass}`} />
+                    {accentColor === color && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <svg className={`w-6 h-6 ${colorClasses.textClass}`} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Divider */}
+          <div className={`border-t ${themeClasses.divider}`} />
+
+          {/* Display Preferences */}
+          <section>
+            <div className="mb-6">
+              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Display Preferences</h2>
               <p className={`text-sm ${themeClasses.textSecondary}`}>
                 Customize how your passwords are displayed in the main view
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-8">
+              {/* View Mode */}
               <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  theme === "light" ? "text-gray-700" : theme === "half-dark" ? "text-gray-300" : "text-gray-300"
-                }`}>
+                <label className={`block text-sm font-medium mb-4 ${themeClasses.text}`}>
                   View Mode
                 </label>
-                <select
-                  value={viewMode}
-                  onChange={(e) => onViewModeChange(e.target.value as "grid" | "table")}
-                  className={`w-full ${themeClasses.cardBg} border ${themeClasses.border} rounded-lg px-4 py-3 ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all`}
-                >
-                  <option value="grid">Grid View</option>
-                  <option value="table">Table View</option>
-                </select>
-              </div>
-
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${
-                  theme === "light" ? "text-gray-700" : theme === "half-dark" ? "text-gray-300" : "text-gray-300"
-                }`}>
-                  Item Size
-                </label>
-                <div className="space-y-2">
+                <div className="flex gap-3">
                   <button
-                    onClick={() => onItemSizeChange("small")}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                      itemSize === "small"
-                        ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                        : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                    onClick={() => onViewModeChange("grid")}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === "grid"
+                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Small</span>
-                      {itemSize === "small" && (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
+                    Grid View
+                  </button>
+                  <button
+                    onClick={() => onViewModeChange("table")}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                      viewMode === "table"
+                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                    }`}
+                  >
+                    Table View
+                  </button>
+                </div>
+              </div>
+
+              {/* Item Size */}
+              <div>
+                <label className={`block text-sm font-medium mb-4 ${themeClasses.text}`}>
+                  Item Size
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => onItemSizeChange("small")}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                      itemSize === "small"
+                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                    }`}
+                  >
+                    Small
                   </button>
                   <button
                     onClick={() => onItemSizeChange("medium")}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                       itemSize === "medium"
-                        ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                        : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Medium</span>
-                      {itemSize === "medium" && (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
+                    Medium
                   </button>
                   <button
                     onClick={() => onItemSizeChange("large")}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                       itemSize === "large"
-                        ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                        : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Large</span>
-                      {itemSize === "large" && (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
+                    Large
                   </button>
                 </div>
               </div>
 
-              <div className={`${theme === "light" ? "bg-gray-100" : theme === "half-dark" ? "bg-gray-700" : "bg-[#111111]"} border ${themeClasses.border} rounded-lg p-4`}>
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 mt-0.5">
-                    <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className={`text-sm font-medium mb-1 ${
-                      theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-                    }`}>About View Modes</h3>
-                    <p className={`text-sm ${themeClasses.textSecondary} leading-relaxed`}>
-                      <strong className={theme === "light" ? "text-gray-800" : theme === "half-dark" ? "text-gray-200" : "text-gray-300"}>Grid View:</strong> Displays passwords as cards in a grid layout. 
-                      Ideal for quickly browsing through your passwords with visual icons. Best for users who prefer a 
-                      more visual and modern interface.
-                    </p>
-                    <p className={`text-sm ${themeClasses.textSecondary} leading-relaxed mt-2`}>
-                      <strong className={theme === "light" ? "text-gray-800" : theme === "half-dark" ? "text-gray-200" : "text-gray-300"}>Table View:</strong> Displays passwords in a traditional table format 
-                      with columns for service, username, website, password, and category. Perfect for users who need to 
-                      see more information at once and prefer a compact, organized layout.
-                    </p>
-                  </div>
-                </div>
+              {/* Info Box - More Subtle */}
+              <div className={`${themeClasses.sectionBg} rounded-lg p-5 mt-6`}>
+                <p className={`text-sm ${themeClasses.textSecondary} leading-relaxed`}>
+                  <span className={`font-medium ${themeClasses.text}`}>Grid View</span> displays passwords as cards in a grid layout, ideal for visual browsing.{" "}
+                  <span className={`font-medium ${themeClasses.text}`}>Table View</span> shows passwords in a compact table format with columns for detailed information.
+                </p>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Additional Settings Placeholder */}
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-6`}>
-            <div className="mb-4">
-              <h2 className={`text-xl font-semibold mb-2 ${
-                theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-              }`}>Security</h2>
+          {/* Divider */}
+          <div className={`border-t ${themeClasses.divider}`} />
+
+          {/* Security Section */}
+          <section>
+            <div className="mb-6">
+              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Security</h2>
               <p className={`text-sm ${themeClasses.textSecondary}`}>
                 Security and encryption settings
               </p>
             </div>
             <p className={`text-sm ${themeClasses.textTertiary}`}>More security options coming soon...</p>
-          </div>
+          </section>
 
-          {/* Additional Settings Placeholder */}
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-6`}>
-            <div className="mb-4">
-              <h2 className={`text-xl font-semibold mb-2 ${
-                theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-              }`}>General</h2>
+          {/* Divider */}
+          <div className={`border-t ${themeClasses.divider}`} />
+
+          {/* General Section */}
+          <section>
+            <div className="mb-6">
+              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>General</h2>
               <p className={`text-sm ${themeClasses.textSecondary}`}>
                 General application preferences
               </p>
             </div>
             <p className={`text-sm ${themeClasses.textTertiary}`}>More general options coming soon...</p>
-          </div>
+          </section>
         </div>
       </div>
     </div>
