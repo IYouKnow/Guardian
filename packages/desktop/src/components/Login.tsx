@@ -4,7 +4,7 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { loadVault } from "../../../shared/crypto";
 
 interface LoginProps {
-  onLogin: (vaultPath: string) => void;
+  onLogin: (vaultPath: string, masterPassword: string) => void;
   onRegister: () => void;
 }
 
@@ -67,7 +67,7 @@ export default function Login({ onLogin, onRegister }: LoginProps) {
       await loadVault(masterPassword, vaultBytes);
 
       // Success - vault decrypted correctly
-      onLogin(vaultPath);
+      onLogin(vaultPath, masterPassword);
       setMasterPassword("");
     } catch (err) {
       console.error("Error loading vault:", err);

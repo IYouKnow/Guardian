@@ -1,8 +1,6 @@
 interface HeaderProps {
   activeCategory: string;
   passwordCount: number;
-  viewMode: "grid" | "table";
-  onViewModeToggle: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
 }
@@ -10,8 +8,6 @@ interface HeaderProps {
 export default function Header({
   activeCategory,
   passwordCount,
-  viewMode,
-  onViewModeToggle,
   searchQuery,
   onSearchChange,
 }: HeaderProps) {
@@ -25,29 +21,6 @@ export default function Header({
           <p className="text-sm text-gray-400">{passwordCount} passwords</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* View Mode Toggle */}
-          <div className="relative">
-            <button
-              onClick={onViewModeToggle}
-              className="px-3 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a] flex items-center gap-2"
-            >
-              {viewMode === "grid" ? (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                  </svg>
-                  <span>Table</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                  <span>Grid</span>
-                </>
-              )}
-            </button>
-          </div>
           <button className="px-4 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a]">
             Import
           </button>

@@ -4,7 +4,7 @@ import { writeFile } from "@tauri-apps/plugin-fs";
 import { createVault, createEmptyVault } from "../../../shared/crypto";
 
 interface RegisterProps {
-  onRegister: (vaultPath: string) => void;
+  onRegister: (vaultPath: string, masterPassword: string) => void;
   onBackToLogin: () => void;
 }
 
@@ -73,8 +73,8 @@ export default function Register({ onRegister, onBackToLogin }: RegisterProps) {
       // Write encrypted vault file as binary
       await writeFile(vaultPath, encryptedVault, { createNew: true });
       
-      // Callback with vault path
-      onRegister(vaultPath);
+      // Callback with vault path and master password
+      onRegister(vaultPath, masterPassword);
     } catch (err) {
       console.error("Error creating vault:", err);
       setError("Failed to create vault file. Please try again.");
