@@ -1,1 +1,27 @@
 @tailwind base; @tailwind components; @tailwind utilities;
+
+/* Remove default margins and borders for extension popup */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  width: 600px;
+  height: 700px;
+  background: transparent;
+}
+
+#root {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  width: 600px;
+  height: 700px;
+  display: flex;
+  flex-direction: column;
+}

@@ -3,6 +3,14 @@
   "name": "Guardian",
   "version": "0.1.0",
   "description": "Your forever password vault",
-  "action": { "default_popup": "index.html" },
-  "permissions": []
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Guardian"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
 }
