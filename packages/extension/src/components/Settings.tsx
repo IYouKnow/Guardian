@@ -2,17 +2,15 @@ import { Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 
 interface SettingsProps {
-  viewMode: "grid" | "table";
-  onViewModeChange: (mode: "grid" | "table") => void;
   theme: Theme;
   onThemeChange: (theme: Theme) => void;
-  itemSize: "small" | "medium" | "large";
-  onItemSizeChange: (size: "small" | "medium" | "large") => void;
   accentColor: AccentColor;
   onAccentColorChange: (color: AccentColor) => void;
+  onBack: () => void;
+  onLogout: () => void;
 }
 
-export default function Settings({ viewMode, onViewModeChange, theme, onThemeChange, itemSize, onItemSizeChange, accentColor, onAccentColorChange }: SettingsProps) {
+export default function Settings({ theme, onThemeChange, accentColor, onAccentColorChange, onBack, onLogout }: SettingsProps) {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
@@ -88,20 +86,31 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
 
   return (
     <div className={`flex-1 overflow-y-auto overflow-x-hidden ${themeClasses.bg} ${themeClasses.text}`}>
-      <div className="max-w-4xl mx-auto min-w-0 px-8 py-12">
+      <div className="max-w-4xl mx-auto min-w-0 px-4 py-6">
         {/* Header */}
-        <div className="mb-16">
-          <h1 className={`text-4xl font-bold mb-3 ${themeClasses.text}`}>Settings</h1>
-          <p className={`text-base ${themeClasses.textSecondary}`}>Manage your password manager preferences</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className={`text-2xl font-bold mb-1 ${themeClasses.text}`}>Settings</h1>
+            <p className={`text-sm ${themeClasses.textSecondary}`}>Manage your preferences</p>
+          </div>
+          <button
+            onClick={onBack}
+            className={`p-2 ${themeClasses.textSecondary} hover:${themeClasses.text} transition-colors`}
+            title="Back"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        <div className="space-y-16">
+        <div className="space-y-8">
           {/* Theme Setting */}
           <section>
-            <div className="mb-6">
-              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Theme</h2>
-              <p className={`text-sm ${themeClasses.textSecondary}`}>
-                Customize the appearance of your password manager
+            <div className="mb-4">
+              <h2 className={`text-lg font-semibold mb-1 ${themeClasses.text}`}>Theme</h2>
+              <p className={`text-xs ${themeClasses.textSecondary}`}>
+                Customize the appearance
               </p>
             </div>
 
@@ -219,10 +228,10 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
 
           {/* Accent Color Setting */}
           <section>
-            <div className="mb-6">
-              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Accent Color</h2>
-              <p className={`text-sm ${themeClasses.textSecondary}`}>
-                Choose your preferred accent color for buttons and highlights
+            <div className="mb-4">
+              <h2 className={`text-lg font-semibold mb-1 ${themeClasses.text}`}>Accent Color</h2>
+              <p className={`text-xs ${themeClasses.textSecondary}`}>
+                Choose your preferred accent color
               </p>
             </div>
 
@@ -256,92 +265,14 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
           {/* Divider */}
           <div className={`border-t ${themeClasses.divider}`} />
 
-          {/* Display Preferences */}
+          {/* Logout */}
           <section>
-            <div className="mb-6">
-              <h2 className={`text-2xl font-semibold mb-2 ${themeClasses.text}`}>Display Preferences</h2>
-              <p className={`text-sm ${themeClasses.textSecondary}`}>
-                Customize how your passwords are displayed in the main view
-              </p>
-            </div>
-
-            <div className="space-y-8">
-              {/* View Mode */}
-              <div>
-                <label className={`block text-sm font-medium mb-4 ${themeClasses.text}`}>
-                  View Mode
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => onViewModeChange("grid")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      viewMode === "grid"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
-                  >
-                    Grid View
-                  </button>
-                  <button
-                    onClick={() => onViewModeChange("table")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      viewMode === "table"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
-                  >
-                    Table View
-                  </button>
-                </div>
-              </div>
-
-              {/* Item Size */}
-              <div>
-                <label className={`block text-sm font-medium mb-4 ${themeClasses.text}`}>
-                  Item Size
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => onItemSizeChange("small")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      itemSize === "small"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
-                  >
-                    Small
-                  </button>
-                  <button
-                    onClick={() => onItemSizeChange("medium")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      itemSize === "medium"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
-                  >
-                    Medium
-                  </button>
-                  <button
-                    onClick={() => onItemSizeChange("large")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      itemSize === "large"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
-                  >
-                    Large
-                  </button>
-                </div>
-              </div>
-
-              {/* Info Box */}
-              <div className={`${themeClasses.sectionBg} rounded-lg p-5 mt-6`}>
-                <p className={`text-sm ${themeClasses.textSecondary} leading-relaxed`}>
-                  <span className={`font-medium ${themeClasses.text}`}>Grid View</span> displays passwords as cards in a grid layout, ideal for visual browsing.{" "}
-                  <span className={`font-medium ${themeClasses.text}`}>Table View</span> shows passwords in a compact table format with columns for detailed information.
-                </p>
-              </div>
-            </div>
+            <button
+              onClick={onLogout}
+              className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition-all text-red-400 hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/50`}
+            >
+              Logout
+            </button>
           </section>
         </div>
       </div>

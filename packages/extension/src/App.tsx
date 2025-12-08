@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import { PasswordEntry, Theme, AccentColor } from "./types";
-import { getAccentColorClasses } from "./utils/accentColors";
 import Login from "./components/Login";
-import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
 import PasswordGrid from "./components/PasswordGrid";
-import PasswordTable from "./components/PasswordTable";
+import PasswordDetail from "./components/PasswordDetail";
 import Settings from "./components/Settings";
 import { VaultEntry, openVault } from "../../shared/crypto";
 import { loadSettings, saveSettings, type ExtensionSettings } from "./utils/storage";
@@ -35,12 +32,10 @@ function App() {
   const [masterPassword, setMasterPassword] = useState<string>("");
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedPassword, setSelectedPassword] = useState<PasswordEntry | null>(null);
   const [theme, setTheme] = useState<Theme>("dark");
   const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
-  const [itemSize, setItemSize] = useState<"small" | "medium" | "large">("medium");
 
   // Load settings on mount
   useEffect(() => {
@@ -68,11 +63,8 @@ function App() {
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.website.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = activeCategory === "all" || p.category === activeCategory;
-    return matchesSearch && matchesCategory;
+    return matchesSearch;
   });
-
-  const categories = ["all", ...Array.from(new Set(passwords.map((p) => p.category).filter((c): c is string => Boolean(c))))];
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -115,6 +107,7 @@ function App() {
     setMasterPassword("");
     setPasswords([]);
     setShowSettings(false);
+    setSelectedPassword(null);
   };
 
   const handleLogin = async (file: File, password: string) => {
@@ -208,84 +201,106 @@ function App() {
 
   // Main App
   return (
-    <div className={`flex h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}>
-      <div className="w-72 flex-shrink-0 relative">
-        <Sidebar
-          categories={categories}
-          activeCategory={activeCategory}
-          onCategoryChange={(category) => {
-            setActiveCategory(category);
-            setShowSettings(false); // Close settings when selecting category
-          }}
+    <div className={`flex flex-col h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}>
+      {showSettings ? (
+        <Settings
+          theme={theme}
+          onThemeChange={setTheme}
+          accentColor={accentColor}
+          onAccentColorChange={setAccentColor}
+          onBack={() => setShowSettings(false)}
           onLogout={handleLogout}
-          onSettings={() => setShowSettings(!showSettings)}
-          showSettings={showSettings}
+        />
+      ) : selectedPassword ? (
+        <PasswordDetail
+          password={selectedPassword}
+          onCopyUsername={() => handleCopyUsername(selectedPassword.username)}
+          onCopyPassword={() => handleCopyPassword(selectedPassword.password)}
+          onBack={() => setSelectedPassword(null)}
           theme={theme}
           accentColor={accentColor}
         />
-      </div>
-
-      <main className={`flex-1 flex flex-col overflow-hidden min-w-0 ${themeClasses.bg}`}>
-        {showSettings ? (
-          <Settings
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            theme={theme}
-            onThemeChange={setTheme}
-            itemSize={itemSize}
-            onItemSizeChange={setItemSize}
-            accentColor={accentColor}
-            onAccentColorChange={setAccentColor}
-          />
-        ) : (
-          <>
-            <Header
-              activeCategory={activeCategory}
-              passwordCount={filteredPasswords.length}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              theme={theme}
-              accentColor={accentColor}
-            />
-
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
-              {filteredPasswords.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className={`w-20 h-20 rounded-full ${themeClasses.cardBg} flex items-center justify-center mb-6`}>
-                    <svg className={`w-10 h-10 ${themeClasses.textSecondary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <p className={`${themeClasses.textSecondary} text-lg mb-2`}>
-                    {searchQuery ? "No passwords found" : "No passwords yet"}
-                  </p>
-                  <p className={`${themeClasses.textSecondary} text-sm`}>
-                    {searchQuery ? "Try a different search term" : "No passwords in this vault"}
-                  </p>
-                </div>
-              ) : viewMode === "grid" ? (
-                <PasswordGrid
-                  passwords={filteredPasswords}
-                  onCopyUsername={handleCopyUsername}
-                  onCopyPassword={handleCopyPassword}
-                  theme={theme}
-                  itemSize={itemSize}
-                  accentColor={accentColor}
-                />
-              ) : (
-                <PasswordTable
-                  passwords={filteredPasswords}
-                  onCopyUsername={handleCopyUsername}
-                  onCopyPassword={handleCopyPassword}
-                  theme={theme}
-                  itemSize={itemSize}
-                  accentColor={accentColor}
-                />
-              )}
+      ) : (
+        <>
+          {/* Compact Header with Search */}
+          <header className={`${themeClasses.headerBg} border-b ${themeClasses.border} px-4 py-3 flex-shrink-0`}>
+            <div className="flex items-center justify-between mb-2">
+              <h1 className={`text-lg font-bold ${themeClasses.text}`}>Guardian</h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className={`p-1.5 ${themeClasses.textSecondary} hover:${themeClasses.text} transition-colors`}
+                  title="Settings"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className={`p-1.5 ${themeClasses.textSecondary} hover:text-red-400 transition-colors`}
+                  title="Logout"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
             </div>
-          </>
-        )}
-      </main>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search passwords..."
+                className={`w-full ${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-3 py-2 pl-9 text-sm ${themeClasses.text} placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all`}
+              />
+              <svg
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            {filteredPasswords.length > 0 && (
+              <p className={`text-xs ${themeClasses.textSecondary} mt-2 px-1`}>
+                {filteredPasswords.length} {filteredPasswords.length === 1 ? 'password' : 'passwords'}
+              </p>
+            )}
+          </header>
+
+          {/* Main Content - Vertical Card Stack */}
+          <main className="flex-1 overflow-y-auto p-4">
+            {filteredPasswords.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center py-20">
+                <div className={`w-16 h-16 rounded-full ${themeClasses.cardBg} flex items-center justify-center mb-4`}>
+                  <svg className={`w-8 h-8 ${themeClasses.textSecondary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <p className={`text-base mb-1 ${themeClasses.textSecondary}`}>
+                  {searchQuery ? "No passwords found" : "No passwords yet"}
+                </p>
+                <p className={`text-sm ${themeClasses.textSecondary}`}>
+                  {searchQuery ? "Try a different search term" : "Your passwords will appear here"}
+                </p>
+              </div>
+            ) : (
+              <PasswordGrid
+                passwords={filteredPasswords}
+                onCardClick={(password) => setSelectedPassword(password)}
+                onCopyUsername={handleCopyUsername}
+                onCopyPassword={handleCopyPassword}
+                theme={theme}
+                accentColor={accentColor}
+              />
+            )}
+          </main>
+        </>
+      )}
     </div>
   );
 }

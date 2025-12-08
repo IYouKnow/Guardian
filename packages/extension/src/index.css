@@ -10,9 +10,10 @@ html, body {
   padding: 0;
   border: none;
   outline: none;
-  width: 600px;
-  height: 700px;
+  width: 380px;
+  height: 500px;
   background: transparent;
+  overflow: hidden;
 }
 
 #root {
@@ -20,8 +21,9 @@ html, body {
   padding: 0;
   border: none;
   outline: none;
-  width: 600px;
-  height: 700px;
+  width: 380px;
+  height: 500px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
