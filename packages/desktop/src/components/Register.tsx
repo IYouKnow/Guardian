@@ -1,10 +1,8 @@
 import { useState, FormEvent } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
-import { createVault, createEmptyVault } from "../../../shared/crypto";
 
 interface RegisterProps {
-  onRegister: (vaultPath: string, masterPassword: string) => void;
+  onRegister: (vaultPath: string, masterPassword: string) => Promise<void>;
   onBackToLogin: () => void;
 }
 
@@ -63,21 +61,12 @@ export default function Register({ onRegister, onBackToLogin }: RegisterProps) {
     setIsCreating(true);
 
     try {
-      // Create initial vault data
-      const vaultData = createEmptyVault();
-
-      // Encrypt vault with master password
-      // createVault expects entries array, not the full VaultData object
-      const encryptedVault = await createVault(masterPassword, vaultData.entries);
-
-      // Write encrypted vault file as binary
-      await writeFile(vaultPath, encryptedVault, { createNew: true });
-      
-      // Callback with vault path and master password
-      onRegister(vaultPath, masterPassword);
+      await onRegister(vaultPath, masterPassword);
     } catch (err) {
       console.error("Error creating vault:", err);
-      setError("Failed to create vault file. Please try again.");
+      setError(
+        err instanceof Error ? err.message : "Failed to create vault file. Please try again."
+      );
       setIsCreating(false);
     }
   };

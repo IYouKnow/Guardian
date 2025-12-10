@@ -16,6 +16,18 @@
     "fs:allow-read-dir",
     "fs:write-all",
     "fs:read-all",
-    "fs:scope"
+    "fs:scope",
+    "store:default",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-has",
+    "store:allow-delete",
+    "store:allow-clear",
+    "store:allow-keys",
+    "store:allow-values",
+    "store:allow-entries",
+    "store:allow-length",
+    "store:allow-load",
+    "store:allow-save"
   ]
 }

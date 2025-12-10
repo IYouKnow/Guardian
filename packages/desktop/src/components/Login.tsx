@@ -1,19 +1,25 @@
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readFile } from "@tauri-apps/plugin-fs";
-import { loadVault } from "../../../shared/crypto";
 
 interface LoginProps {
-  onLogin: (vaultPath: string, masterPassword: string) => void;
+  onLogin: (vaultPath: string, masterPassword: string) => Promise<void>;
   onRegister: () => void;
+  lastVaultPath?: string | null;
 }
 
-export default function Login({ onLogin, onRegister }: LoginProps) {
+export default function Login({ onLogin, onRegister, lastVaultPath }: LoginProps) {
   const [masterPassword, setMasterPassword] = useState("");
-  const [vaultPath, setVaultPath] = useState<string>("");
+  const [vaultPath, setVaultPath] = useState<string>(lastVaultPath || "");
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Update vault path when lastVaultPath changes
+  useEffect(() => {
+    if (lastVaultPath) {
+      setVaultPath(lastVaultPath);
+    }
+  }, [lastVaultPath]);
 
   const handleSelectVault = async () => {
     try {
@@ -55,23 +61,13 @@ export default function Login({ onLogin, onRegister }: LoginProps) {
     setIsLoading(true);
 
     try {
-      // Read vault file as binary
-      const vaultData = await readFile(vaultPath);
-      
-      // Ensure we have a Uint8Array (Tauri readFile should return this, but ensure compatibility)
-      const vaultBytes = vaultData instanceof Uint8Array 
-        ? vaultData 
-        : new Uint8Array(vaultData);
-
-      // Try to decrypt vault
-      await loadVault(masterPassword, vaultBytes);
-
-      // Success - vault decrypted correctly
-      onLogin(vaultPath, masterPassword);
+      await onLogin(vaultPath, masterPassword);
       setMasterPassword("");
     } catch (err) {
       console.error("Error loading vault:", err);
-      setLoginError("Invalid master password or corrupted vault file");
+      setLoginError(
+        err instanceof Error ? err.message : "Invalid master password or corrupted vault file"
+      );
       setIsLoading(false);
     }
   };

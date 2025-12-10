@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
-import { PasswordEntry, Theme, AccentColor } from "./types";
+import { Theme, AccentColor } from "./types";
 import { getAccentColorClasses } from "./utils/accentColors";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -11,84 +11,116 @@ import PasswordTable from "./components/PasswordTable";
 import AddPasswordModal from "./components/AddPasswordModal";
 import DeleteConfirmModal from "./components/DeleteConfirmModal";
 import Settings from "./components/Settings";
-import { VaultEntry, loadVault, createVault } from "../../shared/crypto";
-import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-
-// Helper function to convert VaultEntry to PasswordEntry
-function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
-  return {
-    id: vaultEntry.id,
-    title: vaultEntry.name,
-    username: vaultEntry.username || "",
-    website: vaultEntry.url || "",
-    password: vaultEntry.password,
-    category: undefined, // VaultEntry doesn't have category, can be added later
-    favorite: false,
-    passwordStrength: undefined,
-    lastModified: vaultEntry.lastModified,
-    notes: vaultEntry.notes,
-    tags: undefined,
-    breached: false,
-  };
-}
-
-// Helper function to convert PasswordEntry to VaultEntry
-function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
-  return {
-    id: passwordEntry.id,
-    name: passwordEntry.title,
-    username: passwordEntry.username || undefined,
-    password: passwordEntry.password,
-    url: passwordEntry.website || undefined,
-    notes: passwordEntry.notes || undefined,
-    createdAt: new Date().toISOString(),
-    lastModified: passwordEntry.lastModified || new Date().toISOString(),
-  };
-}
+import ToastContainer from "./components/ToastContainer";
+import { usePreferences } from "./hooks/usePreferences";
+import { useVault } from "./hooks/useVault";
+import { usePasswords } from "./hooks/usePasswords";
+import { useToast } from "./hooks/useToast";
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [vaultPath, setVaultPath] = useState<string | null>(null);
-  const [masterPassword, setMasterPassword] = useState<string>("");
-  const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
-  // Map to preserve createdAt timestamps from vault entries
-  const [entryCreatedAtMap, setEntryCreatedAtMap] = useState<Map<string, string>>(new Map());
-  const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showSettings, setShowSettings] = useState(false);
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
-  const [itemSize, setItemSize] = useState<"small" | "medium" | "large">("medium");
-  const [sidebarWidth, setSidebarWidth] = useState(288); // Default 72 * 4 = 288px (w-72)
   const [isResizing, setIsResizing] = useState(false);
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; passwordId: string | null; passwordTitle: string }>({
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    passwordId: string | null;
+    passwordTitle: string;
+  }>({
     isOpen: false,
     passwordId: null,
     passwordTitle: "",
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const filteredPasswords = passwords.filter((p) => {
-    const matchesSearch =
-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.website.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = activeCategory === "all" || p.category === activeCategory;
-    return matchesSearch && matchesCategory;
+  // Custom hooks
+  const {
+    preferences,
+    isLoading: preferencesLoading,
+    setTheme,
+    setAccentColor,
+    setViewMode,
+    setItemSize,
+    setSidebarWidth,
+    setLastVaultPath,
+  } = usePreferences();
+
+  const {
+    vaultPath,
+    isAuthenticated,
+    isLoading: vaultLoading,
+    loadVaultFile,
+    saveVaultFile,
+    createNewVault,
+    logout: vaultLogout,
+  } = useVault();
+
+  const { toasts, removeToast, success, error: showError } = useToast();
+
+  const {
+    passwords,
+    filteredPasswords,
+    categories,
+    searchQuery,
+    activeCategory,
+    setSearchQuery,
+    setActiveCategory,
+    addPassword,
+    deletePassword,
+    loadPasswords,
+  } = usePasswords({
+    onSave: saveVaultFile,
   });
 
-  const categories = ["all", ...Array.from(new Set(passwords.map((p) => p.category).filter((c): c is string => Boolean(c))))];
+  // Load last vault path on mount
+  useEffect(() => {
+    if (preferences.lastVaultPath && !isAuthenticated && !preferencesLoading) {
+      // Optionally auto-load last vault (commented out for security)
+      // User should manually login
+    }
+  }, [preferences.lastVaultPath, isAuthenticated, preferencesLoading]);
+
+  // Sidebar resize handlers
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = e.clientX;
+      const minWidth = 200;
+      const maxWidth = 600;
+
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, setSidebarWidth]);
 
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      // You could add a toast notification here if needed
+      success("Copied to clipboard");
     } catch (err) {
       console.error("Failed to copy:", err);
+      showError("Failed to copy to clipboard");
     }
   };
 
@@ -97,84 +129,23 @@ function App() {
   };
 
   const handleCopyPassword = (password: string) => {
-    // Note: In a real app, you'd decrypt the password here
-    // For now, we'll copy the actual password value
     copyToClipboard(password);
   };
 
-  const loadPasswordsFromVault = async (path: string, password: string) => {
+  const handleAddPassword = async (newPassword: any) => {
     try {
-      const vaultData = await readFile(path);
-      const vaultBytes = vaultData instanceof Uint8Array 
-        ? vaultData 
-        : new Uint8Array(vaultData);
-      
-      const decryptedVault = await loadVault(password, vaultBytes);
-      
-      // Convert VaultEntry[] to PasswordEntry[] and preserve createdAt
-      const loadedPasswords = decryptedVault.entries.map(vaultEntryToPasswordEntry);
-      const createdAtMap = new Map<string, string>();
-      decryptedVault.entries.forEach(entry => {
-        createdAtMap.set(entry.id, entry.createdAt);
-      });
-      
-      setEntryCreatedAtMap(createdAtMap);
-      setPasswords(loadedPasswords);
+      await addPassword(newPassword);
+      success("Password added successfully");
+      setShowAddModal(false);
     } catch (err) {
-      console.error("Error loading passwords from vault:", err);
-      throw err;
-    }
-  };
-
-  const savePasswordsToVault = async (updatedPasswords: PasswordEntry[]) => {
-    if (!vaultPath || !masterPassword) return;
-
-    try {
-      // Convert PasswordEntry[] to VaultEntry[], preserving createdAt where possible
-      const vaultEntries = updatedPasswords.map(entry => {
-        const vaultEntry = passwordEntryToVaultEntry(entry);
-        // Preserve original createdAt if it exists
-        const originalCreatedAt = entryCreatedAtMap.get(entry.id);
-        if (originalCreatedAt) {
-          vaultEntry.createdAt = originalCreatedAt;
-        }
-        return vaultEntry;
-      });
-      
-      // Encrypt and save
-      const encryptedVault = await createVault(masterPassword, vaultEntries);
-      await writeFile(vaultPath, encryptedVault);
-      
-      // Update createdAt map with any new entries
-      const newCreatedAtMap = new Map(entryCreatedAtMap);
-      vaultEntries.forEach(entry => {
-        if (!newCreatedAtMap.has(entry.id)) {
-          newCreatedAtMap.set(entry.id, entry.createdAt);
-        }
-      });
-      setEntryCreatedAtMap(newCreatedAtMap);
-    } catch (err) {
-      console.error("Error saving passwords to vault:", err);
-      throw err;
-    }
-  };
-
-  const handleAddPassword = async (newPassword: PasswordEntry) => {
-    const updatedPasswords = [...passwords, newPassword];
-    setPasswords(updatedPasswords);
-    
-    try {
-      await savePasswordsToVault(updatedPasswords);
-    } catch (err) {
-      // Revert on error
-      setPasswords(passwords);
-      console.error("Failed to save password:", err);
+      console.error("Failed to add password:", err);
+      showError("Failed to save password. Please try again.");
       throw err;
     }
   };
 
   const handleDeletePassword = (id: string) => {
-    const password = passwords.find(p => p.id === id);
+    const password = passwords.find((p) => p.id === id);
     if (password) {
       setDeleteModal({
         isOpen: true,
@@ -189,65 +160,56 @@ function App() {
 
     setIsDeleting(true);
     const passwordId = deleteModal.passwordId;
-    
+
     try {
-      const updatedPasswords = passwords.filter(p => p.id !== passwordId);
-      setPasswords(updatedPasswords);
-      await savePasswordsToVault(updatedPasswords);
-      
-      // Update createdAt map - remove deleted entry
-      const newCreatedAtMap = new Map(entryCreatedAtMap);
-      newCreatedAtMap.delete(passwordId);
-      setEntryCreatedAtMap(newCreatedAtMap);
-      
+      await deletePassword(passwordId);
+      success("Password deleted successfully");
       setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" });
     } catch (err) {
       console.error("Failed to delete password:", err);
-      // Revert on error - reload passwords from vault
-      if (vaultPath && masterPassword) {
-        await loadPasswordsFromVault(vaultPath, masterPassword);
-      }
+      showError("Failed to delete password. Please try again.");
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    setVaultPath(null);
-    setMasterPassword("");
-    setPasswords([]);
-    setEntryCreatedAtMap(new Map());
+    vaultLogout();
     setShowSettings(false);
     setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" });
+    setLastVaultPath(null);
+    success("Logged out successfully");
   };
 
-  const handleRegister = (path: string, password: string) => {
-    setVaultPath(path);
-    setMasterPassword(password);
-    // New vault starts with empty passwords array
-    setPasswords([]);
-    setIsLoggedIn(true);
-    setShowRegister(false);
+  const handleRegister = async (path: string, password: string) => {
+    try {
+      await createNewVault(path, password);
+      setLastVaultPath(path);
+      setShowRegister(false);
+      success("Vault created successfully");
+    } catch (err) {
+      console.error("Failed to create vault:", err);
+      showError("Failed to create vault. Please try again.");
+    }
   };
 
   const handleLogin = async (path: string, password: string) => {
-    setVaultPath(path);
-    setMasterPassword(password);
-    
-    // Load passwords from vault
     try {
-      await loadPasswordsFromVault(path, password);
-      setIsLoggedIn(true);
+      const entries = await loadVaultFile(path, password);
+      loadPasswords(entries);
+      setLastVaultPath(path);
+      success("Vault unlocked successfully");
     } catch (err) {
       console.error("Failed to load vault:", err);
-      // Don't set logged in if loading fails
+      showError(
+        err instanceof Error ? err.message : "Failed to unlock vault. Invalid password or corrupted file."
+      );
     }
   };
 
   // Theme classes based on theme state
   const getThemeClasses = () => {
-    if (theme === "light") {
+    if (preferences.theme === "light") {
       return {
         bg: "bg-[#fafafa]",
         text: "text-gray-800",
@@ -258,7 +220,7 @@ function App() {
         headerBg: "bg-gray-100",
         sidebarBg: "bg-gray-100",
       };
-    } else if (theme === "slate") {
+    } else if (preferences.theme === "slate") {
       return {
         bg: "bg-gray-900",
         text: "text-gray-100",
@@ -269,7 +231,7 @@ function App() {
         headerBg: "bg-gray-900",
         sidebarBg: "bg-gray-900",
       };
-    } else if (theme === "editor") {
+    } else if (preferences.theme === "editor") {
       return {
         bg: "bg-[#1e1e1e]",
         text: "text-[#d4d4d4]",
@@ -280,7 +242,7 @@ function App() {
         headerBg: "bg-[#2a2d2e]",
         sidebarBg: "bg-[#252526]",
       };
-    } else if (theme === "violet") {
+    } else if (preferences.theme === "violet") {
       return {
         bg: "bg-[#282a36]",
         text: "text-[#f8f8f2]",
@@ -308,106 +270,130 @@ function App() {
 
   const themeClasses = getThemeClasses();
 
-  // Sidebar resize handlers
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      
-      const newWidth = e.clientX;
-      const minWidth = 200;
-      const maxWidth = 600;
-      
-      if (newWidth >= minWidth && newWidth <= maxWidth) {
-        setSidebarWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    if (isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-  }, [isResizing]);
+  // Show loading state while preferences are loading
+  if (preferencesLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <svg
+            className="animate-spin w-8 h-8 mx-auto mb-4 text-yellow-400"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Register Page
   if (showRegister) {
     return (
-      <Register
-        onRegister={handleRegister}
-        onBackToLogin={() => setShowRegister(false)}
-      />
+      <>
+        <Register
+          onRegister={handleRegister}
+          onBackToLogin={() => setShowRegister(false)}
+        />
+        <ToastContainer
+          toasts={toasts}
+          onRemove={removeToast}
+          theme={preferences.theme}
+          accentColor={preferences.accentColor}
+        />
+      </>
     );
   }
 
   // Login Page
-  if (!isLoggedIn) {
+  if (!isAuthenticated) {
     return (
-      <Login
-        onLogin={handleLogin}
-        onRegister={() => setShowRegister(true)}
-      />
+      <>
+        <Login
+          onLogin={handleLogin}
+          onRegister={() => setShowRegister(true)}
+          lastVaultPath={preferences.lastVaultPath}
+        />
+        <ToastContainer
+          toasts={toasts}
+          onRemove={removeToast}
+          theme={preferences.theme}
+          accentColor={preferences.accentColor}
+        />
+      </>
     );
   }
 
   // Main App
   return (
-    <div className={`flex h-screen overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}>
-      <div ref={sidebarRef} style={{ width: `${sidebarWidth}px` }} className="flex-shrink-0 relative">
-            <Sidebar
+    <div
+      className={`flex h-screen overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}
+    >
+      <div
+        ref={sidebarRef}
+        style={{ width: `${preferences.sidebarWidth}px` }}
+        className="flex-shrink-0 relative"
+      >
+        <Sidebar
           categories={categories}
           activeCategory={activeCategory}
           onCategoryChange={(category) => {
             setActiveCategory(category);
-            setShowSettings(false); // Close settings when selecting category
+            setShowSettings(false);
           }}
           onAddPassword={() => setShowAddModal(true)}
           onLogout={handleLogout}
           onSettings={() => setShowSettings(!showSettings)}
           showSettings={showSettings}
-          theme={theme}
-          accentColor={accentColor}
+          theme={preferences.theme}
+          accentColor={preferences.accentColor}
         />
-        {/* Resize handle - wider hit area for easier grabbing */}
+        {/* Resize handle */}
         <div
           onMouseDown={(e) => {
             e.preventDefault();
             setIsResizing(true);
           }}
           className={`absolute top-0 right-0 h-full cursor-col-resize z-10 group ${
-            isResizing ? getAccentColorClasses(accentColor).lightClass : ""
+            isResizing ? getAccentColorClasses(preferences.accentColor).lightClass : ""
           }`}
-          style={{ width: '4px', marginRight: '-2px' }}
+          style={{ width: "4px", marginRight: "-2px" }}
         >
-          <div className={`absolute top-0 right-1/2 h-full w-0.5 transition-all ${
-            isResizing 
-              ? getAccentColorClasses(accentColor).bgClass
-              : `bg-transparent ${getAccentColorClasses(accentColor).hoverBgLightClass}`
-          }`} />
+          <div
+            className={`absolute top-0 right-1/2 h-full w-0.5 transition-all ${
+              isResizing
+                ? getAccentColorClasses(preferences.accentColor).bgClass
+                : `bg-transparent ${getAccentColorClasses(preferences.accentColor).hoverBgLightClass}`
+            }`}
+          />
         </div>
       </div>
 
-      <main className={`flex-1 flex flex-col overflow-hidden min-w-0 ${themeClasses.bg}`}>
+      <main
+        className={`flex-1 flex flex-col overflow-hidden min-w-0 ${themeClasses.bg}`}
+      >
         {showSettings ? (
           <Settings
-            viewMode={viewMode}
+            viewMode={preferences.viewMode}
             onViewModeChange={setViewMode}
-            theme={theme}
+            theme={preferences.theme}
             onThemeChange={setTheme}
-            itemSize={itemSize}
+            itemSize={preferences.itemSize}
             onItemSizeChange={setItemSize}
-            accentColor={accentColor}
+            accentColor={preferences.accentColor}
             onAccentColorChange={setAccentColor}
           />
         ) : (
@@ -417,34 +403,48 @@ function App() {
               passwordCount={filteredPasswords.length}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              theme={theme}
-              accentColor={accentColor}
+              theme={preferences.theme}
+              accentColor={preferences.accentColor}
             />
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
               {filteredPasswords.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className={`w-20 h-20 rounded-full ${themeClasses.cardBg} flex items-center justify-center mb-6`}>
-                    <svg className={`w-10 h-10 ${themeClasses.textSecondary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  <div
+                    className={`w-20 h-20 rounded-full ${themeClasses.cardBg} flex items-center justify-center mb-6`}
+                  >
+                    <svg
+                      className={`w-10 h-10 ${themeClasses.textSecondary}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                      />
                     </svg>
                   </div>
                   <p className={`${themeClasses.textSecondary} text-lg mb-2`}>
                     {searchQuery ? "No passwords found" : "No passwords yet"}
                   </p>
                   <p className={`${themeClasses.textSecondary} text-sm`}>
-                    {searchQuery ? "Try a different search term" : "Add your first password to get started"}
+                    {searchQuery
+                      ? "Try a different search term"
+                      : "Add your first password to get started"}
                   </p>
                 </div>
-              ) : viewMode === "grid" ? (
+              ) : preferences.viewMode === "grid" ? (
                 <PasswordGrid
                   passwords={filteredPasswords}
                   onCopyUsername={handleCopyUsername}
                   onCopyPassword={handleCopyPassword}
                   onDelete={handleDeletePassword}
-                  theme={theme}
-                  itemSize={itemSize}
-                  accentColor={accentColor}
+                  theme={preferences.theme}
+                  itemSize={preferences.itemSize}
+                  accentColor={preferences.accentColor}
                 />
               ) : (
                 <PasswordTable
@@ -452,9 +452,9 @@ function App() {
                   onCopyUsername={handleCopyUsername}
                   onCopyPassword={handleCopyPassword}
                   onDelete={handleDeletePassword}
-                  theme={theme}
-                  itemSize={itemSize}
-                  accentColor={accentColor}
+                  theme={preferences.theme}
+                  itemSize={preferences.itemSize}
+                  accentColor={preferences.accentColor}
                 />
               )}
             </div>
@@ -462,8 +462,8 @@ function App() {
         )}
       </main>
 
-      <AddPasswordModal 
-        isOpen={showAddModal} 
+      <AddPasswordModal
+        isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onAddPassword={handleAddPassword}
       />
@@ -472,8 +472,17 @@ function App() {
         isOpen={deleteModal.isOpen}
         passwordTitle={deleteModal.passwordTitle}
         onConfirm={confirmDeletePassword}
-        onCancel={() => setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" })}
+        onCancel={() =>
+          setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" })
+        }
         isDeleting={isDeleting}
+      />
+
+      <ToastContainer
+        toasts={toasts}
+        onRemove={removeToast}
+        theme={preferences.theme}
+        accentColor={preferences.accentColor}
       />
     </div>
   );
