@@ -181,10 +181,13 @@ function App() {
     success("Logged out successfully");
   };
 
-  const handleRegister = async (path: string, password: string) => {
+  const handleRegister = async (path: string, password: string, theme: Theme, accentColor: AccentColor) => {
     try {
       await createNewVault(path, password);
       setLastVaultPath(path);
+      // Set preferences from wizard
+      await setTheme(theme);
+      await setAccentColor(accentColor);
       setShowRegister(false);
       success("Vault created successfully");
     } catch (err) {
