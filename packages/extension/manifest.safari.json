@@ -12,11 +12,22 @@
         "permissions": []
       }
     },
-    "permissions": [],
-    "host_permissions": [],
+    "permissions": [
+      "storage",
+      "activeTab"
+    ],
+    "host_permissions": [
+      "<all_urls>"
+    ],
   
     "background": {
-      "service_worker": "background.js"
+      "service_worker": "src/service-worker.ts"
     },
-    "content_scripts": []
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["src/autofill.ts"],
+        "run_at": "document_idle"
+      }
+    ]
   }

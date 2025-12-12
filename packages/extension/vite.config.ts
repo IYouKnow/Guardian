@@ -9,7 +9,15 @@ const manifestPath = resolve(__dirname, `./manifest.${manifestFile}.json`)
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
 
 export default defineConfig({
-  plugins: [react(), crx({ manifest })],
+  plugins: [
+    react(), 
+    crx({ 
+      manifest,
+      contentScripts: {
+        injectCss: false,
+      }
+    })
+  ],
   build: { 
     outDir: 'dist',
     rollupOptions: {

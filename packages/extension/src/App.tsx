@@ -6,7 +6,7 @@ import PasswordGrid from "./components/PasswordGrid";
 import PasswordDetail from "./components/PasswordDetail";
 import Settings from "./components/Settings";
 import { VaultEntry, openVault } from "../../shared/crypto";
-import { loadSettings, saveSettings, type ExtensionSettings } from "./utils/storage";
+import { loadSettings, saveSettings, saveSession, loadSession, clearSession, saveVault, loadVaultFromStorage, vaultExists, type ExtensionSettings } from "./utils/storage";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -26,6 +26,19 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
   };
 }
 
+// Helper function to convert PasswordEntry to VaultEntry
+function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
+  return {
+    id: passwordEntry.id,
+    name: passwordEntry.title,
+    username: passwordEntry.username,
+    url: passwordEntry.website,
+    password: passwordEntry.password,
+    lastModified: passwordEntry.lastModified || new Date().toISOString(),
+    notes: passwordEntry.notes,
+  };
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [vaultFile, setVaultFile] = useState<File | null>(null);
@@ -37,7 +50,7 @@ function App() {
   const [theme, setTheme] = useState<Theme>("dark");
   const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
 
-  // Load settings on mount
+  // Load settings and restore session on mount
   useEffect(() => {
     loadSettings()
       .then((settings) => {
@@ -48,6 +61,9 @@ function App() {
         console.warn("Failed to load settings (this is normal if storage permission is not granted):", err);
         // Continue with default settings
       });
+
+    // Check if vault exists in browser storage - if so, user can quick unlock
+    // We'll handle this in the Login component
   }, []);
 
   // Save settings when they change
@@ -57,6 +73,19 @@ function App() {
       saveSettings(settings).catch(console.error);
     }
   }, [theme, accentColor, isLoggedIn]);
+
+  // Sync passwords to background when passwords change
+  useEffect(() => {
+    if (isLoggedIn && passwords.length > 0) {
+      syncPasswordsToBackground(passwords);
+      
+      // Also save to browser storage for persistence
+      if (masterPassword) {
+        const vaultEntries = passwords.map(passwordEntryToVaultEntry);
+        saveVault(masterPassword, vaultEntries).catch(console.error);
+      }
+    }
+  }, [passwords, isLoggedIn, masterPassword]);
 
   const filteredPasswords = passwords.filter((p) => {
     const matchesSearch =
@@ -101,13 +130,51 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLoggedIn(false);
     setVaultFile(null);
     setMasterPassword("");
     setPasswords([]);
     setShowSettings(false);
     setSelectedPassword(null);
+    // Clear passwords from background script
+    clearPasswordsFromBackground();
+    // Clear session
+    await clearSession();
+  };
+
+  // Sync passwords to background script for autofill
+  const syncPasswordsToBackground = (passwordsToSync: PasswordEntry[]) => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage({
+          action: 'updatePasswords',
+          passwords: passwordsToSync.map(p => ({
+            id: p.id,
+            title: p.title,
+            username: p.username,
+            website: p.website,
+            password: p.password,
+          })),
+          isLoggedIn: true,
+        }).catch(console.error);
+      }
+    } catch (err) {
+      console.error('Failed to sync passwords to background:', err);
+    }
+  };
+
+  // Clear passwords from background script
+  const clearPasswordsFromBackground = () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage({
+          action: 'clearPasswords',
+        }).catch(console.error);
+      }
+    } catch (err) {
+      console.error('Failed to clear passwords from background:', err);
+    }
   };
 
   const handleLogin = async (file: File, password: string) => {
@@ -116,11 +183,44 @@ function App() {
     
     // Load passwords from vault
     try {
-      await loadPasswordsFromFile(file, password);
+      const decryptedVault = await openVault(password, new Uint8Array(await file.arrayBuffer()));
+      const loadedPasswords = decryptedVault.entries.map(vaultEntryToPasswordEntry);
+      
+      setPasswords(loadedPasswords);
       setIsLoggedIn(true);
+      
+      // Save vault to browser storage for persistence
+      try {
+        await saveVault(password, decryptedVault.entries);
+        
+        // Save session info
+        await saveSession({
+          vaultFileName: file.name,
+          vaultFileLastModified: file.lastModified,
+        });
+      } catch (err) {
+        console.error("Failed to save vault to storage:", err);
+      }
     } catch (err) {
       console.error("Failed to load vault:", err);
       // Don't set logged in if loading fails
+      throw err;
+    }
+  };
+
+  // Quick unlock from browser storage
+  const handleQuickUnlock = async (password: string) => {
+    try {
+      const vaultEntries = await loadVaultFromStorage(password);
+      const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);
+      setPasswords(loadedPasswords);
+      setMasterPassword(password);
+      setIsLoggedIn(true);
+      
+      // Sync to background
+      syncPasswordsToBackground(loadedPasswords);
+    } catch (err) {
+      console.error("Failed to quick unlock:", err);
       throw err;
     }
   };
@@ -194,6 +294,7 @@ function App() {
       <div className="w-full h-full flex">
         <Login
           onLogin={handleLogin}
+          onQuickUnlock={handleQuickUnlock}
         />
       </div>
     );

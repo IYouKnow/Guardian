@@ -4,7 +4,22 @@
   "version": "0.1.0",
   "description": "Your forever password vault",
   "action": { "default_popup": "index.html" },
-  "permissions": [],
+  "permissions": [
+    "storage",
+    "tabs",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["src/service-worker.ts"],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/autofill.ts"],
+      "run_at": "document_idle"
+    }
+  ],
   "browser_specific_settings": {
        "gecko": {
          "id": "guardian",

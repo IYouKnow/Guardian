@@ -1,17 +1,31 @@
-import { useState, useRef, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { openVault } from "../../../shared/crypto";
+import { vaultExists } from "../utils/storage";
 
 interface LoginProps {
   onLogin: (file: File, masterPassword: string) => void;
+  onQuickUnlock?: (masterPassword: string) => Promise<void>;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, onQuickUnlock }: LoginProps) {
   const [masterPassword, setMasterPassword] = useState("");
   const [vaultFile, setVaultFile] = useState<File | null>(null);
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [hasStoredVault, setHasStoredVault] = useState(false);
+  const [useQuickUnlock, setUseQuickUnlock] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if vault exists in storage on mount
+  useEffect(() => {
+    vaultExists()
+      .then((exists) => {
+        setHasStoredVault(exists);
+        setUseQuickUnlock(exists);
+      })
+      .catch(console.error);
+  }, []);
 
   const handleSelectVault = () => {
     fileInputRef.current?.click();
@@ -29,6 +43,26 @@ export default function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setLoginError("");
 
+    // Quick unlock from browser storage
+    if (useQuickUnlock && onQuickUnlock) {
+      if (masterPassword.length < 8) {
+        setLoginError("Master password must be at least 8 characters");
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        await onQuickUnlock(masterPassword);
+        setMasterPassword("");
+      } catch (err) {
+        console.error("Error quick unlocking:", err);
+        setLoginError("Invalid master password");
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Regular file-based login
     if (!vaultFile) {
       setLoginError("Please select your vault file");
       return;
@@ -73,32 +107,46 @@ export default function Login({ onLogin }: LoginProps) {
 
         {/* Login Form */}
         <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Vault File</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={vaultFile?.name || ""}
-                readOnly
-                placeholder="Select your vault file"
-                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 cursor-not-allowed"
-              />
+          {hasStoredVault && (
+            <div className="mb-2">
               <button
                 type="button"
-                onClick={handleSelectVault}
-                className="px-3 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a] whitespace-nowrap"
+                onClick={() => setUseQuickUnlock(!useQuickUnlock)}
+                className="text-xs text-yellow-400 hover:text-yellow-500 underline"
               >
-                Browse
+                {useQuickUnlock ? "Use vault file instead" : "Quick unlock from browser storage"}
               </button>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".guardian"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </div>
+          )}
+          
+          {!useQuickUnlock && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Vault File</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={vaultFile?.name || ""}
+                  readOnly
+                  placeholder="Select your vault file"
+                  className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 cursor-not-allowed"
+                />
+                <button
+                  type="button"
+                  onClick={handleSelectVault}
+                  className="px-3 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a] whitespace-nowrap"
+                >
+                  Browse
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".guardian"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">Master Password</label>

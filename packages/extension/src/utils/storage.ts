@@ -8,11 +8,18 @@ import type { VaultEntry } from "../../../shared/crypto/vault";
 
 const VAULT_STORAGE_KEY = "guardian_vault";
 const SETTINGS_STORAGE_KEY = "guardian_settings";
+const SESSION_STORAGE_KEY = "guardian_session";
 
 export interface ExtensionSettings {
   theme?: "dark" | "slate" | "light" | "editor" | "violet";
   accentColor?: "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
   autoLockMinutes?: number;
+}
+
+export interface SessionData {
+  vaultFileName: string;
+  vaultFileLastModified: number;
+  // We don't store master password for security - user must re-enter it
 }
 
 /**
@@ -142,6 +149,45 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     }
     console.error("Error loading settings:", error);
     return {};
+  }
+}
+
+/**
+ * Save session data (vault file reference)
+ */
+export async function saveSession(session: SessionData): Promise<void> {
+  try {
+    const storage = getStorage();
+    await storage.set({ [SESSION_STORAGE_KEY]: session });
+  } catch (error) {
+    console.error("Error saving session:", error);
+    // Don't throw - session persistence is optional
+  }
+}
+
+/**
+ * Load session data
+ */
+export async function loadSession(): Promise<SessionData | null> {
+  try {
+    const storage = getStorage();
+    const result = await storage.get(SESSION_STORAGE_KEY);
+    return result[SESSION_STORAGE_KEY] || null;
+  } catch (error) {
+    console.error("Error loading session:", error);
+    return null;
+  }
+}
+
+/**
+ * Clear session data
+ */
+export async function clearSession(): Promise<void> {
+  try {
+    const storage = getStorage();
+    await storage.remove(SESSION_STORAGE_KEY);
+  } catch (error) {
+    console.error("Error clearing session:", error);
   }
 }
 
