@@ -123,6 +123,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'checkAutoUnlock') {
+    // Check if we have passwords in memory/storage for auto-unlock
+    sendResponse({ 
+      canAutoUnlock: isLoggedIn && cachedPasswords.length > 0,
+      passwordCount: cachedPasswords.length 
+    });
+    return true;
+  }
+
+  if (message.action === 'getCachedPasswords') {
+    // Return cached passwords for auto-unlock (only if logged in)
+    if (isLoggedIn) {
+      sendResponse({ passwords: cachedPasswords, success: true });
+    } else {
+      sendResponse({ passwords: [], success: false });
+    }
+    return true;
+  }
+
   if (message.action === 'openExtension') {
     // Open extension popup - this will be handled by the popup
     sendResponse({ success: true });

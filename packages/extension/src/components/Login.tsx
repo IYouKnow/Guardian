@@ -1,41 +1,102 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { openVault } from "../../../shared/crypto";
-import { vaultExists } from "../utils/storage";
+import { 
+  isFileSystemAccessAvailable, 
+  selectVaultFile,
+  readFileFromHandle,
+  saveFileHandle,
+  loadFileHandle,
+  type FileSystemFileHandle
+} from "../utils/fileSystem";
+import { saveFileHandleMetadata } from "../utils/storage";
 
 interface LoginProps {
-  onLogin: (file: File, masterPassword: string) => void;
-  onQuickUnlock?: (masterPassword: string) => Promise<void>;
+  onLogin: (file: File, masterPassword: string, handle?: FileSystemFileHandle) => void;
 }
 
-export default function Login({ onLogin, onQuickUnlock }: LoginProps) {
+export default function Login({ onLogin }: LoginProps) {
   const [masterPassword, setMasterPassword] = useState("");
   const [vaultFile, setVaultFile] = useState<File | null>(null);
+  const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [hasStoredVault, setHasStoredVault] = useState(false);
-  const [useQuickUnlock, setUseQuickUnlock] = useState(false);
+  const [isLoadingFromHandle, setIsLoadingFromHandle] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const useFileSystemAPI = isFileSystemAccessAvailable();
 
-  // Check if vault exists in storage on mount
+  // Try to load file handle on mount
   useEffect(() => {
-    vaultExists()
-      .then((exists) => {
-        setHasStoredVault(exists);
-        setUseQuickUnlock(exists);
-      })
-      .catch(console.error);
-  }, []);
+    if (useFileSystemAPI) {
+      loadFileHandle().then(({ handle, metadata }) => {
+        if (handle) {
+          setFileHandle(handle);
+          // Try to read file from handle
+          readFileFromHandle(handle)
+            .then((file) => {
+              setVaultFile(file);
+            })
+            .catch((err) => {
+              console.warn("Could not read file from saved handle:", err);
+              // Handle might have lost permission, user will need to select again
+            });
+        } else if (metadata) {
+          // Show that we have a saved file but need to re-select
+          setVaultFile(new File([], metadata.fileName));
+        }
+      }).catch(console.error);
+    }
+  }, [useFileSystemAPI]);
 
-  const handleSelectVault = () => {
-    fileInputRef.current?.click();
+  const handleSelectVault = async () => {
+    if (useFileSystemAPI) {
+      try {
+        setIsLoadingFromHandle(true);
+        const { handle, file } = await selectVaultFile();
+        setFileHandle(handle);
+        setVaultFile(file);
+        setLoginError("");
+        // Save handle for future use
+        await saveFileHandle(handle);
+        await saveFileHandleMetadata({
+          fileName: file.name,
+          lastModified: file.lastModified,
+          name: handle.name,
+          kind: handle.kind,
+        });
+      } catch (err: any) {
+        if (err.message !== 'File selection cancelled') {
+          console.error("Error selecting file:", err);
+          setLoginError(err.message || "Failed to select file");
+        }
+      } finally {
+        setIsLoadingFromHandle(false);
+      }
+    } else {
+      // Fallback to traditional file input
+      fileInputRef.current?.click();
+    }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setVaultFile(file);
       setLoginError("");
+      
+      // If File System API is available, try to get handle from the file
+      // Note: This won't work for traditional file inputs, but we'll try
+      if (useFileSystemAPI && (file as any).handle) {
+        const handle = (file as any).handle;
+        setFileHandle(handle);
+        await saveFileHandle(handle);
+        await saveFileHandleMetadata({
+          fileName: file.name,
+          lastModified: file.lastModified,
+          name: handle.name,
+          kind: handle.kind,
+        });
+      }
     }
   };
 
@@ -43,27 +104,19 @@ export default function Login({ onLogin, onQuickUnlock }: LoginProps) {
     e.preventDefault();
     setLoginError("");
 
-    // Quick unlock from browser storage
-    if (useQuickUnlock && onQuickUnlock) {
-      if (masterPassword.length < 8) {
-        setLoginError("Master password must be at least 8 characters");
-        return;
-      }
-
-      setIsLoading(true);
+    // If we have a handle, try to read from it first (might be newer)
+    let fileToUse = vaultFile;
+    if (useFileSystemAPI && fileHandle) {
       try {
-        await onQuickUnlock(masterPassword);
-        setMasterPassword("");
+        fileToUse = await readFileFromHandle(fileHandle);
+        setVaultFile(fileToUse);
       } catch (err) {
-        console.error("Error quick unlocking:", err);
-        setLoginError("Invalid master password");
-        setIsLoading(false);
+        console.warn("Could not read from handle, using cached file:", err);
+        // Continue with cached file
       }
-      return;
     }
 
-    // Regular file-based login
-    if (!vaultFile) {
+    if (!fileToUse) {
       setLoginError("Please select your vault file");
       return;
     }
@@ -77,12 +130,12 @@ export default function Login({ onLogin, onQuickUnlock }: LoginProps) {
 
     try {
       // Read file and try to decrypt vault
-      const arrayBuffer = await vaultFile.arrayBuffer();
+      const arrayBuffer = await fileToUse.arrayBuffer();
       const vaultBytes = new Uint8Array(arrayBuffer);
       await openVault(masterPassword, vaultBytes);
 
       // Success - vault decrypted correctly
-      onLogin(vaultFile, masterPassword);
+      onLogin(fileToUse, masterPassword, fileHandle || undefined);
       setMasterPassword("");
     } catch (err) {
       console.error("Error loading vault:", err);
@@ -107,37 +160,26 @@ export default function Login({ onLogin, onQuickUnlock }: LoginProps) {
 
         {/* Login Form */}
         <form onSubmit={handleLogin} className="space-y-4">
-          {hasStoredVault && (
-            <div className="mb-2">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Vault File</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={vaultFile?.name || ""}
+                readOnly
+                placeholder="Select your vault file"
+                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 cursor-not-allowed"
+              />
               <button
                 type="button"
-                onClick={() => setUseQuickUnlock(!useQuickUnlock)}
-                className="text-xs text-yellow-400 hover:text-yellow-500 underline"
+                onClick={handleSelectVault}
+                disabled={isLoadingFromHandle}
+                className="px-3 py-2 bg-[#1a1a1a] hover:bg-[#222222] disabled:bg-[#1a1a1a]/50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a] whitespace-nowrap"
               >
-                {useQuickUnlock ? "Use vault file instead" : "Quick unlock from browser storage"}
+                {isLoadingFromHandle ? "Loading..." : "Browse"}
               </button>
             </div>
-          )}
-          
-          {!useQuickUnlock && (
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Vault File</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={vaultFile?.name || ""}
-                  readOnly
-                  placeholder="Select your vault file"
-                  className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 cursor-not-allowed"
-                />
-                <button
-                  type="button"
-                  onClick={handleSelectVault}
-                  className="px-3 py-2 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a] whitespace-nowrap"
-                >
-                  Browse
-                </button>
-              </div>
+            {!useFileSystemAPI && (
               <input
                 ref={fileInputRef}
                 type="file"
@@ -145,8 +187,8 @@ export default function Login({ onLogin, onQuickUnlock }: LoginProps) {
                 onChange={handleFileChange}
                 className="hidden"
               />
-            </div>
-          )}
+            )}
+          </div>
 
           <div>
             <label className="block text-xs text-gray-400 mb-1.5">Master Password</label>

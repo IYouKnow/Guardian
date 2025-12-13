@@ -9,6 +9,7 @@ import type { VaultEntry } from "../../../shared/crypto/vault";
 const VAULT_STORAGE_KEY = "guardian_vault";
 const SETTINGS_STORAGE_KEY = "guardian_settings";
 const SESSION_STORAGE_KEY = "guardian_session";
+const FILE_HANDLE_STORAGE_KEY = "guardian_file_handle";
 
 export interface ExtensionSettings {
   theme?: "dark" | "slate" | "light" | "editor" | "violet";
@@ -20,6 +21,13 @@ export interface SessionData {
   vaultFileName: string;
   vaultFileLastModified: number;
   // We don't store master password for security - user must re-enter it
+}
+
+export interface FileHandleMetadata {
+  fileName: string;
+  lastModified: number;
+  name: string;
+  kind: string;
 }
 
 /**
@@ -188,6 +196,44 @@ export async function clearSession(): Promise<void> {
     await storage.remove(SESSION_STORAGE_KEY);
   } catch (error) {
     console.error("Error clearing session:", error);
+  }
+}
+
+/**
+ * Save file handle metadata
+ */
+export async function saveFileHandleMetadata(metadata: FileHandleMetadata): Promise<void> {
+  try {
+    const storage = getStorage();
+    await storage.set({ [FILE_HANDLE_STORAGE_KEY]: metadata });
+  } catch (error) {
+    console.error("Error saving file handle metadata:", error);
+  }
+}
+
+/**
+ * Load file handle metadata
+ */
+export async function loadFileHandleMetadata(): Promise<FileHandleMetadata | null> {
+  try {
+    const storage = getStorage();
+    const result = await storage.get(FILE_HANDLE_STORAGE_KEY);
+    return result[FILE_HANDLE_STORAGE_KEY] || null;
+  } catch (error) {
+    console.error("Error loading file handle metadata:", error);
+    return null;
+  }
+}
+
+/**
+ * Clear file handle metadata
+ */
+export async function clearFileHandleMetadata(): Promise<void> {
+  try {
+    const storage = getStorage();
+    await storage.remove(FILE_HANDLE_STORAGE_KEY);
+  } catch (error) {
+    console.error("Error clearing file handle metadata:", error);
   }
 }
 

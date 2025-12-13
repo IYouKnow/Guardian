@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { PasswordEntry, Theme, AccentColor } from "./types";
 import Login from "./components/Login";
@@ -6,7 +6,15 @@ import PasswordGrid from "./components/PasswordGrid";
 import PasswordDetail from "./components/PasswordDetail";
 import Settings from "./components/Settings";
 import { VaultEntry, openVault } from "../../shared/crypto";
-import { loadSettings, saveSettings, saveSession, loadSession, clearSession, saveVault, loadVaultFromStorage, vaultExists, type ExtensionSettings } from "./utils/storage";
+import { loadSettings, saveSettings, saveSession, loadSession, clearSession, saveVault, type ExtensionSettings } from "./utils/storage";
+import { 
+  readFileFromHandle, 
+  getFileMetadata, 
+  saveFileHandle,
+  clearFileHandle,
+  loadFileHandle,
+  type FileSystemFileHandle
+} from "./utils/fileSystem";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -41,7 +49,9 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isCheckingAutoUnlock, setIsCheckingAutoUnlock] = useState(true);
   const [vaultFile, setVaultFile] = useState<File | null>(null);
+  const [vaultFileHandle, setVaultFileHandle] = useState<FileSystemFileHandle | null>(null);
   const [masterPassword, setMasterPassword] = useState<string>("");
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,6 +59,79 @@ function App() {
   const [selectedPassword, setSelectedPassword] = useState<PasswordEntry | null>(null);
   const [theme, setTheme] = useState<Theme>("dark");
   const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
+  const filePollIntervalRef = useRef<number | null>(null);
+  const lastFileModifiedRef = useRef<number>(0);
+
+  // Check for auto-unlock on mount
+  const checkAutoUnlock = async () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        // First, quickly check if there's anything to unlock (without showing loading)
+        const quickCheck = await chrome.runtime.sendMessage({ action: 'checkAutoUnlock' });
+        
+        // Only show loading if we actually have something to unlock
+        if (quickCheck?.canAutoUnlock) {
+          setIsCheckingAutoUnlock(true);
+          
+          // Try multiple times with a small delay to ensure background is ready
+          let attempts = 0;
+          const maxAttempts = 3;
+          
+          const tryUnlock = async (): Promise<boolean> => {
+            const response = await chrome.runtime.sendMessage({ action: 'checkAutoUnlock' });
+            if (response?.canAutoUnlock) {
+              // Get cached passwords from background
+              const passwordResponse = await chrome.runtime.sendMessage({ action: 'getCachedPasswords' });
+              if (passwordResponse?.success && passwordResponse.passwords?.length > 0) {
+                // Auto-unlock: passwords are already in background memory
+                setPasswords(passwordResponse.passwords);
+                setIsLoggedIn(true);
+                
+                // Try to restore file handle if available (for polling)
+                const { handle, metadata } = await loadFileHandle();
+                if (handle && metadata) {
+                  setVaultFileHandle(handle);
+                  // Try to read file to set vaultFile state
+                  try {
+                    const file = await readFileFromHandle(handle);
+                    setVaultFile(file);
+                  } catch (err) {
+                    console.warn("Could not read file from handle:", err);
+                  }
+                }
+                return true;
+              }
+            }
+            return false;
+          };
+          
+          // Try immediately
+          if (await tryUnlock()) {
+            setIsCheckingAutoUnlock(false);
+            return;
+          }
+          
+          // Retry with delays if first attempt failed
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+            if (await tryUnlock()) {
+              setIsCheckingAutoUnlock(false);
+              return;
+            }
+            attempts++;
+          }
+          
+          setIsCheckingAutoUnlock(false);
+        } else {
+          // No passwords to unlock, don't show loading
+          setIsCheckingAutoUnlock(false);
+        }
+      }
+    } catch (err) {
+      console.warn("Auto-unlock check failed (this is normal if not logged in):", err);
+      setIsCheckingAutoUnlock(false);
+    }
+  };
 
   // Load settings and restore session on mount
   useEffect(() => {
@@ -62,8 +145,16 @@ function App() {
         // Continue with default settings
       });
 
-    // Check if vault exists in browser storage - if so, user can quick unlock
-    // We'll handle this in the Login component
+    // Check for auto-unlock
+    checkAutoUnlock();
+
+    // Cleanup polling on unmount
+    return () => {
+      if (filePollIntervalRef.current) {
+        clearInterval(filePollIntervalRef.current);
+        filePollIntervalRef.current = null;
+      }
+    };
   }, []);
 
   // Save settings when they change
@@ -74,16 +165,16 @@ function App() {
     }
   }, [theme, accentColor, isLoggedIn]);
 
-  // Sync passwords to background when passwords change
+  // Sync passwords to background when passwords change (but not on initial login - that's handled in handleLogin)
   useEffect(() => {
-    if (isLoggedIn && passwords.length > 0) {
+    if (isLoggedIn && passwords.length > 0 && masterPassword) {
+      // Only sync if passwords actually changed (not on initial load from handleLogin)
+      // This prevents duplicate saves right after login
       syncPasswordsToBackground(passwords);
       
       // Also save to browser storage for persistence
-      if (masterPassword) {
-        const vaultEntries = passwords.map(passwordEntryToVaultEntry);
-        saveVault(masterPassword, vaultEntries).catch(console.error);
-      }
+      const vaultEntries = passwords.map(passwordEntryToVaultEntry);
+      saveVault(masterPassword, vaultEntries).catch(console.error);
     }
   }, [passwords, isLoggedIn, masterPassword]);
 
@@ -133,14 +224,21 @@ function App() {
   const handleLogout = async () => {
     setIsLoggedIn(false);
     setVaultFile(null);
+    setVaultFileHandle(null);
     setMasterPassword("");
     setPasswords([]);
     setShowSettings(false);
     setSelectedPassword(null);
+    // Stop file polling
+    if (filePollIntervalRef.current) {
+      clearInterval(filePollIntervalRef.current);
+      filePollIntervalRef.current = null;
+    }
     // Clear passwords from background script
     clearPasswordsFromBackground();
-    // Clear session
+    // Clear session and file handle
     await clearSession();
+    await clearFileHandle();
   };
 
   // Sync passwords to background script for autofill
@@ -177,9 +275,19 @@ function App() {
     }
   };
 
-  const handleLogin = async (file: File, password: string) => {
+  const handleLogin = async (file: File, password: string, handle?: FileSystemFileHandle) => {
     setVaultFile(file);
     setMasterPassword(password);
+    
+    // Save file handle if provided
+    if (handle) {
+      setVaultFileHandle(handle);
+      try {
+        await saveFileHandle(handle);
+      } catch (err) {
+        console.error("Failed to save file handle:", err);
+      }
+    }
     
     // Load passwords from vault
     try {
@@ -189,7 +297,10 @@ function App() {
       setPasswords(loadedPasswords);
       setIsLoggedIn(true);
       
-      // Save vault to browser storage for persistence
+      // Sync passwords to background IMMEDIATELY (for auto-unlock)
+      syncPasswordsToBackground(loadedPasswords);
+      
+      // Save vault to browser storage for persistence (for auto-unlock)
       try {
         await saveVault(password, decryptedVault.entries);
         
@@ -201,6 +312,11 @@ function App() {
       } catch (err) {
         console.error("Failed to save vault to storage:", err);
       }
+      
+      // Start file polling if we have a handle
+      if (handle) {
+        startFilePolling(handle, password, file.lastModified);
+      }
     } catch (err) {
       console.error("Failed to load vault:", err);
       // Don't set logged in if loading fails
@@ -208,22 +324,60 @@ function App() {
     }
   };
 
-  // Quick unlock from browser storage
-  const handleQuickUnlock = async (password: string) => {
-    try {
-      const vaultEntries = await loadVaultFromStorage(password);
-      const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);
-      setPasswords(loadedPasswords);
-      setMasterPassword(password);
-      setIsLoggedIn(true);
-      
-      // Sync to background
-      syncPasswordsToBackground(loadedPasswords);
-    } catch (err) {
-      console.error("Failed to quick unlock:", err);
-      throw err;
+  // Poll file for changes (every 10 seconds)
+  const startFilePolling = (
+    handle: FileSystemFileHandle,
+    password: string,
+    initialLastModified: number
+  ) => {
+    // Clear any existing interval
+    if (filePollIntervalRef.current) {
+      clearInterval(filePollIntervalRef.current);
     }
+
+    // Set initial last modified time
+    lastFileModifiedRef.current = initialLastModified;
+
+    filePollIntervalRef.current = window.setInterval(async () => {
+      try {
+        const metadata = await getFileMetadata(handle);
+        
+        // Check if file was modified
+        if (metadata.lastModified > lastFileModifiedRef.current) {
+          console.log("Vault file changed, reloading...");
+          
+          // Read updated file
+          const updatedFile = await readFileFromHandle(handle);
+          const decryptedVault = await openVault(
+            password,
+            new Uint8Array(await updatedFile.arrayBuffer())
+          );
+          const loadedPasswords = decryptedVault.entries.map(vaultEntryToPasswordEntry);
+          
+          // Update passwords
+          setPasswords(loadedPasswords);
+          setVaultFile(updatedFile);
+          
+          // Update last known modified time
+          lastFileModifiedRef.current = metadata.lastModified;
+          
+          // Save to storage for auto-unlock
+          await saveVault(password, decryptedVault.entries);
+          
+          // Sync to background
+          syncPasswordsToBackground(loadedPasswords);
+        }
+      } catch (err) {
+        console.error("Error polling file:", err);
+        // Stop polling on error
+        if (filePollIntervalRef.current) {
+          clearInterval(filePollIntervalRef.current);
+          filePollIntervalRef.current = null;
+        }
+      }
+    }, 10000); // Poll every 10 seconds
   };
+
 
   // Theme classes based on theme state
   const getThemeClasses = () => {
@@ -288,13 +442,27 @@ function App() {
 
   const themeClasses = getThemeClasses();
 
+  // Show loading state while checking auto-unlock
+  if (isCheckingAutoUnlock) {
+    return (
+      <div className="flex w-full h-full bg-black text-white items-center justify-center">
+        <div className="text-center">
+          <svg className="animate-spin w-8 h-8 text-yellow-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <p className="text-sm text-gray-400">Unlocking...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Login Page
   if (!isLoggedIn) {
     return (
       <div className="w-full h-full flex">
         <Login
           onLogin={handleLogin}
-          onQuickUnlock={handleQuickUnlock}
         />
       </div>
     );
