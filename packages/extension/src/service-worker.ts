@@ -124,21 +124,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'checkAutoUnlock') {
-    // Check if we have passwords in memory/storage for auto-unlock
-    sendResponse({ 
-      canAutoUnlock: isLoggedIn && cachedPasswords.length > 0,
-      passwordCount: cachedPasswords.length 
+    // Always reload from storage first (service worker might have been suspended)
+    loadPasswordsFromStorage().then(() => {
+      sendResponse({ 
+        canAutoUnlock: isLoggedIn && cachedPasswords.length > 0,
+        passwordCount: cachedPasswords.length 
+      });
+    }).catch(() => {
+      sendResponse({ 
+        canAutoUnlock: isLoggedIn && cachedPasswords.length > 0,
+        passwordCount: cachedPasswords.length 
+      });
     });
     return true;
   }
 
   if (message.action === 'getCachedPasswords') {
-    // Return cached passwords for auto-unlock (only if logged in)
-    if (isLoggedIn) {
-      sendResponse({ passwords: cachedPasswords, success: true });
-    } else {
-      sendResponse({ passwords: [], success: false });
-    }
+    // Always reload from storage first (service worker might have been suspended)
+    loadPasswordsFromStorage().then(() => {
+      if (isLoggedIn) {
+        sendResponse({ passwords: cachedPasswords, success: true });
+      } else {
+        sendResponse({ passwords: [], success: false });
+      }
+    }).catch(() => {
+      // Fallback to current memory state
+      if (isLoggedIn) {
+        sendResponse({ passwords: cachedPasswords, success: true });
+      } else {
+        sendResponse({ passwords: [], success: false });
+      }
+    });
     return true;
   }
 
