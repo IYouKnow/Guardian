@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { openVault } from "../../../shared/crypto";
-import { 
-  isFileSystemAccessAvailable, 
+import {
+  isFileSystemAccessAvailable,
   selectVaultFile,
   readFileFromHandle,
   saveFileHandle,
-  loadFileHandle,
-  type FileSystemFileHandle
+  loadFileHandle
 } from "../utils/fileSystem";
 import { saveFileHandleMetadata } from "../utils/storage";
+import { motion } from "framer-motion";
 
 interface LoginProps {
   onLogin: (file: File, masterPassword: string, handle?: FileSystemFileHandle) => void;
@@ -31,17 +31,14 @@ export default function Login({ onLogin }: LoginProps) {
       loadFileHandle().then(({ handle, metadata }) => {
         if (handle) {
           setFileHandle(handle);
-          // Try to read file from handle
           readFileFromHandle(handle)
             .then((file) => {
               setVaultFile(file);
             })
             .catch((err) => {
               console.warn("Could not read file from saved handle:", err);
-              // Handle might have lost permission, user will need to select again
             });
         } else if (metadata) {
-          // Show that we have a saved file but need to re-select
           setVaultFile(new File([], metadata.fileName));
         }
       }).catch(console.error);
@@ -56,7 +53,6 @@ export default function Login({ onLogin }: LoginProps) {
         setFileHandle(handle);
         setVaultFile(file);
         setLoginError("");
-        // Save handle for future use
         await saveFileHandle(handle);
         await saveFileHandleMetadata({
           fileName: file.name,
@@ -73,7 +69,6 @@ export default function Login({ onLogin }: LoginProps) {
         setIsLoadingFromHandle(false);
       }
     } else {
-      // Fallback to traditional file input
       fileInputRef.current?.click();
     }
   };
@@ -83,9 +78,6 @@ export default function Login({ onLogin }: LoginProps) {
     if (file) {
       setVaultFile(file);
       setLoginError("");
-      
-      // If File System API is available, try to get handle from the file
-      // Note: This won't work for traditional file inputs, but we'll try
       if (useFileSystemAPI && (file as any).handle) {
         const handle = (file as any).handle;
         setFileHandle(handle);
@@ -104,7 +96,6 @@ export default function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setLoginError("");
 
-    // If we have a handle, try to read from it first (might be newer)
     let fileToUse = vaultFile;
     if (useFileSystemAPI && fileHandle) {
       try {
@@ -112,71 +103,78 @@ export default function Login({ onLogin }: LoginProps) {
         setVaultFile(fileToUse);
       } catch (err) {
         console.warn("Could not read from handle, using cached file:", err);
-        // Continue with cached file
       }
     }
 
     if (!fileToUse) {
-      setLoginError("Please select your vault file");
+      setLoginError("Select your vault file");
       return;
     }
 
     if (masterPassword.length < 8) {
-      setLoginError("Master password must be at least 8 characters");
+      setLoginError("Password must be 8+ characters");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Read file and try to decrypt vault
       const arrayBuffer = await fileToUse.arrayBuffer();
       const vaultBytes = new Uint8Array(arrayBuffer);
       await openVault(masterPassword, vaultBytes);
-
-      // Success - vault decrypted correctly
       onLogin(fileToUse, masterPassword, fileHandle || undefined);
-      setMasterPassword("");
     } catch (err) {
       console.error("Error loading vault:", err);
-      setLoginError("Invalid master password or corrupted vault file");
+      setLoginError("Invalid password or corrupted vault.");
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex w-full h-full bg-black text-white items-center justify-center p-4">
-      <div className="w-full max-w-full">
+    <div className="flex w-full h-full bg-[#050505] text-white items-center justify-center p-8 font-sans">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-sm"
+      >
         {/* Logo and Title */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-yellow-400/20 to-yellow-500/10 border-2 border-yellow-400/30 mb-3 shadow-lg shadow-yellow-400/10">
-            <svg className="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        <div className="text-center mb-10">
+          <motion.div
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 mb-5 shadow-inner"
+          >
+            <svg className="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 0 00-2-2H6a2 0 00-2 2v6a2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-1">Guardian</h1>
-          <p className="text-sm text-gray-400">Enter your master password to unlock</p>
+          </motion.div>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">Guardian</h1>
+          <p className="text-sm text-gray-500">Secure Password Vault</p>
         </div>
 
         {/* Login Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Vault File</label>
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-gray-400 ml-1">Vault File</label>
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={vaultFile?.name || ""}
-                readOnly
-                placeholder="Select your vault file"
-                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 cursor-not-allowed"
-              />
+              <div className="relative flex-1 group">
+                <input
+                  type="text"
+                  value={vaultFile?.name || ""}
+                  readOnly
+                  placeholder="Select .guardian file..."
+                  className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-600 outline-none"
+                />
+              </div>
               <button
                 type="button"
                 onClick={handleSelectVault}
                 disabled={isLoadingFromHandle}
-                className="px-3 py-2 bg-[#1a1a1a] hover:bg-[#222222] disabled:bg-[#1a1a1a]/50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all border border-[#1a1a1a] whitespace-nowrap"
+                className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-semibold border border-white/5 transition-colors active:scale-95"
               >
-                {isLoadingFromHandle ? "Loading..." : "Browse"}
+                {isLoadingFromHandle ? "..." : "Select"}
               </button>
             </div>
             {!useFileSystemAPI && (
@@ -190,9 +188,9 @@ export default function Login({ onLogin }: LoginProps) {
             )}
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Master Password</label>
-            <div className="relative">
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-gray-400 ml-1">Master Password</label>
+            <div className="relative group">
               <input
                 type={showMasterPassword ? "text" : "password"}
                 value={masterPassword}
@@ -200,14 +198,14 @@ export default function Login({ onLogin }: LoginProps) {
                   setMasterPassword(e.target.value);
                   setLoginError("");
                 }}
-                placeholder="Enter your master password"
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-2 pr-10 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
+                placeholder="Enter password..."
+                className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 pr-12 text-xs text-white placeholder-gray-600 outline-none focus:ring-1 focus:ring-yellow-400/50"
                 autoFocus
               />
               <button
                 type="button"
                 onClick={() => setShowMasterPassword(!showMasterPassword)}
-                className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-yellow-400 transition-colors"
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
               >
                 {showMasterPassword ? (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,47 +220,29 @@ export default function Login({ onLogin }: LoginProps) {
               </button>
             </div>
             {loginError && (
-              <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {loginError}
-              </p>
+              <p className="mt-2 text-[11px] text-red-400 font-medium ml-1">{loginError}</p>
             )}
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-yellow-400/50 disabled:cursor-not-allowed text-black font-semibold py-2.5 px-4 rounded-lg transition-all shadow-lg shadow-yellow-400/20 flex items-center justify-center gap-2 text-sm"
+            className="w-full bg-yellow-400 hover:bg-yellow-300 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-black font-bold py-3.5 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 text-sm mt-8"
           >
             {isLoading ? (
-              <>
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Unlocking...
-              </>
+              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
             ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                Unlock Vault
-              </>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 0 00-2-2H6a2 0 00-2 2v6a2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
             )}
+            {isLoading ? "Unlocking..." : "Unlock Vault"}
           </button>
         </form>
-
-        {/* Help Text */}
-        <div className="mt-4 text-center">
-          <p className="text-xs text-gray-500">
-            Select your .guardian vault file and enter your master password
-          </p>
-        </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
-

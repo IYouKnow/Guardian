@@ -1,4 +1,4 @@
-import { Theme, AccentColor } from "../types";
+import type { Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 
 interface SettingsProps {
@@ -16,27 +16,29 @@ export default function Settings({ theme, onThemeChange, accentColor, onAccentCo
       return {
         bg: "bg-[#fafafa]",
         text: "text-gray-800",
-        sectionBg: "bg-gray-100/50",
-        divider: "border-gray-300",
+        sectionBg: "bg-white/80",
+        divider: "border-gray-200",
         textSecondary: "text-gray-600",
-        textTertiary: "text-gray-500",
-        hoverBg: "hover:bg-gray-200/50",
-        activeBg: "bg-gray-200",
-        activeText: "text-gray-800",
-        radioBorder: "border-gray-400",
+        textTertiary: "text-gray-400",
+        hoverBg: "hover:bg-gray-100/50",
+        activeBg: "bg-gray-100",
+        activeText: "text-gray-900",
+        border: "border-gray-200",
+        cardBg: "bg-white",
       };
     } else if (theme === "slate") {
       return {
-        bg: "bg-gray-900",
-        text: "text-gray-100",
-        sectionBg: "bg-gray-800/30",
-        divider: "border-gray-700",
-        textSecondary: "text-gray-400",
-        textTertiary: "text-gray-500",
-        hoverBg: "hover:bg-gray-800/50",
-        activeBg: "bg-gray-800/60",
-        activeText: "text-gray-100",
-        radioBorder: "border-gray-600",
+        bg: "bg-[#0f172a]",
+        text: "text-slate-100",
+        sectionBg: "bg-[#1e293b]/50",
+        divider: "border-slate-800",
+        textSecondary: "text-slate-400",
+        textTertiary: "text-slate-500",
+        hoverBg: "hover:bg-slate-800/50",
+        activeBg: "bg-slate-800/80",
+        activeText: "text-slate-100",
+        border: "border-slate-800",
+        cardBg: "bg-slate-800/40",
       };
     } else if (theme === "editor") {
       return {
@@ -44,39 +46,41 @@ export default function Settings({ theme, onThemeChange, accentColor, onAccentCo
         text: "text-[#d4d4d4]",
         sectionBg: "bg-[#252526]/50",
         divider: "border-[#3e3e42]",
-        textSecondary: "text-[#858585]",
-        textTertiary: "text-[#6a6a6a]",
+        textSecondary: "text-gray-300",
+        textTertiary: "text-gray-400",
         hoverBg: "hover:bg-[#2a2d2e]/70",
         activeBg: "bg-[#2a2d2e]/80",
         activeText: "text-[#d4d4d4]",
-        radioBorder: "border-[#3e3e42]",
+        border: "border-[#333333]",
+        cardBg: "bg-[#252526]/40",
       };
     } else if (theme === "violet") {
       return {
-        bg: "bg-[#282a36]",
-        text: "text-[#f8f8f2]",
-        sectionBg: "bg-[#44475a]/40",
-        divider: "border-[#6272a4]/60",
-        textSecondary: "text-[#c9a0dc]",
-        textTertiary: "text-[#6272a4]",
-        hoverBg: "hover:bg-[#44475a]/60",
-        activeBg: "bg-[#44475a]/70",
-        activeText: "text-[#f8f8f2]",
-        radioBorder: "border-[#6272a4]/60",
+        bg: "bg-[#1a1b26]",
+        text: "text-[#a9b1d6]",
+        sectionBg: "bg-[#24283b]/50",
+        divider: "border-[#414868]/40",
+        textSecondary: "text-gray-300",
+        textTertiary: "text-gray-400",
+        hoverBg: "hover:bg-[#414868]/30",
+        activeBg: "bg-[#414868]/50",
+        activeText: "text-[#c0caf5]",
+        border: "border-[#414868]/30",
+        cardBg: "bg-[#24283b]/40",
       };
     } else {
-      // dark (default)
       return {
-        bg: "bg-black",
+        bg: "bg-[#050505]",
         text: "text-white",
-        sectionBg: "bg-[#0a0a0a]/50",
-        divider: "border-[#1a1a1a]",
-        textSecondary: "text-gray-400",
+        sectionBg: "bg-[#111111]/50",
+        divider: "border-white/10",
+        textSecondary: "text-gray-300",
         textTertiary: "text-gray-500",
-        hoverBg: "hover:bg-[#0a0a0a]/70",
-        activeBg: "bg-[#0a0a0a]/80",
+        hoverBg: "hover:bg-white/10",
+        activeBg: "bg-white/20",
         activeText: "text-white",
-        radioBorder: "border-gray-600",
+        border: "border-white/10",
+        cardBg: "bg-[#111111]/40",
       };
     }
   };
@@ -84,197 +88,101 @@ export default function Settings({ theme, onThemeChange, accentColor, onAccentCo
   const themeClasses = getThemeClasses();
   const accentClasses = getAccentColorClasses(accentColor);
 
+  const themeList: Theme[] = ["light", "dark", "slate", "editor", "violet"];
+
+  const accents: { id: AccentColor; color: string }[] = [
+    { id: "yellow", color: "bg-yellow-400" },
+    { id: "blue", color: "bg-blue-500" },
+    { id: "green", color: "bg-emerald-500" },
+    { id: "purple", color: "bg-purple-500" },
+    { id: "pink", color: "bg-pink-500" },
+  ];
+
   return (
-    <div className={`flex-1 overflow-y-auto overflow-x-hidden ${themeClasses.bg} ${themeClasses.text}`}>
-      <div className="max-w-4xl mx-auto min-w-0 px-4 py-6">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className={`text-2xl font-bold mb-1 ${themeClasses.text}`}>Settings</h1>
-            <p className={`text-sm ${themeClasses.textSecondary}`}>Manage your preferences</p>
-          </div>
-          <button
-            onClick={onBack}
-            className={`p-2 ${themeClasses.textSecondary} hover:${themeClasses.text} transition-colors`}
-            title="Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <div className={`flex flex-col h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text} font-sans`}>
+      {/* Header */}
+      <header className={`px-6 py-5 flex items-center justify-between shrink-0 border-b ${themeClasses.border}`}>
+        <div>
+          <h1 className="text-base font-bold">Settings</h1>
+          <p className={`text-[10px] ${themeClasses.textTertiary}`}>Customize your experience</p>
         </div>
+        <button
+          onClick={onBack}
+          className={`p-2 rounded-lg transition-all duration-300 ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
 
-        <div className="space-y-8">
-          {/* Theme Setting */}
-          <section>
-            <div className="mb-4">
-              <h2 className={`text-lg font-semibold mb-1 ${themeClasses.text}`}>Theme</h2>
-              <p className={`text-xs ${themeClasses.textSecondary}`}>
-                Customize the appearance
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => onThemeChange("light")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "light"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "light"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
-                    {theme === "light" && (
-                      <div className="w-2 h-2 rounded-full bg-black" />
-                    )}
-                  </div>
-                  <span className="text-sm font-medium">Light Mode</span>
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("dark")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "dark"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "dark"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
-                    {theme === "dark" && (
-                      <div className="w-2 h-2 rounded-full bg-black" />
-                    )}
-                  </div>
-                  <span className="text-sm font-medium">Dark Mode</span>
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("slate")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "slate"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "slate"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
-                    {theme === "slate" && (
-                      <div className="w-2 h-2 rounded-full bg-black" />
-                    )}
-                  </div>
-                  <span className="text-sm font-medium">Slate</span>
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("editor")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "editor"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "editor"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
-                    {theme === "editor" && (
-                      <div className="w-2 h-2 rounded-full bg-black" />
-                    )}
-                  </div>
-                  <span className="text-sm font-medium">Editor</span>
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("violet")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "violet"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "violet"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
-                    {theme === "violet" && (
-                      <div className="w-2 h-2 rounded-full bg-black" />
-                    )}
-                  </div>
-                  <span className="text-sm font-medium">Violet</span>
-                </div>
-              </button>
-            </div>
-          </section>
-
-          {/* Divider */}
-          <div className={`border-t ${themeClasses.divider}`} />
-
-          {/* Accent Color Setting */}
-          <section>
-            <div className="mb-4">
-              <h2 className={`text-lg font-semibold mb-1 ${themeClasses.text}`}>Accent Color</h2>
-              <p className={`text-xs ${themeClasses.textSecondary}`}>
-                Choose your preferred accent color
-              </p>
-            </div>
-
-            <div className="grid grid-cols-4 gap-3">
-              {(["yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"] as AccentColor[]).map((color) => {
-                const colorClasses = getAccentColorClasses(color);
-                return (
-                  <button
-                    key={color}
-                    onClick={() => onAccentColorChange(color)}
-                    className={`relative aspect-square rounded-lg border-2 transition-all ${
-                      accentColor === color
-                        ? `${colorClasses.baseClass} ${colorClasses.lightClass}`
-                        : `${themeClasses.border} ${themeClasses.sectionBg} ${themeClasses.hoverBg}`
-                    }`}
-                  >
-                    <div className={`w-full h-full rounded-md ${colorClasses.bgClass}`} />
-                    {accentColor === color && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <svg className={`w-6 h-6 ${colorClasses.textClass}`} fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-10 scrollbar-hide">
+        {/* Appearance */}
+        <section className="space-y-6">
+          <div className="space-y-4">
+            <label className={`block text-[10px] font-black uppercase tracking-[0.2em] ${themeClasses.textTertiary}`}>Theme Engine</label>
+            <div className="grid grid-cols-3 gap-3">
+              {themeList.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => onThemeChange(t)}
+                  className="group flex flex-col items-center gap-2"
+                >
+                  <div className={`
+                    w-full aspect-[16/10] rounded-xl border-2 transition-all duration-300 overflow-hidden relative
+                    ${theme === t ? `border-transparent ring-2 ${accentClasses.focusRingClass} shadow-lg scale-[1.02]` : `${themeClasses.border} opacity-50 grayscale hover:grayscale-0 hover:opacity-100`}
+                  `}>
+                    <div className={`absolute inset-0 p-2 flex flex-col gap-1.5 ${t === 'light' ? 'bg-[#fafafa]' :
+                      t === 'slate' ? 'bg-[#0f172a]' :
+                        t === 'editor' ? 'bg-[#1e1e1e]' :
+                          t === 'violet' ? 'bg-[#1a1b26]' : 'bg-[#050505]'
+                      }`}>
+                      <div className={`h-1.5 w-3/4 rounded-full ${t === 'light' ? 'bg-gray-200' : 'bg-white/10'}`} />
+                      <div className="flex-1 grid grid-cols-2 gap-1.5">
+                        <div className={`rounded-md ${t === 'light' ? 'bg-gray-100' : 'bg-white/5'}`} />
+                        <div className={`rounded-md ${t === 'light' ? 'bg-gray-100' : 'bg-white/5'}`} />
                       </div>
-                    )}
-                  </button>
-                );
-              })}
+                      <div className={`h-3 w-full rounded-md ${theme === t ? 'opacity-100' : 'opacity-20'} ${accentClasses.bgClass} transition-opacity duration-300`} />
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-tight ${theme === t ? accentClasses.textClass : themeClasses.textSecondary}`}>
+                    {t}
+                  </span>
+                </button>
+              ))}
             </div>
-          </section>
+          </div>
 
-          {/* Divider */}
-          <div className={`border-t ${themeClasses.divider}`} />
+          <div className="space-y-4 pt-4 border-t border-white/5">
+            <label className={`block text-[10px] font-black uppercase tracking-[0.2em] ${themeClasses.textTertiary}`}>Accent Interface</label>
+            <div className="flex flex-wrap gap-4">
+              {accents.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => onAccentColorChange(a.id)}
+                  className={`w-7 h-7 rounded-full transition-all duration-500 flex items-center justify-center p-0.5 ${accentColor === a.id ? `ring-2 ${accentClasses.bgClass} ring-offset-2 ring-offset-transparent scale-110` : 'hover:scale-110'
+                    }`}
+                >
+                  <div className={`w-full h-full rounded-full ${a.color} shadow-sm`} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
 
-          {/* Logout */}
-          <section>
-            <button
-              onClick={onLogout}
-              className={`w-full px-4 py-3 rounded-lg text-sm font-medium transition-all text-red-400 hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/50`}
-            >
-              Logout
-            </button>
-          </section>
-        </div>
+        {/* Action Section */}
+        <section className="space-y-4 pt-6 mt-4 border-t border-white/5">
+          <button
+            onClick={onLogout}
+            className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3.5 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 border border-red-500/20"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout session
+          </button>
+        </section>
       </div>
     </div>
   );

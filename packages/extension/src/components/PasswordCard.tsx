@@ -1,5 +1,6 @@
 import type { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
+import { motion } from "framer-motion";
 
 interface PasswordCardProps {
   password: PasswordEntry;
@@ -8,6 +9,7 @@ interface PasswordCardProps {
   onCopyPassword: () => void;
   theme: Theme;
   accentColor: AccentColor;
+  isActive?: boolean;
 }
 
 export default function PasswordCard({
@@ -17,43 +19,53 @@ export default function PasswordCard({
   onCopyPassword,
   theme,
   accentColor,
+  isActive = false,
 }: PasswordCardProps) {
   const getThemeClasses = () => {
     if (theme === "light") {
       return {
-        cardBg: "bg-gray-100",
-        border: "border-gray-300",
+        cardBg: "bg-white",
+        sectionBg: "bg-gray-50",
+        border: "border-gray-100",
         text: "text-gray-800",
-        textSecondary: "text-gray-600",
+        textSecondary: "text-gray-500",
+        hoverBg: "hover:bg-gray-100/50",
       };
     } else if (theme === "slate") {
       return {
-        cardBg: "bg-gray-800",
-        border: "border-gray-700",
-        text: "text-gray-100",
-        textSecondary: "text-gray-400",
+        cardBg: "bg-slate-800/40",
+        sectionBg: "bg-slate-900/50",
+        border: "border-slate-800",
+        text: "text-slate-100",
+        textSecondary: "text-slate-400",
+        hoverBg: "hover:bg-slate-800/50",
       };
     } else if (theme === "editor") {
       return {
-        cardBg: "bg-[#252526]",
-        border: "border-[#3e3e42]",
+        cardBg: "bg-[#252526]/40",
+        sectionBg: "bg-[#1e1e1e]",
+        border: "border-[#333333]",
         text: "text-[#d4d4d4]",
-        textSecondary: "text-[#858585]",
+        textSecondary: "text-gray-400",
+        hoverBg: "hover:bg-[#2a2d2e]/70",
       };
     } else if (theme === "violet") {
       return {
-        cardBg: "bg-[#44475a]",
-        border: "border-[#6272a4]/60",
-        text: "text-[#f8f8f2]",
-        textSecondary: "text-[#c9a0dc]",
+        cardBg: "bg-[#24283b]/40",
+        sectionBg: "bg-[#16161e]",
+        border: "border-[#414868]/30",
+        text: "text-[#a9b1d6]",
+        textSecondary: "text-gray-400",
+        hoverBg: "hover:bg-[#414868]/30",
       };
     } else {
-      // dark (default)
       return {
         cardBg: "bg-[#0a0a0a]",
-        border: "border-[#1a1a1a]",
+        sectionBg: "bg-black",
+        border: "border-white/10",
         text: "text-white",
         textSecondary: "text-gray-400",
+        hoverBg: "hover:bg-white/10",
       };
     }
   };
@@ -62,48 +74,59 @@ export default function PasswordCard({
   const accentClasses = getAccentColorClasses(accentColor);
 
   return (
-    <div 
+    <motion.div
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
       onClick={onCardClick}
-      className={`group ${themeClasses.cardBg} rounded-lg border ${themeClasses.border} ${accentClasses.hoverBorderClass} hover:shadow-md transition-all cursor-pointer active:scale-[0.98]`}
+      className={`group ${isActive ? `${themeClasses.cardBg} ring-1 ${accentClasses.focusRingClass} border-transparent` : `${themeClasses.cardBg} border ${themeClasses.border}`} rounded-xl transition-all cursor-pointer shadow-sm hover:shadow-md`}
     >
-      <div className="p-3 flex items-center gap-3">
+      <div className="p-2 flex items-center gap-3">
         {/* Icon/Image */}
         <div className="relative flex-shrink-0">
-          <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-base shadow-sm`}>
+          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-xs shadow-inner`}>
             {password.title.charAt(0).toUpperCase()}
           </div>
           {password.breached && (
-            <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full flex items-center justify-center border-2 ${theme === "light" ? "border-white" : "border-[#0a0a0a]"}`}>
-              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full flex items-center justify-center border-2 border-black">
+              <div className="w-0.5 h-0.5 bg-white rounded-full" />
             </div>
           )}
         </div>
 
         {/* Title and Username */}
         <div className="flex-1 min-w-0">
-          <h3 className={`font-semibold ${themeClasses.text} text-sm truncate mb-0.5`}>{password.title}</h3>
-          <p className={`text-xs ${themeClasses.textSecondary} truncate`}>{password.username || "No username"}</p>
+          <h3 className={`font-semibold ${themeClasses.text} text-xs truncate group-hover:${accentClasses.textClass} transition-colors`}>{password.title}</h3>
+          <p className={`text-[10px] ${themeClasses.textSecondary} truncate mt-0.5`}>{password.username || "No username"}</p>
         </div>
 
-        {/* Copy buttons on hover */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Action icons on hover */}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onCopyUsername();
             }}
-            className={`p-1.5 ${themeClasses.textSecondary} ${accentClasses.hoverTextClass} ${accentClasses.hoverBgClass} rounded transition-all`}
-            title="Copy username"
+            className={`p-1.5 rounded-lg ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${accentClasses.textClass} transition-all active:scale-95`}
+            title="Copy Username"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopyPassword();
+            }}
+            className={`p-1.5 rounded-lg ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${accentClasses.textClass} transition-all active:scale-95`}
+            title="Copy Password"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
-

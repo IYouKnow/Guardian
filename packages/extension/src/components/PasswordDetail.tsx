@@ -22,48 +22,67 @@ export default function PasswordDetail({
     if (theme === "light") {
       return {
         bg: "bg-[#fafafa]",
-        cardBg: "bg-gray-100",
-        border: "border-gray-300",
+        cardBg: "bg-white",
+        sectionBg: "bg-gray-100/30",
+        divider: "border-gray-100",
         text: "text-gray-800",
-        textSecondary: "text-gray-600",
-        inputBg: "bg-gray-200",
+        textSecondary: "text-gray-500",
+        textTertiary: "text-gray-400",
+        inputBg: "bg-gray-50",
+        hoverBg: "hover:bg-gray-100",
+        border: "border-gray-200",
       };
     } else if (theme === "slate") {
       return {
-        bg: "bg-gray-900",
-        cardBg: "bg-gray-800",
-        border: "border-gray-700",
-        text: "text-gray-100",
-        textSecondary: "text-gray-400",
-        inputBg: "bg-gray-800",
+        bg: "bg-[#0f172a]",
+        cardBg: "bg-slate-800/40",
+        sectionBg: "bg-slate-900/30",
+        divider: "border-slate-800/50",
+        text: "text-slate-100",
+        textSecondary: "text-slate-400",
+        textTertiary: "text-slate-500",
+        inputBg: "bg-slate-900/50",
+        hoverBg: "hover:bg-slate-800/50",
+        border: "border-slate-800",
       };
     } else if (theme === "editor") {
       return {
         bg: "bg-[#1e1e1e]",
-        cardBg: "bg-[#252526]",
-        border: "border-[#3e3e42]",
+        cardBg: "bg-[#252526]/40",
+        sectionBg: "bg-[#121212]/30",
+        divider: "border-[#333333]",
         text: "text-[#d4d4d4]",
-        textSecondary: "text-[#858585]",
-        inputBg: "bg-[#2a2d2e]",
+        textSecondary: "text-gray-300",
+        textTertiary: "text-gray-400",
+        inputBg: "bg-[#1e1e1e]",
+        hoverBg: "hover:bg-[#2a2d2e]/70",
+        border: "border-[#333333]",
       };
     } else if (theme === "violet") {
       return {
-        bg: "bg-[#282a36]",
-        cardBg: "bg-[#44475a]",
-        border: "border-[#6272a4]/60",
-        text: "text-[#f8f8f2]",
-        textSecondary: "text-[#c9a0dc]",
-        inputBg: "bg-[#44475a]",
+        bg: "bg-[#1a1b26]",
+        cardBg: "bg-[#24283b]/40",
+        sectionBg: "bg-[#16161e]/30",
+        divider: "border-[#414868]/20",
+        text: "text-[#a9b1d6]",
+        textSecondary: "text-gray-300",
+        textTertiary: "text-gray-400",
+        inputBg: "bg-[#16161e]",
+        hoverBg: "hover:bg-[#414868]/30",
+        border: "border-[#414868]/30",
       };
     } else {
-      // dark (default)
       return {
-        bg: "bg-black",
+        bg: "bg-[#050505]",
         cardBg: "bg-[#0a0a0a]",
-        border: "border-[#1a1a1a]",
+        sectionBg: "bg-[#111111]/30",
+        divider: "border-white/10",
         text: "text-white",
-        textSecondary: "text-gray-400",
-        inputBg: "bg-[#1a1a1a]",
+        textSecondary: "text-gray-300",
+        textTertiary: "text-gray-500",
+        inputBg: "bg-[#0a0a0a]",
+        hoverBg: "hover:bg-white/10",
+        border: "border-white/10",
       };
     }
   };
@@ -72,118 +91,108 @@ export default function PasswordDetail({
   const accentClasses = getAccentColorClasses(accentColor);
 
   return (
-    <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
-      {/* Header with back button */}
-      <header className={`${themeClasses.cardBg} border-b ${themeClasses.border} px-4 py-3 flex-shrink-0`}>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className={`p-1.5 ${themeClasses.textSecondary} hover:${themeClasses.text} transition-colors`}
-            title="Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h2 className={`text-base font-semibold ${themeClasses.text}`}>Password Details</h2>
+    <div className={`flex flex-col h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text} font-sans border-l ${themeClasses.border}`}>
+      {/* Mini Header */}
+      <header className={`px-5 py-4 flex items-center justify-between shrink-0 border-b ${themeClasses.border}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-sm shrink-0`}>
+            {password.title.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold truncate">{password.title}</h1>
+            <p className={`text-[10px] ${themeClasses.textTertiary}`}>Account Details</p>
+          </div>
         </div>
+        <button
+          onClick={onBack}
+          className={`p-1.5 rounded-lg transition-all duration-300 ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.text}`}
+          title="Close"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </header>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="flex flex-col items-center mb-6">
-          {/* Icon/Image */}
-          <div className="relative mb-4">
-            <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${accentClasses.lightClass} border-2 ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-3xl shadow-lg`}>
-              {password.title.charAt(0).toUpperCase()}
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-hide">
+        {/* BREACH STATUS */}
+        {password.breached && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
+            <div className="w-6 h-6 bg-red-500/20 rounded-lg flex items-center justify-center shrink-0">
+              <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
             </div>
-            {password.breached && (
-              <div className={`absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center border-2 ${theme === "light" ? "border-white" : "border-[#0a0a0a]"}`}>
-                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-            )}
+            <div>
+              <p className="text-xs font-bold text-red-500">Security Alert</p>
+              <p className="text-[10px] text-red-500/80 leading-tight">This password was found in a known data breach.</p>
+            </div>
           </div>
+        )}
 
-          {/* Title */}
-          <h1 className={`text-xl font-bold ${themeClasses.text} mb-1 text-center`}>{password.title}</h1>
-        </div>
-
-        {/* Details */}
-        <div className="space-y-4">
-          {/* Username */}
-          <div>
-            <label className={`block text-xs font-medium ${themeClasses.textSecondary} mb-2`}>
-              Username
-            </label>
-            <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-3 py-2.5 flex items-center gap-2`}>
-              <span className={`flex-1 text-sm ${themeClasses.text} break-all`}>
-                {password.username || "No username"}
-              </span>
+        {/* USERNAME SECTION */}
+        <section className="space-y-1.5">
+          <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Username</label>
+          <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3 relative group`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium tracking-wide truncate">{password.username || "None"}</p>
+              </div>
               <button
                 onClick={onCopyUsername}
-                className={`p-1.5 ${themeClasses.textSecondary} ${accentClasses.hoverTextClass} ${accentClasses.hoverBgClass} rounded transition-all flex-shrink-0`}
-                title="Copy username"
+                className={`p-2 rounded-lg ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${accentClasses.textClass} transition-all active:scale-90`}
+                title="Copy Username"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </button>
             </div>
           </div>
+        </section>
 
-          {/* Password */}
-          <div>
-            <label className={`block text-xs font-medium ${themeClasses.textSecondary} mb-2`}>
-              Password
-            </label>
-            <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-3 py-2.5 flex items-center gap-2`}>
-              <span className={`flex-1 text-sm font-mono ${themeClasses.text} break-all`}>
-                {password.password}
-              </span>
+        {/* PASSWORD SECTION */}
+        <section className="space-y-1.5">
+          <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Password</label>
+          <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3 relative group`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-mono tracking-wider truncate">{password.password}</p>
+              </div>
               <button
                 onClick={onCopyPassword}
-                className={`p-1.5 ${themeClasses.textSecondary} ${accentClasses.hoverTextClass} ${accentClasses.hoverBgClass} rounded transition-all flex-shrink-0`}
-                title="Copy password"
+                className={`p-2 rounded-lg ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${accentClasses.textClass} transition-all active:scale-90`}
+                title="Copy Password"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </button>
             </div>
           </div>
+        </section>
 
-          {/* Website (if available) */}
-          {password.website && (
-            <div>
-              <label className={`block text-xs font-medium ${themeClasses.textSecondary} mb-2`}>
-                Website
-              </label>
-              <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-3 py-2.5`}>
-                <span className={`text-sm ${themeClasses.text} break-all`}>
-                  {password.website}
-                </span>
-              </div>
+        {/* WEBSITE SECTION */}
+        {password.website && (
+          <section className="space-y-1.5">
+            <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Website</label>
+            <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3`}>
+              <p className="text-sm truncate">{password.website}</p>
             </div>
-          )}
+          </section>
+        )}
 
-          {/* Notes (if available) */}
-          {password.notes && (
-            <div>
-              <label className={`block text-xs font-medium ${themeClasses.textSecondary} mb-2`}>
-                Notes
-              </label>
-              <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-3 py-2.5`}>
-                <span className={`text-sm ${themeClasses.text} break-all whitespace-pre-wrap`}>
-                  {password.notes}
-                </span>
-              </div>
+        {/* NOTES SECTION */}
+        {password.notes && (
+          <section className="space-y-1.5">
+            <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Notes</label>
+            <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3`}>
+              <p className={`text-xs ${themeClasses.textSecondary} whitespace-pre-wrap leading-relaxed`}>{password.notes}</p>
             </div>
-          )}
-        </div>
+          </section>
+        )}
       </div>
     </div>
   );
 }
-
