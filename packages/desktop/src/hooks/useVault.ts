@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { VaultEntry, loadVault, createVault } from "../../../shared/crypto";
+import { VaultEntry, VaultData, VaultSettings, loadVault, createVault } from "../../../shared/crypto/vault";
 
 interface UseVaultReturn {
   vaultPath: string | null;
@@ -10,8 +10,8 @@ interface UseVaultReturn {
   error: string | null;
   setVaultPath: (path: string | null) => void;
   setMasterPassword: (password: string) => void;
-  loadVaultFile: (path: string, password: string) => Promise<VaultEntry[]>;
-  saveVaultFile: (entries: VaultEntry[]) => Promise<void>;
+  loadVaultFile: (path: string, password: string) => Promise<VaultData>;
+  saveVaultFile: (entries: VaultEntry[], settings?: VaultSettings) => Promise<void>;
   createNewVault: (path: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -22,7 +22,7 @@ export function useVault(): UseVaultReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadVaultFile = useCallback(async (path: string, password: string): Promise<VaultEntry[]> => {
+  const loadVaultFile = useCallback(async (path: string, password: string): Promise<VaultData> => {
     setIsLoading(true);
     setError(null);
 
@@ -32,11 +32,11 @@ export function useVault(): UseVaultReturn {
         vaultData instanceof Uint8Array ? vaultData : new Uint8Array(vaultData);
 
       const decryptedVault = await loadVault(password, vaultBytes);
-      
+
       setVaultPath(path);
       setMasterPassword(password);
-      
-      return decryptedVault.entries;
+
+      return decryptedVault;
     } catch (err) {
       const errorMessage =
         err instanceof Error
@@ -50,7 +50,7 @@ export function useVault(): UseVaultReturn {
   }, []);
 
   const saveVaultFile = useCallback(
-    async (entries: VaultEntry[]): Promise<void> => {
+    async (entries: VaultEntry[], settings?: VaultSettings): Promise<void> => {
       if (!vaultPath || !masterPassword) {
         throw new Error("Vault path or master password not set");
       }
@@ -59,7 +59,7 @@ export function useVault(): UseVaultReturn {
       setError(null);
 
       try {
-        const encryptedVault = await createVault(masterPassword, entries);
+        const encryptedVault = await createVault(masterPassword, entries, settings);
         await writeFile(vaultPath, encryptedVault);
       } catch (err) {
         const errorMessage =
@@ -81,7 +81,7 @@ export function useVault(): UseVaultReturn {
       try {
         const encryptedVault = await createVault(password, []);
         await writeFile(path, encryptedVault, { createNew: true });
-        
+
         setVaultPath(path);
         setMasterPassword(password);
       } catch (err) {

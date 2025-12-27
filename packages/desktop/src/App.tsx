@@ -45,6 +45,7 @@ function App() {
     setItemSize,
     setSidebarWidth,
     setLastVaultPath,
+    loadFromVault,
   } = usePreferences();
 
   const {
@@ -68,6 +69,7 @@ function App() {
     addPassword,
     deletePassword,
     loadPasswords,
+    getVaultEntries,
   } = usePasswords({
     onSave: saveVaultFile,
   });
@@ -188,8 +190,11 @@ function App() {
 
   const handleLogin = async (path: string, password: string) => {
     try {
-      const entries = await loadVaultFile(path, password);
-      loadPasswords(entries);
+      const vaultData = await loadVaultFile(path, password);
+      loadPasswords(vaultData.entries);
+      if (vaultData.settings) {
+        await loadFromVault(vaultData.settings as any);
+      }
       setLastVaultPath(path);
       success("Vault unlocked");
     } catch (err) {
@@ -318,13 +323,25 @@ function App() {
             >
               <Settings
                 viewMode={preferences.viewMode}
-                onViewModeChange={setViewMode}
                 theme={preferences.theme}
-                onThemeChange={setTheme}
                 itemSize={preferences.itemSize}
-                onItemSizeChange={setItemSize}
                 accentColor={preferences.accentColor}
-                onAccentColorChange={setAccentColor}
+                onAccentColorChange={(color) => {
+                  setAccentColor(color);
+                  saveVaultFile(getVaultEntries(), { ...preferences, accentColor: color });
+                }}
+                onThemeChange={(theme) => {
+                  setTheme(theme);
+                  saveVaultFile(getVaultEntries(), { ...preferences, theme });
+                }}
+                onViewModeChange={(mode) => {
+                  setViewMode(mode);
+                  saveVaultFile(getVaultEntries(), { ...preferences, viewMode: mode });
+                }}
+                onItemSizeChange={(size) => {
+                  setItemSize(size);
+                  saveVaultFile(getVaultEntries(), { ...preferences, itemSize: size });
+                }}
               />
             </motion.div>
           ) : (

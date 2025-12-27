@@ -109,6 +109,23 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
+    setPreferences((prev) => ({
+      ...prev,
+      ...vaultSettings,
+    }));
+
+    // Also update local store for persistence
+    try {
+      const store = await getStore();
+      for (const [key, value] of Object.entries(vaultSettings)) {
+        await store.set(key, value);
+      }
+    } catch (error) {
+      console.error("Failed to sync vault settings to local store:", error);
+    }
+  }, []);
+
   return {
     preferences,
     isLoading,
@@ -118,6 +135,7 @@ export function usePreferences() {
     setItemSize,
     setSidebarWidth,
     setLastVaultPath,
+    loadFromVault,
   };
 }
 

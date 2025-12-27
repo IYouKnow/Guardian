@@ -20,6 +20,7 @@ interface UsePasswordsReturn {
   updatePassword: (id: string, updates: Partial<PasswordEntry>) => Promise<void>;
   deletePassword: (id: string) => Promise<void>;
   loadPasswords: (vaultEntries: VaultEntry[]) => void;
+  getVaultEntries: () => VaultEntry[];
 }
 
 // Helper function to convert VaultEntry to PasswordEntry
@@ -86,7 +87,7 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
   const loadPasswords = useCallback((vaultEntries: VaultEntry[]) => {
     const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);
     const createdAtMap = new Map<string, string>();
-    
+
     vaultEntries.forEach((entry) => {
       createdAtMap.set(entry.id, entry.createdAt);
     });
@@ -124,7 +125,7 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
     async (password: PasswordEntry) => {
       const updatedPasswords = [...passwords, password];
       setPasswords(updatedPasswords);
-      
+
       try {
         await savePasswords(updatedPasswords);
       } catch (err) {
@@ -161,7 +162,7 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
 
       try {
         await savePasswords(updatedPasswords);
-        
+
         // Update createdAt map - remove deleted entry
         const newCreatedAtMap = new Map(entryCreatedAtMap);
         newCreatedAtMap.delete(id);
@@ -189,6 +190,16 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
     updatePassword,
     deletePassword,
     loadPasswords,
+    getVaultEntries: useCallback(() => {
+      return passwords.map((entry) => {
+        const vaultEntry = passwordEntryToVaultEntry(entry);
+        const originalCreatedAt = entryCreatedAtMap.get(entry.id);
+        if (originalCreatedAt) {
+          vaultEntry.createdAt = originalCreatedAt;
+        }
+        return vaultEntry;
+      });
+    }, [passwords, entryCreatedAtMap]),
   };
 }
 
