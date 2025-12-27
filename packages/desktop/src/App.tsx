@@ -16,6 +16,7 @@ import { usePreferences } from "./hooks/usePreferences";
 import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
 import { useToast } from "./hooks/useToast";
+import { motion, AnimatePresence } from "framer-motion";
 
 function App() {
   const [showRegister, setShowRegister] = useState(false);
@@ -47,9 +48,7 @@ function App() {
   } = usePreferences();
 
   const {
-    vaultPath,
     isAuthenticated,
-    isLoading: vaultLoading,
     loadVaultFile,
     saveVaultFile,
     createNewVault,
@@ -73,14 +72,6 @@ function App() {
     onSave: saveVaultFile,
   });
 
-  // Load last vault path on mount
-  useEffect(() => {
-    if (preferences.lastVaultPath && !isAuthenticated && !preferencesLoading) {
-      // Optionally auto-load last vault (commented out for security)
-      // User should manually login
-    }
-  }, [preferences.lastVaultPath, isAuthenticated, preferencesLoading]);
-
   // Sidebar resize handlers
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -88,7 +79,7 @@ function App() {
 
       const newWidth = e.clientX;
       const minWidth = 200;
-      const maxWidth = 600;
+      const maxWidth = 500;
 
       if (newWidth >= minWidth && newWidth <= maxWidth) {
         setSidebarWidth(newWidth);
@@ -135,11 +126,11 @@ function App() {
   const handleAddPassword = async (newPassword: any) => {
     try {
       await addPassword(newPassword);
-      success("Password added successfully");
+      success("Record added successfully");
       setShowAddModal(false);
     } catch (err) {
       console.error("Failed to add password:", err);
-      showError("Failed to save password. Please try again.");
+      showError("Failed to save record. Please try again.");
       throw err;
     }
   };
@@ -163,11 +154,11 @@ function App() {
 
     try {
       await deletePassword(passwordId);
-      success("Password deleted successfully");
+      success("Record removed");
       setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" });
     } catch (err) {
       console.error("Failed to delete password:", err);
-      showError("Failed to delete password. Please try again.");
+      showError("Failed to delete record.");
     } finally {
       setIsDeleting(false);
     }
@@ -178,21 +169,20 @@ function App() {
     setShowSettings(false);
     setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" });
     setLastVaultPath(null);
-    success("Logged out successfully");
+    success("Vault locked");
   };
 
   const handleRegister = async (path: string, password: string, theme: Theme, accentColor: AccentColor) => {
     try {
       await createNewVault(path, password);
       setLastVaultPath(path);
-      // Set preferences from wizard
       await setTheme(theme);
       await setAccentColor(accentColor);
       setShowRegister(false);
-      success("Vault created successfully");
+      success("Vault created");
     } catch (err) {
       console.error("Failed to create vault:", err);
-      showError("Failed to create vault. Please try again.");
+      showError("Failed to create vault.");
     }
   };
 
@@ -201,154 +191,97 @@ function App() {
       const entries = await loadVaultFile(path, password);
       loadPasswords(entries);
       setLastVaultPath(path);
-      success("Vault unlocked successfully");
+      success("Vault unlocked");
     } catch (err) {
       console.error("Failed to load vault:", err);
       showError(
-        err instanceof Error ? err.message : "Failed to unlock vault. Invalid password or corrupted file."
+        err instanceof Error ? err.message : "Failed to unlock vault."
       );
     }
   };
 
-  // Theme classes based on theme state
   const getThemeClasses = () => {
-    if (preferences.theme === "light") {
-      return {
-        bg: "bg-[#fafafa]",
-        text: "text-gray-800",
-        textSecondary: "text-gray-600",
-        cardBg: "bg-gray-100",
-        border: "border-gray-300",
-        inputBg: "bg-gray-200",
-        headerBg: "bg-gray-100",
-        sidebarBg: "bg-gray-100",
-      };
-    } else if (preferences.theme === "slate") {
-      return {
-        bg: "bg-gray-900",
-        text: "text-gray-100",
-        textSecondary: "text-gray-400",
-        cardBg: "bg-gray-800",
-        border: "border-gray-700",
-        inputBg: "bg-gray-800",
-        headerBg: "bg-gray-900",
-        sidebarBg: "bg-gray-900",
-      };
-    } else if (preferences.theme === "editor") {
-      return {
-        bg: "bg-[#1e1e1e]",
-        text: "text-[#d4d4d4]",
-        textSecondary: "text-[#858585]",
-        cardBg: "bg-[#252526]",
-        border: "border-[#3e3e42]",
-        inputBg: "bg-[#2a2d2e]",
-        headerBg: "bg-[#2a2d2e]",
-        sidebarBg: "bg-[#252526]",
-      };
-    } else if (preferences.theme === "violet") {
-      return {
-        bg: "bg-[#282a36]",
-        text: "text-[#f8f8f2]",
-        textSecondary: "text-[#c9a0dc]",
-        cardBg: "bg-[#44475a]",
-        border: "border-[#6272a4]/60",
-        inputBg: "bg-[#44475a]",
-        headerBg: "bg-[#44475a]",
-        sidebarBg: "bg-[#282a36]",
-      };
-    } else {
-      // dark (default)
-      return {
-        bg: "bg-black",
-        text: "text-white",
-        textSecondary: "text-gray-400",
-        cardBg: "bg-[#0a0a0a]",
-        border: "border-[#1a1a1a]",
-        inputBg: "bg-[#1a1a1a]",
-        headerBg: "bg-[#0a0a0a]",
-        sidebarBg: "bg-[#0a0a0a]",
-      };
+    switch (preferences.theme) {
+      case "light":
+        return {
+          bg: "bg-[#f8fafc]",
+          text: "text-slate-900",
+          textMuted: "text-slate-500",
+          border: "border-slate-200",
+        };
+      case "slate":
+        return {
+          bg: "bg-slate-950",
+          text: "text-slate-100",
+          textMuted: "text-slate-400",
+          border: "border-slate-800",
+        };
+      case "editor":
+        return {
+          bg: "bg-[#0d0d0d]",
+          text: "text-[#d4d4d4]",
+          textMuted: "text-[#858585]",
+          border: "border-[#333333]",
+        };
+      case "violet":
+        return {
+          bg: "bg-[#120a1f]",
+          text: "text-[#f8f8f2]",
+          textMuted: "text-[#c9a0dc]/70",
+          border: "border-[#4a3a6b]",
+        };
+      default: // dark
+        return {
+          bg: "bg-black",
+          text: "text-white",
+          textMuted: "text-zinc-500",
+          border: "border-zinc-800/50",
+        };
     }
   };
 
   const themeClasses = getThemeClasses();
+  const accentClasses = getAccentColorClasses(preferences.accentColor);
 
-  // Show loading state while preferences are loading
   if (preferencesLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black text-white">
+      <div className="flex h-screen items-center justify-center bg-black text-white font-sans">
         <div className="text-center">
-          <svg
-            className="animate-spin w-8 h-8 mx-auto mb-4 text-yellow-400"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <p className="text-gray-400">Loading...</p>
+          <div className="w-10 h-10 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-[0.6rem] font-bold uppercase tracking-widest text-zinc-500">Initializing Vault</p>
         </div>
       </div>
     );
   }
 
-  // Register Page
   if (showRegister) {
     return (
       <>
-        <Register
-          onRegister={handleRegister}
-          onBackToLogin={() => setShowRegister(false)}
-        />
-        <ToastContainer
-          toasts={toasts}
-          onRemove={removeToast}
-          theme={preferences.theme}
-          accentColor={preferences.accentColor}
-        />
+        <Register onRegister={handleRegister} onBackToLogin={() => setShowRegister(false)} />
+        <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );
   }
 
-  // Login Page
   if (!isAuthenticated) {
     return (
       <>
-        <Login
-          onLogin={handleLogin}
-          onRegister={() => setShowRegister(true)}
-          lastVaultPath={preferences.lastVaultPath}
-        />
-        <ToastContainer
-          toasts={toasts}
-          onRemove={removeToast}
-          theme={preferences.theme}
-          accentColor={preferences.accentColor}
-        />
+        <Login onLogin={handleLogin} onRegister={() => setShowRegister(true)} lastVaultPath={preferences.lastVaultPath} theme={preferences.theme} accentColor={preferences.accentColor} />
+        <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );
   }
 
-  // Main App
   return (
-    <div
-      className={`flex h-screen overflow-hidden ${themeClasses.bg} ${themeClasses.text}`}
-    >
+    <div className={`relative flex h-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
+      {/* Global Background Elements */}
+      <div className={`absolute top-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-10 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
+      <div className={`absolute bottom-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-5 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
+
       <div
         ref={sidebarRef}
         style={{ width: `${preferences.sidebarWidth}px` }}
-        className="flex-shrink-0 relative"
+        className="flex-shrink-0 relative z-30"
       >
         <Sidebar
           categories={categories}
@@ -364,129 +297,104 @@ function App() {
           theme={preferences.theme}
           accentColor={preferences.accentColor}
         />
+
         {/* Resize handle */}
         <div
-          onMouseDown={(e) => {
-            e.preventDefault();
-            setIsResizing(true);
-          }}
-          className={`absolute top-0 right-0 h-full cursor-col-resize z-10 group ${
-            isResizing ? getAccentColorClasses(preferences.accentColor).lightClass : ""
-          }`}
-          style={{ width: "4px", marginRight: "-2px" }}
-        >
-          <div
-            className={`absolute top-0 right-1/2 h-full w-0.5 transition-all ${
-              isResizing
-                ? getAccentColorClasses(preferences.accentColor).bgClass
-                : `bg-transparent ${getAccentColorClasses(preferences.accentColor).hoverBgLightClass}`
-            }`}
-          />
-        </div>
+          onMouseDown={(e) => { e.preventDefault(); setIsResizing(true); }}
+          className={`absolute top-0 right-0 h-full cursor-col-resize z-40 transition-all ${isResizing ? "bg-white/10" : "bg-transparent hover:bg-white/5"}`}
+          style={{ width: "2px" }}
+        />
       </div>
 
-      <main
-        className={`flex-1 flex flex-col overflow-hidden min-w-0 ${themeClasses.bg}`}
-      >
-        {showSettings ? (
-          <Settings
-            viewMode={preferences.viewMode}
-            onViewModeChange={setViewMode}
-            theme={preferences.theme}
-            onThemeChange={setTheme}
-            itemSize={preferences.itemSize}
-            onItemSizeChange={setItemSize}
-            accentColor={preferences.accentColor}
-            onAccentColorChange={setAccentColor}
-          />
-        ) : (
-          <>
-            <Header
-              activeCategory={activeCategory}
-              passwordCount={filteredPasswords.length}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              theme={preferences.theme}
-              accentColor={preferences.accentColor}
-            />
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0 relative z-20">
+        <AnimatePresence mode="wait">
+          {showSettings ? (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1 overflow-y-auto"
+            >
+              <Settings
+                viewMode={preferences.viewMode}
+                onViewModeChange={setViewMode}
+                theme={preferences.theme}
+                onThemeChange={setTheme}
+                itemSize={preferences.itemSize}
+                onItemSizeChange={setItemSize}
+                accentColor={preferences.accentColor}
+                onAccentColorChange={setAccentColor}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <Header
+                activeCategory={activeCategory}
+                passwordCount={filteredPasswords.length}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                theme={preferences.theme}
+                accentColor={preferences.accentColor}
+              />
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
-              {filteredPasswords.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div
-                    className={`w-20 h-20 rounded-full ${themeClasses.cardBg} flex items-center justify-center mb-6`}
-                  >
-                    <svg
-                      className={`w-10 h-10 ${themeClasses.textSecondary}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                      />
-                    </svg>
+              <div className="flex-1 overflow-y-auto p-8 relative">
+                {filteredPasswords.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center py-20">
+                    <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>
+                      <svg className={`w-8 h-8 ${themeClasses.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className={`${themeClasses.text} text-lg font-bold mb-1`}>
+                      {searchQuery ? "No matches found" : "Empty Secure Vault"}
+                    </p>
+                    <p className={`${themeClasses.textMuted} text-xs font-bold uppercase tracking-widest`}>
+                      {searchQuery ? "Try a different search term" : "Add your first record to begin"}
+                    </p>
                   </div>
-                  <p className={`${themeClasses.textSecondary} text-lg mb-2`}>
-                    {searchQuery ? "No passwords found" : "No passwords yet"}
-                  </p>
-                  <p className={`${themeClasses.textSecondary} text-sm`}>
-                    {searchQuery
-                      ? "Try a different search term"
-                      : "Add your first password to get started"}
-                  </p>
-                </div>
-              ) : preferences.viewMode === "grid" ? (
-                <PasswordGrid
-                  passwords={filteredPasswords}
-                  onCopyUsername={handleCopyUsername}
-                  onCopyPassword={handleCopyPassword}
-                  onDelete={handleDeletePassword}
-                  theme={preferences.theme}
-                  itemSize={preferences.itemSize}
-                  accentColor={preferences.accentColor}
-                />
-              ) : (
-                <PasswordTable
-                  passwords={filteredPasswords}
-                  onCopyUsername={handleCopyUsername}
-                  onCopyPassword={handleCopyPassword}
-                  onDelete={handleDeletePassword}
-                  theme={preferences.theme}
-                  itemSize={preferences.itemSize}
-                  accentColor={preferences.accentColor}
-                />
-              )}
-            </div>
-          </>
-        )}
+                ) : preferences.viewMode === "grid" ? (
+                  <PasswordGrid
+                    passwords={filteredPasswords}
+                    onCopyUsername={handleCopyUsername}
+                    onCopyPassword={handleCopyPassword}
+                    onDelete={handleDeletePassword}
+                    theme={preferences.theme}
+                    itemSize={preferences.itemSize}
+                    accentColor={preferences.accentColor}
+                  />
+                ) : (
+                  <PasswordTable
+                    passwords={filteredPasswords}
+                    onCopyUsername={handleCopyUsername}
+                    onCopyPassword={handleCopyPassword}
+                    onDelete={handleDeletePassword}
+                    theme={preferences.theme}
+                    itemSize={preferences.itemSize}
+                    accentColor={preferences.accentColor}
+                  />
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
-      <AddPasswordModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAddPassword={handleAddPassword}
-      />
-
+      <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} />
       <DeleteConfirmModal
         isOpen={deleteModal.isOpen}
         passwordTitle={deleteModal.passwordTitle}
         onConfirm={confirmDeletePassword}
-        onCancel={() =>
-          setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" })
-        }
+        onCancel={() => setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" })}
         isDeleting={isDeleting}
       />
-
-      <ToastContainer
-        toasts={toasts}
-        onRemove={removeToast}
-        theme={preferences.theme}
-        accentColor={preferences.accentColor}
-      />
+      <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
     </div>
   );
 }

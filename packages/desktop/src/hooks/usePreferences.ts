@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Store } from "@tauri-apps/plugin-store";
+import { load, Store } from "@tauri-apps/plugin-store";
 import { Theme, AccentColor } from "../types";
 
 interface Preferences {
@@ -20,13 +20,13 @@ const DEFAULT_PREFERENCES: Preferences = {
   lastVaultPath: null,
 };
 
-let storeInstance: Store | null = null;
+let storePromise: Promise<Store> | null = null;
 
 async function getStore(): Promise<Store> {
-  if (!storeInstance) {
-    storeInstance = new Store(".settings.dat");
+  if (!storePromise) {
+    storePromise = load(".settings.dat");
   }
-  return storeInstance;
+  return storePromise;
 }
 
 export function usePreferences() {

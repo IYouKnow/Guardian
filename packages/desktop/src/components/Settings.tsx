@@ -26,6 +26,7 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
         activeBg: "bg-gray-200",
         activeText: "text-gray-800",
         radioBorder: "border-gray-400",
+        border: "border-gray-200",
       };
     } else if (theme === "slate") {
       return {
@@ -39,6 +40,7 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
         activeBg: "bg-gray-800/60",
         activeText: "text-gray-100",
         radioBorder: "border-gray-600",
+        border: "border-gray-800",
       };
     } else if (theme === "editor") {
       return {
@@ -52,6 +54,7 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
         activeBg: "bg-[#2a2d2e]/80",
         activeText: "text-[#d4d4d4]",
         radioBorder: "border-[#3e3e42]",
+        border: "border-[#333333]",
       };
     } else if (theme === "violet") {
       return {
@@ -65,6 +68,7 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
         activeBg: "bg-[#44475a]/70",
         activeText: "text-[#f8f8f2]",
         radioBorder: "border-[#6272a4]/60",
+        border: "border-[#4a3a6b]",
       };
     } else {
       // dark (default)
@@ -79,6 +83,7 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
         activeBg: "bg-[#0a0a0a]/80",
         activeText: "text-white",
         radioBorder: "border-gray-600",
+        border: "border-white/10",
       };
     }
   };
@@ -108,18 +113,16 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
             <div className="space-y-3">
               <button
                 onClick={() => onThemeChange("light")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "light"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${theme === "light"
+                  ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                  : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "light"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${theme === "light"
+                    ? accentClasses.baseClass
+                    : themeClasses.radioBorder
+                    }`}>
                     {theme === "light" && (
                       <div className="w-2 h-2 rounded-full bg-black" />
                     )}
@@ -129,18 +132,16 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
               </button>
               <button
                 onClick={() => onThemeChange("dark")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "dark"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${theme === "dark"
+                  ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                  : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "dark"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${theme === "dark"
+                    ? accentClasses.baseClass
+                    : themeClasses.radioBorder
+                    }`}>
                     {theme === "dark" && (
                       <div className="w-2 h-2 rounded-full bg-black" />
                     )}
@@ -150,18 +151,16 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
               </button>
               <button
                 onClick={() => onThemeChange("slate")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "slate"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${theme === "slate"
+                  ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                  : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "slate"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${theme === "slate"
+                    ? accentClasses.baseClass
+                    : themeClasses.radioBorder
+                    }`}>
                     {theme === "slate" && (
                       <div className="w-2 h-2 rounded-full bg-black" />
                     )}
@@ -171,18 +170,16 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
               </button>
               <button
                 onClick={() => onThemeChange("editor")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "editor"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${theme === "editor"
+                  ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                  : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "editor"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${theme === "editor"
+                    ? accentClasses.baseClass
+                    : themeClasses.radioBorder
+                    }`}>
                     {theme === "editor" && (
                       <div className="w-2 h-2 rounded-full bg-black" />
                     )}
@@ -192,18 +189,16 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
               </button>
               <button
                 onClick={() => onThemeChange("violet")}
-                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${
-                  theme === "violet"
-                    ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                    : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                }`}
+                className={`w-full text-left px-4 py-3.5 rounded-lg transition-all ${theme === "violet"
+                  ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                  : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    theme === "violet"
-                      ? accentClasses.baseClass
-                      : themeClasses.radioBorder
-                  }`}>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${theme === "violet"
+                    ? accentClasses.baseClass
+                    : themeClasses.radioBorder
+                    }`}>
                     {theme === "violet" && (
                       <div className="w-2 h-2 rounded-full bg-black" />
                     )}
@@ -233,11 +228,10 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
                   <button
                     key={color}
                     onClick={() => onAccentColorChange(color)}
-                    className={`relative aspect-square rounded-lg border-2 transition-all ${
-                      accentColor === color
-                        ? `${colorClasses.baseClass} ${colorClasses.lightClass}`
-                        : `${themeClasses.border} ${themeClasses.sectionBg} ${themeClasses.hoverBg}`
-                    }`}
+                    className={`relative aspect-square rounded-lg border-2 transition-all ${accentColor === color
+                      ? `${colorClasses.baseClass} ${colorClasses.lightClass}`
+                      : `${themeClasses.border} ${themeClasses.sectionBg} ${themeClasses.hoverBg}`
+                      }`}
                   >
                     <div className={`w-full h-full rounded-md ${colorClasses.bgClass}`} />
                     {accentColor === color && (
@@ -274,21 +268,19 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
                 <div className="flex gap-3">
                   <button
                     onClick={() => onViewModeChange("grid")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      viewMode === "grid"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${viewMode === "grid"
+                      ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                      : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                      }`}
                   >
                     Grid View
                   </button>
                   <button
                     onClick={() => onViewModeChange("table")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      viewMode === "table"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${viewMode === "table"
+                      ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                      : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                      }`}
                   >
                     Table View
                   </button>
@@ -303,31 +295,28 @@ export default function Settings({ viewMode, onViewModeChange, theme, onThemeCha
                 <div className="flex gap-3">
                   <button
                     onClick={() => onItemSizeChange("small")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      itemSize === "small"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${itemSize === "small"
+                      ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                      : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                      }`}
                   >
                     Small
                   </button>
                   <button
                     onClick={() => onItemSizeChange("medium")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      itemSize === "medium"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${itemSize === "medium"
+                      ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                      : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                      }`}
                   >
                     Medium
                   </button>
                   <button
                     onClick={() => onItemSizeChange("large")}
-                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      itemSize === "large"
-                        ? `${themeClasses.activeBg} ${themeClasses.activeText}`
-                        : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
-                    }`}
+                    className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-all ${itemSize === "large"
+                      ? `${themeClasses.activeBg} ${themeClasses.activeText}`
+                      : `${themeClasses.sectionBg} ${themeClasses.textSecondary} ${themeClasses.hoverBg}`
+                      }`}
                   >
                     Large
                   </button>

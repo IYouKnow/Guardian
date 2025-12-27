@@ -137,7 +137,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-2">Category</label>
-            <select 
+            <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"

@@ -1,20 +1,84 @@
 import { useState, useEffect, FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { motion, AnimatePresence } from "framer-motion";
+import { Theme, AccentColor } from "../types";
+import { getAccentColorClasses } from "../utils/accentColors";
 
 interface LoginProps {
   onLogin: (vaultPath: string, masterPassword: string) => Promise<void>;
   onRegister: () => void;
   lastVaultPath?: string | null;
+  theme?: Theme;
+  accentColor?: AccentColor;
 }
 
-export default function Login({ onLogin, onRegister, lastVaultPath }: LoginProps) {
+export default function Login({
+  onLogin,
+  onRegister,
+  lastVaultPath,
+  theme = "dark",
+  accentColor = "yellow"
+}: LoginProps) {
   const [masterPassword, setMasterPassword] = useState("");
   const [vaultPath, setVaultPath] = useState<string>(lastVaultPath || "");
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Update vault path when lastVaultPath changes
+  const accentClasses = getAccentColorClasses(accentColor);
+
+  const getThemeClasses = () => {
+    switch (theme) {
+      case "light":
+        return {
+          bg: "bg-[#f8fafc]",
+          card: "bg-white/80 backdrop-blur-xl",
+          text: "text-slate-900",
+          textMuted: "text-slate-500",
+          border: "border-slate-200",
+          input: "bg-slate-100",
+        };
+      case "slate":
+        return {
+          bg: "bg-slate-950",
+          card: "bg-slate-900/40 backdrop-blur-xl",
+          text: "text-slate-100",
+          textMuted: "text-slate-400",
+          border: "border-slate-800",
+          input: "bg-slate-800/50",
+        };
+      case "editor":
+        return {
+          bg: "bg-[#0d0d0d]",
+          card: "bg-[#1a1a1a]/60 backdrop-blur-xl",
+          text: "text-[#d4d4d4]",
+          textMuted: "text-[#858585]",
+          border: "border-[#333333]",
+          input: "bg-[#252526]",
+        };
+      case "violet":
+        return {
+          bg: "bg-[#120a1f]",
+          card: "bg-[#23173a]/50 backdrop-blur-xl",
+          text: "text-[#f8f8f2]",
+          textMuted: "text-[#c9a0dc]/70",
+          border: "border-[#4a3a6b]",
+          input: "bg-[#2d1b4d]",
+        };
+      default: // dark
+        return {
+          bg: "bg-black",
+          card: "bg-[#0a0a0a]/60 backdrop-blur-xl",
+          text: "text-white",
+          textMuted: "text-zinc-500",
+          border: "border-zinc-800/50",
+          input: "bg-zinc-900/50",
+        };
+    }
+  };
+
+  const themeClasses = getThemeClasses();
+
   useEffect(() => {
     if (lastVaultPath) {
       setVaultPath(lastVaultPath);
@@ -25,12 +89,7 @@ export default function Login({ onLogin, onRegister, lastVaultPath }: LoginProps
     try {
       const filePath = await open({
         title: "Select your vault file",
-        filters: [
-          {
-            name: "Guardian Vault",
-            extensions: ["guardian"],
-          },
-        ],
+        filters: [{ name: "Guardian Vault", extensions: ["guardian"] }],
         multiple: false,
       });
 
@@ -49,12 +108,12 @@ export default function Login({ onLogin, onRegister, lastVaultPath }: LoginProps
     setLoginError("");
 
     if (!vaultPath) {
-      setLoginError("Please select your vault file");
+      setLoginError("Please select a vault file.");
       return;
     }
 
     if (masterPassword.length < 8) {
-      setLoginError("Master password must be at least 8 characters");
+      setLoginError("Password must be at least 8 characters.");
       return;
     }
 
@@ -65,125 +124,133 @@ export default function Login({ onLogin, onRegister, lastVaultPath }: LoginProps
       setMasterPassword("");
     } catch (err) {
       console.error("Error loading vault:", err);
-      setLoginError(
-        err instanceof Error ? err.message : "Invalid master password or corrupted vault file"
-      );
+      setLoginError(err instanceof Error ? err.message : "Invalid password or corrupted file.");
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex h-screen bg-black text-white items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        {/* Logo and Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow-400/20 to-yellow-500/10 border-2 border-yellow-400/30 mb-4 shadow-lg shadow-yellow-400/10">
-            <svg className="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    <div className={`relative flex h-screen w-full font-sans ${themeClasses.bg} ${themeClasses.text} items-center justify-center p-6 overflow-hidden transition-colors duration-500`}>
+      {/* Background gradients */}
+      <div className={`absolute top-[-5%] right-[-5%] w-[35%] h-[35%] rounded-full blur-[100px] opacity-15 ${accentClasses.bgClass} transition-colors duration-700`} />
+      <div className={`absolute bottom-[-5%] left-[-5%] w-[35%] h-[35%] rounded-full blur-[100px] opacity-10 ${accentClasses.bgClass} transition-colors duration-700`} />
+
+      <div className="relative z-10 w-full max-w-md">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${accentClasses.lightClass} border border-white/5 mb-4 shadow-xl`}>
+            <svg className={`w-7 h-7 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">Guardian</h1>
-          <p className="text-gray-400">Enter your master password to unlock</p>
-        </div>
+          <h1 className="text-3xl font-bold tracking-tight mb-1">Welcome Back</h1>
+          <p className={`${themeClasses.textMuted} text-sm font-medium`}>Unlock your secure workspace</p>
+        </motion.div>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Vault File</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={vaultPath}
-                readOnly
-                placeholder="Select your vault file"
-                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-3 text-white placeholder-gray-500 cursor-not-allowed"
-              />
-              <button
-                type="button"
-                onClick={handleSelectVault}
-                className="px-4 py-3 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg font-medium transition-all border border-[#1a1a1a] whitespace-nowrap"
-              >
-                Browse
-              </button>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`${themeClasses.card} rounded-[1.5rem] border ${themeClasses.border} overflow-hidden shadow-2xl p-8`}
+        >
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                Vault File
+              </label>
+              <div className="flex gap-2">
+                <div className={`flex-1 ${themeClasses.input} border ${themeClasses.border} rounded-xl px-4 py-3.5 flex items-center overflow-hidden`}>
+                  <span className={`text-sm truncate ${vaultPath ? themeClasses.text : themeClasses.textMuted}`}>
+                    {vaultPath ? vaultPath.split(/[\\/]/).pop() : "No vault selected"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSelectVault}
+                  className={`px-5 rounded-xl ${themeClasses.input} border ${themeClasses.border} hover:border-white/10 transition-colors font-bold text-[0.65rem] uppercase tracking-wider`}
+                >
+                  Browse
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Master Password</label>
-            <div className="relative">
-              <input
-                type={showMasterPassword ? "text" : "password"}
-                value={masterPassword}
-                onChange={(e) => {
-                  setMasterPassword(e.target.value);
-                  setLoginError("");
-                }}
-                placeholder="Enter your master password"
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-3 pr-12 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={() => setShowMasterPassword(!showMasterPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-yellow-400 transition-colors"
-              >
-                {showMasterPassword ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
+            <div className="space-y-2">
+              <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                Access Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showMasterPassword ? "text" : "password"}
+                  value={masterPassword}
+                  onChange={(e) => {
+                    setMasterPassword(e.target.value);
+                    setLoginError("");
+                  }}
+                  placeholder="Master Password"
+                  className={`w-full ${themeClasses.input} border ${themeClasses.border} focus:${accentClasses.borderClass} rounded-xl px-4 py-3.5 pr-12 ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accentClasses.focusRingClass}`}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMasterPassword(!showMasterPassword)}
+                  className={`absolute right-4 top-1/2 -translate-y-1/2 ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors p-1`}
+                >
+                  {showMasterPassword ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <AnimatePresence>
+                {loginError && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
+                    className="text-red-400 text-xs font-medium ml-1"
+                  >
+                    {loginError}
+                  </motion.p>
                 )}
-              </button>
+              </AnimatePresence>
             </div>
-            {loginError && (
-              <p className="mt-2 text-sm text-red-400 flex items-center gap-1">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {loginError}
-              </p>
-            )}
-          </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-yellow-400/50 disabled:cursor-not-allowed text-black font-semibold py-3 px-4 rounded-lg transition-all shadow-lg shadow-yellow-400/20 flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Unlocking...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                Unlock Vault
-              </>
-            )}
-          </button>
-        </form>
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-4 rounded-xl ${accentClasses.bgClass} text-black font-bold text-[0.65rem] uppercase tracking-wider shadow-lg ${accentClasses.shadowClass} disabled:opacity-50 flex items-center justify-center gap-2`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Unlocking...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Unlock Vault
+                </>
+              )}
+            </motion.button>
+          </form>
 
-          {/* Help Text */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-500">
-            Select your .guardian vault file and enter your master password
-          </p>
-          <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-600">
-            <button className="hover:text-yellow-400 transition-colors">Forgot password?</button>
-            <span>•</span>
-            <button onClick={onRegister} className="hover:text-yellow-400 transition-colors">Create vault</button>
+          <div className="mt-8 flex items-center justify-center gap-4">
+            <button onClick={onRegister} className={`text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${accentClasses.textClass} transition-colors`}>
+              Create New Vault
+            </button>
           </div>
-        </div>
+        </motion.div>
+
+
       </div>
     </div>
   );
