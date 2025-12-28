@@ -12,12 +12,14 @@ import { motion } from "framer-motion";
 
 interface LoginProps {
   onLogin: (file: File, masterPassword: string, handle?: FileSystemFileHandle) => void;
+  initialFile?: File | null;
+  initialHandle?: FileSystemFileHandle | null;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, initialFile, initialHandle }: LoginProps) {
   const [masterPassword, setMasterPassword] = useState("");
-  const [vaultFile, setVaultFile] = useState<File | null>(null);
-  const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
+  const [vaultFile, setVaultFile] = useState<File | null>(initialFile || null);
+  const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(initialHandle || null);
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,9 +27,9 @@ export default function Login({ onLogin }: LoginProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const useFileSystemAPI = isFileSystemAccessAvailable();
 
-  // Try to load file handle on mount
+  // Try to load file handle on mount (only if no initial file/Handle provided)
   useEffect(() => {
-    if (useFileSystemAPI) {
+    if (useFileSystemAPI && !initialHandle && !initialFile) {
       loadFileHandle().then(({ handle, metadata }) => {
         if (handle) {
           setFileHandle(handle);
@@ -43,7 +45,7 @@ export default function Login({ onLogin }: LoginProps) {
         }
       }).catch(console.error);
     }
-  }, [useFileSystemAPI]);
+  }, [useFileSystemAPI, initialHandle, initialFile]);
 
   const handleSelectVault = async () => {
     if (useFileSystemAPI) {
@@ -147,7 +149,7 @@ export default function Login({ onLogin }: LoginProps) {
             className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 mb-5 shadow-inner"
           >
             <svg className="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 0 00-2-2H6a2 0 00-2 2v6a2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
             </svg>
           </motion.div>
           <h1 className="text-2xl font-bold tracking-tight mb-1">Guardian</h1>
@@ -236,7 +238,7 @@ export default function Login({ onLogin }: LoginProps) {
               </svg>
             ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 0 00-2-2H6a2 0 00-2 2v6a2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
               </svg>
             )}
             {isLoading ? "Unlocking..." : "Unlock Vault"}

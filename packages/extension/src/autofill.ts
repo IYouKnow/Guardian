@@ -95,7 +95,7 @@ function renderDropdown(matches: AutofillMatch[], showCreateOption: boolean = fa
     `;
     icon.innerHTML = `
       <svg width="16" height="16" fill="none" stroke="rgb(250, 204, 21)" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
       </svg>
     `;
 
@@ -310,12 +310,12 @@ function fillCredentials(match: AutofillMatch) {
     const inputs = Array.from(form.querySelectorAll('input[type="text"], input[type="email"], input[name*="user"], input[name*="email"], input[id*="user"], input[id*="email"]'));
     usernameField = inputs.find(input => {
       const elem = input as HTMLInputElement;
-      return elem !== passwordField && 
-             (elem.type === 'text' || elem.type === 'email' || 
-              elem.name?.toLowerCase().includes('user') || 
-              elem.name?.toLowerCase().includes('email') ||
-              elem.id?.toLowerCase().includes('user') ||
-              elem.id?.toLowerCase().includes('email'));
+      return elem !== passwordField &&
+        (elem.type === 'text' || elem.type === 'email' ||
+          elem.name?.toLowerCase().includes('user') ||
+          elem.name?.toLowerCase().includes('email') ||
+          elem.id?.toLowerCase().includes('user') ||
+          elem.id?.toLowerCase().includes('email'));
     }) as HTMLInputElement | null;
   } else {
     usernameField = currentInput;
@@ -353,23 +353,23 @@ function getDomain(url: string): string {
 function urlMatches(entryWebsite: string, currentUrl: string): boolean {
   const entryDomain = getDomain(entryWebsite);
   const currentDomain = getDomain(currentUrl);
-  
+
   if (!entryDomain || !currentDomain) return false;
-  
+
   // Exact match
   if (entryDomain === currentDomain) return true;
-  
+
   // Subdomain match (e.g., www.google.com matches google.com)
   if (currentDomain.endsWith('.' + entryDomain)) return true;
   if (entryDomain.endsWith('.' + currentDomain)) return true;
-  
+
   return false;
 }
 
 // Handle input focus
 async function handleInputFocus(event: FocusEvent) {
   const input = event.target as HTMLInputElement;
-  
+
   // Only handle text, email, and password inputs
   if (!input || (input.type !== 'text' && input.type !== 'email' && input.type !== 'password')) {
     return;
@@ -390,7 +390,7 @@ async function handleInputFocus(event: FocusEvent) {
     if (response) {
       const matches = response.matches || [];
       const isLoggedIn = response.isLoggedIn || false;
-      
+
       // Show dropdown if we have matches OR if user is logged in (to show create option)
       if (matches.length > 0 || isLoggedIn) {
         showDropdown(input, matches, isLoggedIn && matches.length === 0, currentUrl);
@@ -414,7 +414,7 @@ function handleClickOutside(event: MouseEvent) {
 function init() {
   // Listen for focus events on input fields
   document.addEventListener('focusin', handleInputFocus);
-  
+
   // Listen for clicks outside to close dropdown
   document.addEventListener('click', handleClickOutside);
 

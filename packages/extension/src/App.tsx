@@ -8,7 +8,7 @@ import PasswordGrid from "./components/PasswordGrid";
 import PasswordDetail from "./components/PasswordDetail";
 import Settings from "./components/Settings";
 import { openVault, type VaultEntry } from "../../shared/crypto";
-import { loadSettings, saveSettings, saveSession, loadSession, clearSession, saveVault } from "./utils/storage";
+import { loadSettings, saveSettings, clearSession, saveVault } from "./utils/storage";
 import {
   readFileFromHandle,
   getFileMetadata,
@@ -45,21 +45,79 @@ function App() {
 
   const filePollIntervalRef = useRef<number | null>(null);
   const lastFileModifiedRef = useRef<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Initialize settings
   useEffect(() => {
     const initApp = async () => {
       try {
+        console.log("initApp: Starting initialization...");
         const settings = await loadSettings();
         if (settings.theme) setTheme(settings.theme as Theme);
         if (settings.accentColor) setAccentColor(settings.accentColor as AccentColor);
 
-        // Attempt auto-unlock if we have valid session data
-        const session = await loadSession();
-        const { handle } = await loadFileHandle();
+        // 1. Get stored session from service worker
+        const session = await new Promise<{ isLoggedIn: boolean; passwords: PasswordEntry[]; lastModified: number }>((resolve) => {
+          chrome.runtime.sendMessage({ action: 'getSession' }, (res) => {
+            console.log("initApp: Session from SW:", res ? (res.isLoggedIn ? "LoggedIn" : "LoggedOut") : "No response");
+            resolve(res || { isLoggedIn: false, passwords: [], lastModified: 0 });
+          });
+        });
 
-        if (session && handle) {
-          console.log("Session found, but master password required for security");
+        // 2. Load file handle and metadata
+        const { handle, metadata } = await loadFileHandle();
+        console.log("initApp: Handle info:", { hasHandle: !!handle, hasMetadata: !!metadata });
+
+        if (handle) {
+          setVaultFileHandle(handle);
+        }
+
+        if (metadata) {
+          setVaultFile(new File([], metadata.fileName));
+          lastFileModifiedRef.current = metadata.lastModified;
+        }
+
+        // 3. Try to get fresh file if we have a handle
+        let freshFile: File | null = null;
+        if (handle) {
+          try {
+            freshFile = await readFileFromHandle(handle);
+            setVaultFile(freshFile);
+            lastFileModifiedRef.current = freshFile.lastModified;
+            console.log("initApp: Fresh file read successful, lastModified:", freshFile.lastModified);
+          } catch (err) {
+            console.warn("initApp: Could not read fresh file (likely permission):", err);
+          }
+        }
+
+        // 4. Check for auto-login
+        if (session.isLoggedIn && session.passwords.length > 0) {
+          console.log("initApp: Session exists. Checking if sync is needed...");
+
+          let fileMatches = false;
+          if (freshFile) {
+            fileMatches = freshFile.lastModified === session.lastModified;
+            console.log("initApp: Comparing fresh file timestamp:", { file: freshFile.lastModified, session: session.lastModified });
+          } else if (metadata) {
+            fileMatches = metadata.lastModified === session.lastModified;
+            console.log("initApp: Comparing metadata timestamp:", { metadata: metadata.lastModified, session: session.lastModified });
+          } else {
+            // No handle or metadata, but we have a session? 
+            // This might happen if the session persists but the local storage was cleared.
+            // For safety, we match if we have no file to compare with.
+            fileMatches = true;
+            console.log("initApp: No file info to compare, assuming session is valid");
+          }
+
+          if (fileMatches) {
+            console.log("initApp: Auto-logging in with", session.passwords.length, "passwords");
+            setPasswords(session.passwords);
+            setIsLoggedIn(true);
+          } else {
+            console.log("initApp: Vault file changed externally or sync lost. Re-login required.");
+          }
+        } else {
+          console.log("initApp: No active session found.");
         }
       } catch (err) {
         console.error("Initialization error:", err);
@@ -87,6 +145,16 @@ function App() {
       if (handle) {
         setVaultFileHandle(handle);
         await saveFileHandle(handle);
+
+        // Verify permission
+        const permissionStatus = await (handle as any).queryPermission({ mode: 'read' });
+        if (permissionStatus !== 'granted') {
+          // Request permission
+          const newPermission = await (handle as any).requestPermission({ mode: 'read' });
+          if (newPermission !== 'granted') {
+            throw new Error('Permission to read file not granted.');
+          }
+        }
       }
 
       const arrayBuffer = await file.arrayBuffer();
@@ -100,9 +168,13 @@ function App() {
       // Save session info
       try {
         await saveVault(password, decryptedVault.entries);
-        await saveSession({
-          vaultFileName: file.name,
-          vaultFileLastModified: file.lastModified,
+
+        // Sync with service worker for persistence across popup opens
+        await chrome.runtime.sendMessage({
+          action: 'updatePasswords',
+          passwords: loadedPasswords,
+          isLoggedIn: true,
+          lastModified: file.lastModified
         });
       } catch (err) {
         console.error("Failed to save vault to storage:", err);
@@ -132,18 +204,64 @@ function App() {
         const metadata = await getFileMetadata(handle);
         if (metadata.lastModified > lastFileModifiedRef.current) {
           console.log("Vault file changed externally, reloading...");
-          const file = await readFileFromHandle(handle);
-          const arrayBuffer = await file.arrayBuffer();
-          const vaultBytes = new Uint8Array(arrayBuffer);
-          const decryptedVault = await openVault(password, vaultBytes);
-          const loadedPasswords = decryptedVault.entries.map(vaultEntryToPasswordEntry);
-          setPasswords(loadedPasswords);
-          lastFileModifiedRef.current = metadata.lastModified;
+          await refreshVault(handle, password);
         }
       } catch (err) {
         console.error("File polling error:", err);
       }
     }, 10000);
+  };
+
+  const refreshVault = async (handle: FileSystemFileHandle, password: string) => {
+    try {
+      const file = await readFileFromHandle(handle);
+      const arrayBuffer = await file.arrayBuffer();
+      const vaultBytes = new Uint8Array(arrayBuffer);
+      const decryptedVault = await openVault(password, vaultBytes);
+      const loadedPasswords = decryptedVault.entries.map(vaultEntryToPasswordEntry);
+
+      setPasswords(loadedPasswords);
+      lastFileModifiedRef.current = file.lastModified;
+
+      // Update session storage
+      await chrome.runtime.sendMessage({
+        action: 'updatePasswords',
+        passwords: loadedPasswords,
+        isLoggedIn: true,
+        lastModified: file.lastModified
+      });
+
+      return true;
+    } catch (err) {
+      console.error("Error refreshing vault:", err);
+      return false;
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    // Add a small artificial delay so the user sees the spin
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Force a "soft logout" -> Clear sensitive data but keep the file handle
+    // This forces the user to re-enter their password to decrypt the latest file
+    if (filePollIntervalRef.current) {
+      clearInterval(filePollIntervalRef.current);
+      filePollIntervalRef.current = null;
+    }
+
+    setIsLoggedIn(false);
+    setSelectedPassword(null);
+    setPasswords([]);
+    setMasterPassword("");
+
+    // Clear session persistence so auto-login doesn't interfere
+    await clearSession();
+    await chrome.runtime.sendMessage({ action: 'clearPasswords' });
+
+    // We intentionally do NOT call clearFileHandle() here
+
+    setIsRefreshing(false);
   };
 
   const handleLogout = async () => {
@@ -157,6 +275,8 @@ function App() {
     setMasterPassword("");
     await clearSession();
     await clearFileHandle();
+    // Clear session in service worker
+    await chrome.runtime.sendMessage({ action: 'clearPasswords' });
   };
 
   const handleThemeChange = async (newTheme: Theme) => {
@@ -274,7 +394,11 @@ function App() {
             exit={{ opacity: 0 }}
             className="w-full h-full"
           >
-            <Login onLogin={handleLogin} />
+            <Login
+              onLogin={handleLogin}
+              initialFile={_vaultFile}
+              initialHandle={_vaultFileHandle}
+            />
           </motion.div>
         ) : showSettings ? (
           <motion.div
@@ -307,7 +431,7 @@ function App() {
                   <div className="flex items-center gap-2">
                     <div className={`w-6 h-6 rounded-md bg-yellow-400/10 flex items-center justify-center border border-yellow-400/20`}>
                       <svg className="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 0 00-2-2H6a2 0 00-2 2v6a2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
                       </svg>
                     </div>
                     <div>
@@ -315,6 +439,16 @@ function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={handleManualRefresh}
+                      disabled={isRefreshing}
+                      className={`p-1.5 rounded-lg transition-all duration-300 ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText} disabled:opacity-50`}
+                      title="Refresh Vault"
+                    >
+                      <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </button>
                     <button
                       onClick={() => setShowSettings(true)}
                       className={`p-1.5 rounded-lg transition-all duration-300 ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`}
