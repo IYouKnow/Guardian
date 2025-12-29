@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 function App() {
   const [showRegister, setShowRegister] = useState(false);
+  const [registerMode, setRegisterMode] = useState<"local" | "server">("local");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -54,7 +55,8 @@ function App() {
     saveVaultFile,
     createNewVault,
     logout: vaultLogout,
-    loginToServer
+    loginToServer,
+    registerOnServer
   } = useVault();
 
   const { toasts, removeToast, success, error: showError } = useToast();
@@ -175,14 +177,23 @@ function App() {
     success("Vault locked");
   };
 
-  const handleRegister = async (path: string, password: string, theme: Theme, accentColor: AccentColor) => {
+  const handleRegister = async (data: any) => {
     try {
-      await createNewVault(path, password);
-      setLastVaultPath(path);
-      await setTheme(theme);
-      await setAccentColor(accentColor);
+      if (registerMode === "local") {
+        const { vaultPath, masterPassword, theme, accentColor } = data;
+        await createNewVault(vaultPath, masterPassword);
+        setLastVaultPath(vaultPath);
+        await setTheme(theme);
+        await setAccentColor(accentColor);
+        success("Vault created");
+      } else {
+        // Server Register
+        const { url, username, password, invite_token, db_name } = data;
+        await registerOnServer(url, { username, password, invite_token, db_name });
+        success("Account created. Please login.");
+      }
       setShowRegister(false);
-      success("Vault created");
+
     } catch (err) {
       console.error("Failed to create vault:", err);
       showError("Failed to create vault.");
@@ -272,7 +283,7 @@ function App() {
   if (showRegister) {
     return (
       <>
-        <Register onRegister={handleRegister} onBackToLogin={() => setShowRegister(false)} />
+        <Register mode={registerMode} onRegister={handleRegister} onBackToLogin={() => setShowRegister(false)} />
         <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );
@@ -281,7 +292,13 @@ function App() {
   if (!isAuthenticated) {
     return (
       <>
-        <Login onLogin={handleLogin} onRegister={() => setShowRegister(true)} lastVaultPath={preferences.lastVaultPath} theme={preferences.theme} accentColor={preferences.accentColor} />
+        <Login
+          onLogin={handleLogin}
+          onRegister={(mode) => { setRegisterMode(mode); setShowRegister(true); }}
+          lastVaultPath={preferences.lastVaultPath}
+          theme={preferences.theme}
+          accentColor={preferences.accentColor}
+        />
         <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );

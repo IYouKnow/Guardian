@@ -6,7 +6,7 @@ import { getAccentColorClasses } from "../utils/accentColors";
 
 interface LoginProps {
   onLogin: (mode: "local" | "server", credentials: any) => Promise<void>;
-  onRegister: () => void;
+  onRegister: (mode: "local" | "server") => void;
   lastVaultPath?: string | null;
   theme?: Theme;
   accentColor?: AccentColor;
@@ -306,13 +306,11 @@ export default function Login({
             </motion.button>
           </form>
 
-          {mode === "local" && (
-            <div className="mt-8 flex items-center justify-center gap-4">
-              <button onClick={onRegister} className={`text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${accentClasses.textClass} transition-colors`}>
-                Create New Vault
-              </button>
-            </div>
-          )}
+          <div className="mt-8 flex items-center justify-center gap-4">
+            <button onClick={() => onRegister(mode)} className={`text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${accentClasses.textClass} transition-colors`}>
+              {mode === "server" ? "Create Server Account" : "Create New Vault"}
+            </button>
+          </div>
         </motion.div>
 
 

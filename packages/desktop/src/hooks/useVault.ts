@@ -22,6 +22,7 @@ interface UseVaultReturn {
   // Server Mode
   connectionMode: "local" | "server";
   loginToServer: (url: string, username: string, password: string) => Promise<VaultData>;
+  registerOnServer: (url: string, data: any) => Promise<void>;
 }
 
 interface VaultItem {
@@ -275,7 +276,17 @@ export function useVault(): UseVaultReturn {
 
     // Server Specific
     connectionMode,
-    loginToServer
+    loginToServer,
+    registerOnServer: async (url: string, data: any) => {
+      const resp = await fetch(`${url}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+      if (!resp.ok) {
+        throw new Error(await resp.text());
+      }
+    }
   };
 }
 
