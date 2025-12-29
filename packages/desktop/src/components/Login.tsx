@@ -5,7 +5,7 @@ import { Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 
 interface LoginProps {
-  onLogin: (vaultPath: string, masterPassword: string) => Promise<void>;
+  onLogin: (mode: "local" | "server", credentials: any) => Promise<void>;
   onRegister: () => void;
   lastVaultPath?: string | null;
   theme?: Theme;
@@ -19,8 +19,12 @@ export default function Login({
   theme = "dark",
   accentColor = "yellow"
 }: LoginProps) {
+  const [mode, setMode] = useState<"local" | "server">("local");
   const [masterPassword, setMasterPassword] = useState("");
   const [vaultPath, setVaultPath] = useState<string>(lastVaultPath || "");
+  const [serverUrl, setServerUrl] = useState("http://localhost:8080");
+  const [username, setUsername] = useState("");
+
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -107,9 +111,16 @@ export default function Login({
     e.preventDefault();
     setLoginError("");
 
-    if (!vaultPath) {
-      setLoginError("Please select a vault file.");
-      return;
+    if (mode === "local") {
+      if (!vaultPath) {
+        setLoginError("Please select a vault file.");
+        return;
+      }
+    } else {
+      if (!serverUrl || !username) {
+        setLoginError("Please enter server URL and username.");
+        return;
+      }
     }
 
     if (masterPassword.length < 8) {
@@ -120,11 +131,15 @@ export default function Login({
     setIsLoading(true);
 
     try {
-      await onLogin(vaultPath, masterPassword);
+      if (mode === "local") {
+        await onLogin("local", { path: vaultPath, password: masterPassword });
+      } else {
+        await onLogin("server", { url: serverUrl, username, password: masterPassword });
+      }
       setMasterPassword("");
     } catch (err) {
       console.error("Error loading vault:", err);
-      setLoginError(err instanceof Error ? err.message : "Invalid password or corrupted file.");
+      setLoginError(err instanceof Error ? err.message : "Invalid credentials or connection failed.");
       setIsLoading(false);
     }
   };
@@ -155,30 +170,78 @@ export default function Login({
           animate={{ opacity: 1, scale: 1 }}
           className={`${themeClasses.card} rounded-[1.5rem] border ${themeClasses.border} overflow-hidden shadow-2xl p-8`}
         >
+          {/* Tabs */}
+          <div className="flex p-1 mb-6 bg-black/20 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMode("local")}
+              className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "local" ? `${accentClasses.bgClass} text-black shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+            >
+              Local File
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("server")}
+              className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "server" ? `${accentClasses.bgClass} text-black shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+            >
+              Server
+            </button>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2">
-              <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
-                Vault File
-              </label>
-              <div className="flex gap-2">
-                <div className={`flex-1 ${themeClasses.input} border ${themeClasses.border} rounded-xl px-4 py-3.5 flex items-center overflow-hidden`}>
-                  <span className={`text-sm truncate ${vaultPath ? themeClasses.text : themeClasses.textMuted}`}>
-                    {vaultPath ? vaultPath.split(/[\\/]/).pop() : "No vault selected"}
-                  </span>
+
+            {mode === "local" ? (
+              <div className="space-y-2">
+                <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                  Vault File
+                </label>
+                <div className="flex gap-2">
+                  <div className={`flex-1 ${themeClasses.input} border ${themeClasses.border} rounded-xl px-4 py-3.5 flex items-center overflow-hidden`}>
+                    <span className={`text-sm truncate ${vaultPath ? themeClasses.text : themeClasses.textMuted}`}>
+                      {vaultPath ? vaultPath.split(/[\\/]/).pop() : "No vault selected"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSelectVault}
+                    className={`px-5 rounded-xl ${themeClasses.input} border ${themeClasses.border} hover:border-white/10 transition-colors font-bold text-[0.65rem] uppercase tracking-wider`}
+                  >
+                    Browse
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSelectVault}
-                  className={`px-5 rounded-xl ${themeClasses.input} border ${themeClasses.border} hover:border-white/10 transition-colors font-bold text-[0.65rem] uppercase tracking-wider`}
-                >
-                  Browse
-                </button>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                    Server URL
+                  </label>
+                  <input
+                    type="text"
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                    placeholder="http://localhost:8080"
+                    className={`w-full ${themeClasses.input} border ${themeClasses.border} focus:${accentClasses.borderClass} rounded-xl px-4 py-3.5 ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accentClasses.focusRingClass}`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="username"
+                    className={`w-full ${themeClasses.input} border ${themeClasses.border} focus:${accentClasses.borderClass} rounded-xl px-4 py-3.5 ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accentClasses.focusRingClass}`}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="space-y-2">
               <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
-                Access Key
+                {mode === "server" ? "Account Password" : "Access Key"}
               </label>
               <div className="relative">
                 <input
@@ -188,7 +251,7 @@ export default function Login({
                     setMasterPassword(e.target.value);
                     setLoginError("");
                   }}
-                  placeholder="Master Password"
+                  placeholder={mode === "server" ? "Password" : "Master Password"}
                   className={`w-full ${themeClasses.input} border ${themeClasses.border} focus:${accentClasses.borderClass} rounded-xl px-4 py-3.5 pr-12 ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accentClasses.focusRingClass}`}
                   autoFocus
                 />
@@ -230,24 +293,26 @@ export default function Login({
               {isLoading ? (
                 <>
                   <div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  Unlocking...
+                  {mode === "server" ? "Authenticating..." : "Unlocking..."}
                 </>
               ) : (
                 <>
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                  Unlock Vault
+                  {mode === "server" ? "Login to Server" : "Unlock Vault"}
                 </>
               )}
             </motion.button>
           </form>
 
-          <div className="mt-8 flex items-center justify-center gap-4">
-            <button onClick={onRegister} className={`text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${accentClasses.textClass} transition-colors`}>
-              Create New Vault
-            </button>
-          </div>
+          {mode === "local" && (
+            <div className="mt-8 flex items-center justify-center gap-4">
+              <button onClick={onRegister} className={`text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${accentClasses.textClass} transition-colors`}>
+                Create New Vault
+              </button>
+            </div>
+          )}
         </motion.div>
 
 

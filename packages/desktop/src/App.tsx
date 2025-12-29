@@ -54,6 +54,7 @@ function App() {
     saveVaultFile,
     createNewVault,
     logout: vaultLogout,
+    loginToServer
   } = useVault();
 
   const { toasts, removeToast, success, error: showError } = useToast();
@@ -188,15 +189,23 @@ function App() {
     }
   };
 
-  const handleLogin = async (path: string, password: string) => {
+  const handleLogin = async (mode: "local" | "server", credentials: any) => {
     try {
-      const vaultData = await loadVaultFile(path, password);
+      let vaultData;
+
+      if (mode === "local") {
+        vaultData = await loadVaultFile(credentials.path, credentials.password);
+        setLastVaultPath(credentials.path);
+      } else {
+        vaultData = await loginToServer(credentials.url, credentials.username, credentials.password);
+        // Maybe save server URL to preferences?
+      }
+
       loadPasswords(vaultData.entries);
       if (vaultData.settings) {
         await loadFromVault(vaultData.settings as any);
       }
-      setLastVaultPath(path);
-      success("Vault unlocked");
+      success(mode === "server" ? "Connected to Server" : "Vault unlocked");
     } catch (err) {
       console.error("Failed to load vault:", err);
       showError(
@@ -206,6 +215,7 @@ function App() {
   };
 
   const getThemeClasses = () => {
+
     switch (preferences.theme) {
       case "light":
         return {
