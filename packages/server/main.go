@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -126,7 +125,6 @@ func main() {
 	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus) // New: Check if first run is needed
 
 	// Admin / Invites
-	mux.HandleFunc("GET /admin", server.handleAdminPanel) // Public access with inline login
 	mux.HandleFunc("POST /api/admin/invites", server.withAdminAuth(server.handleGenerateInvite))
 
 	// Vault Operations (Protected)
@@ -548,159 +546,6 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]string{"token": token})
-}
-
-func (s *Server) handleAdminPanel(w http.ResponseWriter, r *http.Request) {
-	// Simple Admin UI with inline login
-	tmpl := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Guardian Admin</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .container { max-width: 500px; width: 100%; padding: 20px; }
-        .card { background: #1a1a1a; padding: 32px; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid #333; }
-        h1 { font-size: 24px; margin-bottom: 8px; }
-        p { color: #888; font-size: 14px; margin-bottom: 24px; }
-        .form-group { margin-bottom: 16px; }
-        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 8px; font-weight: 600; }
-        input { width: 100%; padding: 12px 16px; background: #0d0d0d; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 14px; outline: none; transition: all 0.2s; }
-        input:focus { border-color: #eab308; box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.1); }
-        button { width: 100%; padding: 14px; background: #eab308; color: #000; border: none; border-radius: 8px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; cursor: pointer; transition: all 0.2s; }
-        button:hover { background: #ca8a04; transform: translateY(-1px); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .error { background: #dc2626; color: #fff; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
-        .success { background: #16a34a; color: #fff; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
-        .token-display { background: #0d0d0d; padding: 16px; border-radius: 8px; border: 1px solid #333; margin-top: 16px; display: none; }
-        .token-display code { font-family: 'Courier New', monospace; font-size: 13px; color: #eab308; word-break: break-all; }
-        .logout-btn { background: #333; color: #fff; margin-top: 12px; }
-        .logout-btn:hover { background: #444; }
-        #loginForm, #adminPanel { display: none; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="card">
-            <h1>🔐 Guardian Admin</h1>
-            <p>Server Management Panel</p>
-            
-            <div id="error" class="error"></div>
-            <div id="success" class="success"></div>
-
-            <!-- Login Form -->
-            <form id="loginForm">
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="username" placeholder="admin" required>
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="password" placeholder="••••••••" required>
-                </div>
-                <button type="submit">Login</button>
-            </form>
-
-            <!-- Admin Panel (Hidden until logged in) -->
-            <div id="adminPanel">
-                <p style="margin-bottom: 16px;">Generate invite tokens for new users.</p>
-                <button onclick="generateInvite()">Generate New Invite Token</button>
-                <div id="tokenDisplay" class="token-display">
-                    <label>Invite Token</label>
-                    <code id="tokenCode"></code>
-                </div>
-                <button class="logout-btn" onclick="logout()">Logout</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Check if already logged in
-        const token = localStorage.getItem('admin_token');
-        if (token) {
-            showAdminPanel();
-        } else {
-            document.getElementById('loginForm').style.display = 'block';
-        }
-
-        // Login Handler
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const res = await fetch('/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                if (!res.ok) throw new Error('Invalid credentials');
-
-                const data = await res.json();
-                
-                if (!data.is_admin) {
-                    throw new Error('Access denied: Admin privileges required');
-                }
-
-                localStorage.setItem('admin_token', data.token);
-                showSuccess('Login successful!');
-                setTimeout(showAdminPanel, 500);
-            } catch (err) {
-                showError(err.message);
-            }
-        });
-
-        async function generateInvite() {
-            const token = localStorage.getItem('admin_token');
-            try {
-                const res = await fetch('/api/admin/invites', {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
-                if (!res.ok) throw new Error('Failed to generate invite');
-                const data = await res.json();
-                
-                document.getElementById('tokenCode').innerText = data.token;
-                document.getElementById('tokenDisplay').style.display = 'block';
-                showSuccess('Invite token generated!');
-            } catch (e) {
-                showError(e.message);
-            }
-        }
-
-        function logout() {
-            localStorage.removeItem('admin_token');
-            location.reload();
-        }
-
-        function showAdminPanel() {
-            document.getElementById('loginForm').style.display = 'none';
-            document.getElementById('adminPanel').style.display = 'block';
-        }
-
-        function showError(msg) {
-            const el = document.getElementById('error');
-            el.innerText = msg;
-            el.style.display = 'block';
-            setTimeout(() => el.style.display = 'none', 4000);
-        }
-
-        function showSuccess(msg) {
-            const el = document.getElementById('success');
-            el.innerText = msg;
-            el.style.display = 'block';
-            setTimeout(() => el.style.display = 'none', 3000);
-        }
-    </script>
-</body>
-</html>
-	`
-	t, _ := template.New("admin").Parse(tmpl)
-	w.Header().Set("Content-Type", "text/html")
-	t.Execute(w, nil)
 }
 
 // --- Helpers ---
