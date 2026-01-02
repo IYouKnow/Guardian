@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Ticket, Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter } from 'lucide-react';
 import InviteTable from '@/components/invites/InviteTable';
 import CreateInviteModal from '@/components/invites/CreateInviteModal';
 
 export default function Invites() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleCreateSuccess = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   return (
     <div className="space-y-8">
@@ -85,11 +90,15 @@ export default function Invites() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <InviteTable />
+        <InviteTable key={refreshKey} />
       </motion.div>
 
       {/* Create Invite Modal */}
-      <CreateInviteModal open={showCreateModal} onOpenChange={setShowCreateModal} />
+      <CreateInviteModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onSuccess={handleCreateSuccess}
+      />
     </div>
   );
 }

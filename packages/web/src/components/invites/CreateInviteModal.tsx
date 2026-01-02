@@ -4,65 +4,89 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Ticket, User, Shield, Loader2, Copy, Check } from 'lucide-react';
+import { Ticket, Loader2, Copy, Check, MessageSquare, Hash } from 'lucide-react';
 import { toast } from 'sonner';
+import { adminApi, type Invite } from '@/api/admin';
 
-export default function CreateInviteModal({ open, onOpenChange }) {
+interface CreateInviteModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
+}
+
+export default function CreateInviteModal({ open, onOpenChange, onSuccess }: CreateInviteModalProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState(null);
+  const [generatedInvite, setGeneratedInvite] = useState<Invite | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const handleSubmit = (e) => {
+  // Form state
+  const [maxUses, setMaxUses] = useState("1");
+  const [expiresIn, setExpiresIn] = useState("12h");
+  const [note, setNote] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const uses = parseInt(maxUses);
+      const invite = await adminApi.generateInvite({
+        max_uses: isNaN(uses) ? 1 : uses,
+        expires_in: expiresIn,
+        note: note
+      });
+      setGeneratedInvite(invite);
+      toast.success('Invite created successfully');
+      onSuccess?.();
+    } catch (error) {
+      toast.error('Failed to create invite');
+    } finally {
       setIsLoading(false);
-      setGeneratedCode('INV-' + Math.random().toString(36).substring(2, 10).toUpperCase());
-    }, 1000);
+    }
   };
 
   const copyCode = () => {
-    navigator.clipboard.writeText(generatedCode);
+    if (!generatedInvite) return;
+    navigator.clipboard.writeText(generatedInvite.token);
     setCopied(true);
     toast.success('Invite code copied!');
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleClose = () => {
-    setGeneratedCode(null);
-    setCopied(false);
-    onOpenChange(false);
+  const handleOpenChange = (val: boolean) => {
+    if (!val) {
+      setGeneratedInvite(null);
+      setCopied(false);
+      setNote("");
+    }
+    onOpenChange(val);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="bg-[#141414] border-gray-800 text-white max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold flex items-center gap-2">
             <div className="p-2 rounded-lg bg-yellow-500/10">
               <Ticket className="w-5 h-5 text-yellow-500" />
             </div>
-            {generatedCode ? 'Invite Created' : 'Create Invite'}
+            {generatedInvite ? 'Invite Created' : 'Create Invite'}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {generatedInvite ? 'Your new invite token has been generated.' : 'Fill in the details to create a new invite token.'}
+          </DialogDescription>
         </DialogHeader>
 
-        {generatedCode ? (
+        {generatedInvite ? (
           <div className="space-y-6 mt-4">
             <div className="p-4 bg-[#0a0a0a] rounded-xl border border-gray-800">
               <p className="text-gray-400 text-sm mb-2">Your invite code</p>
               <div className="flex items-center justify-between">
-                <code className="text-2xl font-mono text-yellow-400">{generatedCode}</code>
+                <code className="text-xl font-mono text-yellow-400">{generatedInvite.token}</code>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -77,7 +101,7 @@ export default function CreateInviteModal({ open, onOpenChange }) {
               Share this code with the person you want to invite. They can use it to create their account.
             </p>
             <Button
-              onClick={handleClose}
+              onClick={() => handleOpenChange(false)}
               className="w-full h-11 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl"
             >
               Done
@@ -86,62 +110,54 @@ export default function CreateInviteModal({ open, onOpenChange }) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5 mt-4">
             <div className="space-y-2">
-              <Label className="text-gray-400 text-sm">Account Type</Label>
-              <Select defaultValue="user">
-                <SelectTrigger className="h-11 bg-[#0a0a0a] border-gray-800 text-white focus:ring-yellow-500/20 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                  <SelectItem value="user" className="text-white hover:bg-white/10">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" /> User Account
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="admin" className="text-white hover:bg-white/10">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4" /> Admin Account
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
               <Label className="text-gray-400 text-sm">Max Uses</Label>
-              <Select defaultValue="1">
-                <SelectTrigger className="h-11 bg-[#0a0a0a] border-gray-800 text-white focus:ring-yellow-500/20 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                  <SelectItem value="1" className="text-white hover:bg-white/10">1 use</SelectItem>
-                  <SelectItem value="5" className="text-white hover:bg-white/10">5 uses</SelectItem>
-                  <SelectItem value="10" className="text-white hover:bg-white/10">10 uses</SelectItem>
-                  <SelectItem value="unlimited" className="text-white hover:bg-white/10">Unlimited</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Input
+                  type="number"
+                  min="0"
+                  value={maxUses}
+                  onChange={(e) => setMaxUses(e.target.value)}
+                  placeholder="e.g., 1"
+                  className="pl-10 h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 px-1">
+                Set to <code className="text-yellow-500/70">0</code> for unlimited uses.
+              </p>
             </div>
 
             <div className="space-y-2">
               <Label className="text-gray-400 text-sm">Expires In</Label>
-              <Select defaultValue="7">
-                <SelectTrigger className="h-11 bg-[#0a0a0a] border-gray-800 text-white focus:ring-yellow-500/20 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                  <SelectItem value="1" className="text-white hover:bg-white/10">1 day</SelectItem>
-                  <SelectItem value="7" className="text-white hover:bg-white/10">7 days</SelectItem>
-                  <SelectItem value="14" className="text-white hover:bg-white/10">14 days</SelectItem>
-                  <SelectItem value="30" className="text-white hover:bg-white/10">30 days</SelectItem>
-                  <SelectItem value="never" className="text-white hover:bg-white/10">Never</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                value={expiresIn}
+                onChange={(e) => setExpiresIn(e.target.value)}
+                placeholder="e.g., 7d, 24h, never"
+                className="h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+              />
+              <p className="text-[10px] text-gray-500 px-1">
+                Format: <code className="text-yellow-500/70">1d</code>, <code className="text-yellow-500/70">12h</code>, or <code className="text-yellow-500/70">never</code>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-gray-400 text-sm">Note (Optional)</Label>
+              <div className="relative">
+                <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="e.g., For new team members"
+                  className="pl-10 h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleClose}
+                onClick={() => handleOpenChange(false)}
                 className="flex-1 h-11 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl"
               >
                 Cancel

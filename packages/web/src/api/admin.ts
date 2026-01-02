@@ -1,7 +1,17 @@
 import apiClient from './client';
 
-export interface InviteTokenResponse {
+export interface Invite {
+    id: number;
     token: string;
+    created_at: string;
+    expires_at: string | null;
+    expires_in: string;
+    used_at: string | null;
+    use_count: number;
+    max_uses: number;
+    created_by: number;
+    note: string;
+    status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'REVOKED';
 }
 
 export interface HealthResponse {
@@ -15,10 +25,25 @@ export interface UserStats {
     active_sessions: number;
 }
 
+export interface CreateInviteRequest {
+    max_uses: number;
+    expires_in: string;
+    note: string;
+}
+
 export const adminApi = {
-    async generateInvite(): Promise<InviteTokenResponse> {
-        const response = await apiClient.post<InviteTokenResponse>('/api/admin/invites');
+    async getInvites(): Promise<Invite[]> {
+        const response = await apiClient.get<Invite[]>('/api/admin/invites');
         return response.data;
+    },
+
+    async generateInvite(data: CreateInviteRequest): Promise<Invite> {
+        const response = await apiClient.post<Invite>('/api/admin/invites', data);
+        return response.data;
+    },
+
+    async deleteInvite(id: number): Promise<void> {
+        await apiClient.delete(`/api/admin/invites/${id}`);
     },
 
     async getHealth(): Promise<HealthResponse> {
