@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -42,12 +41,17 @@ type User struct {
 }
 
 type Invite struct {
-	ID        int
-	Token     string
-	CreatedBy int
-	UsedBy    *int
-	ExpiresAt time.Time
-	CreatedAt time.Time
+	ID        int        `json:"id"`
+	Token     string     `json:"token"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	ExpiresIn string     `json:"expires_in"` // Original duration string
+	UsedAt    *time.Time `json:"used_at"`
+	UseCount  int        `json:"use_count"`
+	MaxUses   int        `json:"max_uses"` // 0 for unlimited
+	CreatedBy int        `json:"created_by"`
+	Note      string     `json:"note"`
+	Status    string     `json:"status"` // "ACTIVE", "USED", "EXPIRED", "REVOKED"
 }
 
 type RegisterRequest struct {
@@ -55,6 +59,12 @@ type RegisterRequest struct {
 	Password    string `json:"password"`
 	InviteToken string `json:"invite_token"`
 	DBName      string `json:"db_name"` // Friendly name
+}
+
+type CreateInviteRequest struct {
+	MaxUses   int    `json:"max_uses"`
+	ExpiresIn string `json:"expires_in"` // e.g., "7d", "24h", "never"
+	Note      string `json:"note"`
 }
 
 type LoginRequest struct {
@@ -125,7 +135,9 @@ func main() {
 	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus) // New: Check if first run is needed
 
 	// Admin / Invites
+	mux.HandleFunc("GET /api/admin/invites", server.withAdminAuth(server.handleListInvites))
 	mux.HandleFunc("POST /api/admin/invites", server.withAdminAuth(server.handleGenerateInvite))
+	mux.HandleFunc("DELETE /api/admin/invites/{id}", server.withAdminAuth(server.handleDeleteInvite))
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
@@ -169,12 +181,16 @@ func initSystemDB(path string) (*sql.DB, error) {
 	CREATE TABLE IF NOT EXISTS invites (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
-		created_by INTEGER NOT NULL,
-		used_by INTEGER,
-		expires_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY(created_by) REFERENCES users(id),
-		FOREIGN KEY(used_by) REFERENCES users(id)
+		expires_at DATETIME,
+		expires_in TEXT,
+		used_at DATETIME,
+		use_count INTEGER DEFAULT 0,
+		max_uses INTEGER DEFAULT 1,
+		created_by INTEGER NOT NULL,
+		note TEXT,
+		status TEXT DEFAULT 'ACTIVE',
+		FOREIGN KEY(created_by) REFERENCES users(id)
 	);
 	`
 	_, err = db.Exec(query)
@@ -327,16 +343,41 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var inviteID int
+		var useCount int
+		var maxUses int
+		var status string
+		var expiresAt *time.Time
+
 		err := s.systemDB.QueryRow(`
-			SELECT id FROM invites 
-			WHERE token = ? AND used_by IS NULL AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-		`, req.InviteToken).Scan(&inviteID)
+			SELECT id, use_count, max_uses, status, expires_at FROM invites 
+			WHERE token = ?
+		`, req.InviteToken).Scan(&inviteID, &useCount, &maxUses, &status, &expiresAt)
 
 		if err == sql.ErrNoRows {
-			http.Error(w, "Invalid or expired invite", http.StatusForbidden)
+			http.Error(w, "Invalid invite token", http.StatusForbidden)
 			return
 		} else if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+
+		// Check Status
+		if status != "ACTIVE" {
+			http.Error(w, "Invite is no longer active", http.StatusForbidden)
+			return
+		}
+
+		// Check Expiry
+		if expiresAt != nil && expiresAt.Before(time.Now()) {
+			// Update status to EXPIRED if it wasn't already caught (usually background task or on-the-fly)
+			s.systemDB.Exec("UPDATE invites SET status = 'EXPIRED' WHERE id = ?", inviteID)
+			http.Error(w, "Invite has expired", http.StatusForbidden)
+			return
+		}
+
+		// Check Max Uses
+		if maxUses > 0 && useCount >= maxUses {
+			http.Error(w, "Invite has reached maximum uses", http.StatusForbidden)
 			return
 		}
 	}
@@ -359,7 +400,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Create User in System DB
-	res, err := s.systemDB.Exec(`
+	_, err = s.systemDB.Exec(`
 		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name) 
 		VALUES (?, ?, ?, ?, ?)
 	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName)
@@ -374,13 +415,17 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, _ := res.LastInsertId()
-
-	// 5. Mark Invite Used (if applicable)
+	// 5. Update Invite Usage (if applicable)
 	if !isAdmin {
-		_, err := s.systemDB.Exec("UPDATE invites SET used_by = ? WHERE token = ?", userID, req.InviteToken)
+		_, err := s.systemDB.Exec(`
+			UPDATE invites 
+			SET use_count = use_count + 1, 
+			    used_at = CURRENT_TIMESTAMP,
+			    status = CASE WHEN max_uses > 0 AND use_count + 1 >= max_uses THEN 'USED' ELSE status END
+			WHERE token = ?
+		`, req.InviteToken)
 		if err != nil {
-			s.logger.Println("Warning: Failed to mark invite used:", err)
+			s.logger.Println("Warning: Failed to update invite usage:", err)
 		}
 	}
 
@@ -531,21 +576,163 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 
 // --- Admin Handlers ---
 
+func generateInviteToken() string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 16)
+	rand.Read(b)
+	for i := 0; i < 16; i++ {
+		b[i] = charset[b[i]%byte(len(charset))]
+	}
+	s := string(b)
+	return fmt.Sprintf("GRDN-%s-%s-%s-%s", s[0:4], s[4:8], s[8:12], s[12:16])
+}
+
+func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.systemDB.Query(`
+		SELECT id, token, created_at, expires_at, expires_in, used_at, use_count, max_uses, created_by, note, status 
+		FROM invites ORDER BY created_at DESC
+	`)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	invites := []Invite{}
+	for rows.Next() {
+		var inv Invite
+		var createdAtStr, expiresAtStr, usedAtStr sql.NullString
+		err := rows.Scan(
+			&inv.ID, &inv.Token, &createdAtStr, &expiresAtStr,
+			&inv.ExpiresIn, &usedAtStr, &inv.UseCount, &inv.MaxUses,
+			&inv.CreatedBy, &inv.Note, &inv.Status,
+		)
+		if err != nil {
+			s.logger.Println("Scan error:", err)
+			continue
+		}
+
+		// Parse SQL strings to time.Time
+		if createdAtStr.Valid {
+			inv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr.String)
+		}
+		if expiresAtStr.Valid {
+			t, _ := time.Parse("2006-01-02 15:04:05", expiresAtStr.String)
+			inv.ExpiresAt = &t
+		}
+		if usedAtStr.Valid {
+			t, _ := time.Parse("2006-01-02 15:04:05", usedAtStr.String)
+			inv.UsedAt = &t
+		}
+
+		invites = append(invites, inv)
+	}
+
+	writeJSON(w, http.StatusOK, invites)
+}
+
 func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("user_id").(int)
 
-	// Generate random token
-	bytes := make([]byte, 16)
-	rand.Read(bytes)
-	token := hex.EncodeToString(bytes)
+	var req CreateInviteRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+	}
 
-	_, err := s.systemDB.Exec("INSERT INTO invites (token, created_by) VALUES (?, ?)", token, userID)
+	// Defaults
+	if req.MaxUses == 0 && req.ExpiresIn == "" {
+		req.MaxUses = 1
+	}
+
+	token := generateInviteToken()
+
+	var expiresAt *time.Time
+	if req.ExpiresIn != "" && req.ExpiresIn != "never" {
+		duration, err := time.ParseDuration(req.ExpiresIn)
+		if err == nil {
+			t := time.Now().Add(duration)
+			expiresAt = &t
+		} else {
+			// Try "7d", "30d" patterns
+			if strings.HasSuffix(req.ExpiresIn, "d") {
+				daysStr := strings.TrimSuffix(req.ExpiresIn, "d")
+				var days int
+				fmt.Sscanf(daysStr, "%d", &days)
+				if days > 0 {
+					t := time.Now().AddDate(0, 0, days)
+					expiresAt = &t
+				}
+			}
+		}
+	}
+
+	_, err := s.systemDB.Exec(`
+		INSERT INTO invites (token, created_by, expires_at, expires_in, max_uses, note, status) 
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, token, userID, expiresAt, req.ExpiresIn, req.MaxUses, req.Note, "ACTIVE")
+
 	if err != nil {
+		s.logger.Println("Insert error:", err)
 		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]string{"token": token})
+	// Fetch the newly created invite to return full object
+	var inv Invite
+	var createdAtStr, expiresAtStr sql.NullString
+	err = s.systemDB.QueryRow(`
+		SELECT id, token, created_at, expires_at, expires_in, use_count, max_uses, created_by, note, status 
+		FROM invites WHERE token = ?
+	`, token).Scan(
+		&inv.ID, &inv.Token, &createdAtStr, &expiresAtStr,
+		&inv.ExpiresIn, &inv.UseCount, &inv.MaxUses,
+		&inv.CreatedBy, &inv.Note, &inv.Status,
+	)
+
+	if createdAtStr.Valid {
+		inv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr.String)
+	}
+	if expiresAtStr.Valid {
+		t, _ := time.Parse("2006-01-02 15:04:05", expiresAtStr.String)
+		inv.ExpiresAt = &t
+	}
+
+	writeJSON(w, http.StatusCreated, inv)
+}
+
+func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "Missing invite ID", http.StatusBadRequest)
+		return
+	}
+
+	// Rule: Only delete if not used
+	var useCount int
+	err := s.systemDB.QueryRow("SELECT use_count FROM invites WHERE id = ?", id).Scan(&useCount)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Invite not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if useCount > 0 {
+		http.Error(w, "Cannot delete an invite that has already been used", http.StatusForbidden)
+		return
+	}
+
+	_, err = s.systemDB.Exec("DELETE FROM invites WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Failed to delete invite", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- Helpers ---
