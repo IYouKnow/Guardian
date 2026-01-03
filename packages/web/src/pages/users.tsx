@@ -1,14 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Filter, Download } from 'lucide-react';
 import UserTable from '@/components/users/UserTable';
 import CreateUserModal from '@/components/users/CreateUserModal';
+import { adminApi, type AdminUser } from '@/api/admin';
 
 export default function Users() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const data = await adminApi.getUsers();
+        setUsers(data);
+      } catch (error) {
+        console.error('Failed to fetch users:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(user =>
+      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.friendly_name && user.friendly_name.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  }, [users, searchQuery]);
+
+  const stats = useMemo(() => {
+    return [
+      { label: 'Total Users', value: users.length.toString(), color: 'yellow' },
+      { label: 'Active Users', value: users.filter(u => u.status === 'ACTIVE').length.toString(), color: 'green' },
+      { label: 'Admins', value: users.filter(u => u.role === 'Admin').length.toString(), color: 'blue' },
+      { label: 'Vault Items', value: users.reduce((acc, u) => acc + u.vault_items, 0).toLocaleString(), color: 'purple' },
+    ];
+  }, [users]);
 
   return (
     <div className="space-y-8">
@@ -38,12 +73,7 @@ export default function Users() {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 lg:grid-cols-4 gap-4"
       >
-        {[
-          { label: 'Total Users', value: '2,847', color: 'yellow' },
-          { label: 'Active Users', value: '2,541', color: 'green' },
-          { label: 'Inactive', value: '218', color: 'gray' },
-          { label: 'Suspended', value: '88', color: 'red' },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <div
             key={stat.label}
             className="bg-[#141414] border border-gray-800/50 rounded-xl p-4"
@@ -92,56 +122,45 @@ export default function Users() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <UserTable />
+        <UserTable users={filteredUsers} loading={loading} />
       </motion.div>
 
-      {/* Pagination */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="flex items-center justify-between"
-      >
-        <p className="text-gray-500 text-sm">Showing 1-7 of 2,847 users</p>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
-            disabled
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-yellow-500/10 border-yellow-500/20 text-yellow-500 rounded-lg"
-          >
-            1
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
-          >
-            2
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
-          >
-            3
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
-          >
-            Next
-          </Button>
-        </div>
-      </motion.div>
+      {/* Pagination (Simplified for now) */}
+      {!loading && filteredUsers.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="flex items-center justify-between"
+        >
+          <p className="text-gray-500 text-sm">Showing {filteredUsers.length} users</p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
+              disabled
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-yellow-500/10 border-yellow-500/20 text-yellow-500 rounded-lg"
+            >
+              1
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
+              disabled
+            >
+              Next
+            </Button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Create User Modal */}
       <CreateUserModal open={showCreateModal} onOpenChange={setShowCreateModal} />

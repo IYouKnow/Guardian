@@ -26,7 +26,7 @@ export default function DeleteInviteModal({
 }: DeleteInviteModalProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[400px] bg-[#0f0f0f] border-gray-800 text-white rounded-2xl shadow-2xl">
+            <DialogContent className="sm:max-w-[400px] bg-[#0f0f0f] border-gray-800 text-white rounded-2xl shadow-2xl focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
                 <DialogHeader className="flex flex-col items-center pt-2">
                     <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
                         <AlertTriangle className="w-6 h-6 text-red-500" />
@@ -48,14 +48,14 @@ export default function DeleteInviteModal({
                         variant="ghost"
                         onClick={() => onOpenChange(false)}
                         disabled={isLoading}
-                        className="flex-1 h-11 bg-transparent hover:bg-white/5 border border-gray-800 text-gray-400 hover:text-white rounded-xl transition-all"
+                        className="flex-1 h-11 bg-transparent hover:bg-white/5 border border-gray-800 text-gray-400 hover:text-white rounded-xl transition-all focus-visible:ring-0 focus-visible:ring-offset-0"
                     >
                         Cancel
                     </Button>
                     <Button
                         onClick={onConfirm}
                         disabled={isLoading}
-                        className="flex-1 h-11 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-red-600/20"
+                        className="flex-1 h-11 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-red-600/20 focus-visible:ring-0 focus-visible:ring-offset-0"
                     >
                         {isLoading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />

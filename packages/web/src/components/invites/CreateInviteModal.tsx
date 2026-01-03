@@ -83,7 +83,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="bg-[#141414] border-gray-800 text-white max-w-md">
+      <DialogContent className="bg-[#141414] border-gray-800 text-white max-w-md focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold flex items-center gap-2">
             <div className="p-2 rounded-lg bg-yellow-500/10">
@@ -106,7 +106,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
                   variant="ghost"
                   size="icon"
                   onClick={copyCode}
-                  className="h-10 w-10 text-gray-400 hover:text-white hover:bg-white/10"
+                  className="h-10 w-10 text-gray-400 hover:text-white hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
                 >
                   {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
                 </Button>
@@ -117,7 +117,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
             </p>
             <Button
               onClick={() => handleOpenChange(false)}
-              className="w-full h-11 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl"
+              className="w-full h-11 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               Done
             </Button>
@@ -134,7 +134,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
                   value={maxUses}
                   onChange={(e) => setMaxUses(e.target.value)}
                   placeholder="e.g., 1"
-                  className="pl-10 h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+                  className="pl-10 h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-xl"
                 />
               </div>
               <p className="text-[10px] text-gray-500 px-1">
@@ -148,7 +148,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
                 value={expiresIn}
                 onChange={(e) => setExpiresIn(e.target.value)}
                 placeholder="e.g., 7d, 24h, never"
-                className="h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+                className="h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-xl"
               />
               <p className="text-[10px] text-gray-500 px-1 flex justify-between items-center">
                 <span>Format: <code className="text-yellow-500/70">1d</code>, <code className="text-yellow-500/70">12h</code>, or <code className="text-yellow-500/70">never</code></span>
@@ -169,7 +169,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="e.g., For new team members"
-                  className="pl-10 h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+                  className="pl-10 h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-xl"
                 />
               </div>
             </div>
@@ -179,14 +179,14 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
                 type="button"
                 variant="outline"
                 onClick={() => handleOpenChange(false)}
-                className="flex-1 h-11 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl"
+                className="flex-1 h-11 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 h-11 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl"
+                className="flex-1 h-11 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0"
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

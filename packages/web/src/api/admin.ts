@@ -26,6 +26,18 @@ export interface UserStats {
     active_sessions: number;
 }
 
+export interface AdminUser {
+    id: number;
+    username: string;
+    is_admin: boolean;
+    friendly_name: string;
+    status: string;
+    role: string;
+    vault_items: number;
+    created_at: string;
+    last_login: string | null;
+}
+
 export interface CreateInviteRequest {
     max_uses: number;
     expires_in: string;
@@ -49,6 +61,11 @@ export const adminApi = {
 
     async getHealth(): Promise<HealthResponse> {
         const response = await apiClient.get<HealthResponse>('/health');
+        return response.data;
+    },
+
+    async getUsers(): Promise<AdminUser[]> {
+        const response = await apiClient.get<AdminUser[]>('/api/admin/users');
         return response.data;
     },
 

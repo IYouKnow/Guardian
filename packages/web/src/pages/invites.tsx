@@ -74,7 +74,7 @@ export default function Invites() {
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
-          className="h-11 px-5 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl shadow-lg shadow-yellow-500/20"
+          className="h-11 px-5 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl shadow-lg shadow-yellow-500/20 focus-visible:ring-0 focus-visible:ring-offset-0"
         >
           <Plus className="w-5 h-5 mr-2" />
           Create Invite
@@ -123,13 +123,13 @@ export default function Invites() {
             placeholder="Search invite codes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-11 h-11 bg-[#141414] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+            className="pl-11 h-11 bg-[#141414] border-gray-800 text-white placeholder:text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-xl"
           />
         </div>
         <Button
           variant="outline"
           onClick={handleClearFilters}
-          className="h-11 px-4 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl"
+          className="h-11 px-4 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0"
         >
           <Filter className="w-4 h-4 mr-2" />
           Clear Filters

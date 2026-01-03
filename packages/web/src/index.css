@@ -18,3 +18,12 @@
     @apply hover:bg-zinc-800/60 hover:border-zinc-700 transition-all duration-200;
   }
 }
+
+/* Aggressive focus reset to remove problematic white/yellow lines */
+*:focus,
+*:focus-visible,
+[role="dialog"]:focus,
+[role="dialog"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
