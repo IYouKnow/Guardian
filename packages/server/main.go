@@ -613,10 +613,10 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 	invites := []Invite{}
 	for rows.Next() {
 		var inv Invite
-		var createdAtStr, expiresAtStr, usedAtStr, usedByStr sql.NullString
+		var usedByStr sql.NullString
 		err := rows.Scan(
-			&inv.ID, &inv.Token, &createdAtStr, &expiresAtStr,
-			&inv.ExpiresIn, &usedAtStr, &inv.UseCount, &inv.MaxUses,
+			&inv.ID, &inv.Token, &inv.CreatedAt, &inv.ExpiresAt,
+			&inv.ExpiresIn, &inv.UsedAt, &inv.UseCount, &inv.MaxUses,
 			&inv.CreatedBy, &inv.Note, &inv.Status, &usedByStr,
 		)
 		if err != nil {
@@ -624,21 +624,17 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if usedByStr.Valid {
-			inv.UsedBy = usedByStr.String
+		// Auto-expire check: If ACTIVE but past Expiry, update DB and local object
+		if inv.Status == "ACTIVE" && inv.ExpiresAt != nil && inv.ExpiresAt.Before(time.Now()) {
+			inv.Status = "EXPIRED"
+			_, err := s.systemDB.Exec("UPDATE invites SET status = 'EXPIRED' WHERE id = ?", inv.ID)
+			if err != nil {
+				s.logger.Println("Auto-expire DB update error:", err)
+			}
 		}
 
-		// Parse SQL strings to time.Time
-		if createdAtStr.Valid {
-			inv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr.String)
-		}
-		if expiresAtStr.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", expiresAtStr.String)
-			inv.ExpiresAt = &t
-		}
-		if usedAtStr.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", usedAtStr.String)
-			inv.UsedAt = &t
+		if usedByStr.Valid {
+			inv.UsedBy = usedByStr.String
 		}
 
 		invites = append(invites, inv)
@@ -669,7 +665,7 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresIn != "" && req.ExpiresIn != "never" {
 		duration, err := time.ParseDuration(req.ExpiresIn)
 		if err == nil {
-			t := time.Now().Add(duration)
+			t := time.Now().UTC().Add(duration)
 			expiresAt = &t
 		} else {
 			// Try "7d", "30d" patterns
@@ -678,7 +674,7 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 				var days int
 				fmt.Sscanf(daysStr, "%d", &days)
 				if days > 0 {
-					t := time.Now().AddDate(0, 0, days)
+					t := time.Now().UTC().AddDate(0, 0, days)
 					expiresAt = &t
 				}
 			}
@@ -698,26 +694,18 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch the newly created invite to return full object
 	var inv Invite
-	var createdAtStr, expiresAtStr, usedByStr sql.NullString
+	var usedByStr sql.NullString
 	err = s.systemDB.QueryRow(`
 		SELECT id, token, created_at, expires_at, expires_in, use_count, max_uses, created_by, note, status, used_by 
 		FROM invites WHERE token = ?
 	`, token).Scan(
-		&inv.ID, &inv.Token, &createdAtStr, &expiresAtStr,
+		&inv.ID, &inv.Token, &inv.CreatedAt, &inv.ExpiresAt,
 		&inv.ExpiresIn, &inv.UseCount, &inv.MaxUses,
 		&inv.CreatedBy, &inv.Note, &inv.Status, &usedByStr,
 	)
 
 	if usedByStr.Valid {
 		inv.UsedBy = usedByStr.String
-	}
-
-	if createdAtStr.Valid {
-		inv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr.String)
-	}
-	if expiresAtStr.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", expiresAtStr.String)
-		inv.ExpiresAt = &t
 	}
 
 	writeJSON(w, http.StatusCreated, inv)
