@@ -133,7 +133,7 @@ func main() {
 	// Auth
 	mux.HandleFunc("POST /auth/register", server.handleRegister)
 	mux.HandleFunc("POST /auth/login", server.handleLogin)
-	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus) // New: Check if first run is needed
+	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus)
 
 	// Admin / Invites
 	mux.HandleFunc("GET /api/admin/invites", server.withAdminAuth(server.handleListInvites))
@@ -143,6 +143,21 @@ func main() {
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
+
+	// Serve Static Files (Vite Build)
+	staticFileServer := http.FileServer(http.Dir("dist"))
+	mux.Handle("/assets/", staticFileServer)
+
+	// Catch-all for SPA: Serve index.html for any route not matched above
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// If it's a request for a file that doesn't exist, serve index.html
+		path := filepath.Join("dist", r.URL.Path)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			http.ServeFile(w, r, filepath.Join("dist", "index.html"))
+			return
+		}
+		staticFileServer.ServeHTTP(w, r)
+	})
 
 	// 7. Start Server with CORS
 	logger.Printf("Server listening on http://localhost:%s", config.Port)
