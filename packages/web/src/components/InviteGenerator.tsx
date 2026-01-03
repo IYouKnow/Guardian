@@ -9,7 +9,11 @@ export default function InviteGenerator() {
     const generateToken = async () => {
         setLoading(true);
         try {
-            const response = await adminApi.generateInvite();
+            const response = await adminApi.generateInvite({
+                max_uses: 1,
+                expires_in: '7d',
+                note: 'Generated from quick generator'
+            });
             setToken(response.token);
             setCopied(false);
         } catch (error) {

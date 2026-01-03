@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,10 +17,15 @@ import {
 } from "@/components/ui/select";
 import { User, Mail, Shield, Loader2 } from 'lucide-react';
 
-export default function CreateUserModal({ open, onOpenChange }) {
+interface CreateUserModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export default function CreateUserModal({ open, onOpenChange }: CreateUserModalProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setTimeout(() => {

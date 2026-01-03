@@ -1,10 +1,25 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, type LucideIcon } from 'lucide-react';
 
-export default function StatsCard({ title, value, change, changeType, icon: Icon, delay = 0 }) {
+export interface StatsCardProps {
+  title: string;
+  value: string | number;
+  change?: string;
+  changeType?: 'positive' | 'negative';
+  icon: LucideIcon;
+  delay?: number;
+}
+
+export default function StatsCard({
+  title,
+  value,
+  change,
+  changeType,
+  icon: Icon,
+  delay = 0
+}: StatsCardProps) {
   const isPositive = changeType === 'positive';
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

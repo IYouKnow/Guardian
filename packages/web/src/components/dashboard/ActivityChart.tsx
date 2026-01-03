@@ -1,9 +1,14 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, type TooltipProps } from 'recharts';
 import { Activity } from 'lucide-react';
 
-const data = [
+interface DataPoint {
+  name: string;
+  logins: number;
+  items: number;
+}
+
+const data: DataPoint[] = [
   { name: 'Mon', logins: 45, items: 23 },
   { name: 'Tue', logins: 52, items: 31 },
   { name: 'Wed', logins: 38, items: 18 },
@@ -13,7 +18,7 @@ const data = [
   { name: 'Sun', logins: 28, items: 12 },
 ];
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-3 shadow-xl">
@@ -72,15 +77,15 @@ export default function ActivityChart() {
                 <stop offset="100%" stopColor="#f5c518" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis 
-              dataKey="name" 
-              axisLine={false} 
-              tickLine={false} 
+            <XAxis
+              dataKey="name"
+              axisLine={false}
+              tickLine={false}
               tick={{ fill: '#6b7280', fontSize: 12 }}
             />
-            <YAxis 
-              axisLine={false} 
-              tickLine={false} 
+            <YAxis
+              axisLine={false}
+              tickLine={false}
               tick={{ fill: '#6b7280', fontSize: 12 }}
             />
             <Tooltip content={<CustomTooltip />} />

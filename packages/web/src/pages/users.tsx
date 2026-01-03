@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Users as UsersIcon, Plus, Search, Filter, Download } from 'lucide-react';
+import { Plus, Search, Filter, Download } from 'lucide-react';
 import UserTable from '@/components/users/UserTable';
 import CreateUserModal from '@/components/users/CreateUserModal';
 
@@ -43,7 +43,7 @@ export default function Users() {
           { label: 'Active Users', value: '2,541', color: 'green' },
           { label: 'Inactive', value: '218', color: 'gray' },
           { label: 'Suspended', value: '88', color: 'red' },
-        ].map((stat, index) => (
+        ].map((stat) => (
           <div
             key={stat.label}
             className="bg-[#141414] border border-gray-800/50 rounded-xl p-4"

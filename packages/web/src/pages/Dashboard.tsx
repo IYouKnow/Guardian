@@ -1,12 +1,11 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, Key, Database, Shield, Zap, Server } from 'lucide-react';
-import StatsCard from '@/components/dashboard/StatsCard';
+import { Users, Key, Database, Zap, Server } from 'lucide-react';
+import StatsCard, { type StatsCardProps } from '@/components/dashboard/StatsCard';
 import ActivityChart from '@/components/dashboard/ActivityChart';
 import RecentActivity from '@/components/dashboard/RecentActivity';
 
 export default function Dashboard() {
-  const stats = [
+  const stats: StatsCardProps[] = [
     { title: 'Total Users', value: '2,847', change: '+12.5%', changeType: 'positive', icon: Users },
     { title: 'Vault Items', value: '48,392', change: '+8.2%', changeType: 'positive', icon: Key },
     { title: 'Storage Used', value: '2.4 TB', change: '+3.1%', changeType: 'positive', icon: Database },

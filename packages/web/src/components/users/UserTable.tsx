@@ -1,20 +1,19 @@
-import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Edit, Trash2, Key, Shield, UserX } from 'lucide-react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,13 +28,13 @@ const users = [
   { id: 7, name: 'Alex Turner', email: 'alex.t@email.com', role: 'User', status: 'Active', items: 167, lastActive: '30 min ago' },
 ];
 
-const statusStyles = {
+const statusStyles: Record<string, string> = {
   Active: 'bg-green-500/10 text-green-400 border-green-500/20',
   Inactive: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
   Suspended: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
 
-const roleStyles = {
+const roleStyles: Record<string, string> = {
   Admin: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   User: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
 };

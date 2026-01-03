@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Shield, 
-  LayoutDashboard, 
-  Users, 
-  Ticket, 
-  Settings, 
+import {
+  Shield,
+  LayoutDashboard,
+  Users,
+  Ticket,
   LogOut,
   Menu,
   X,
@@ -43,7 +42,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <Toaster position="top-right" theme="dark" />
-      
+
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-gray-800/50">
         <div className="flex items-center justify-between h-16 px-4">
@@ -118,8 +117,8 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
                   onClick={() => setSidebarOpen(false)}
                   className={`
                     flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-yellow-500/10 to-transparent text-yellow-500 border-l-2 border-yellow-500' 
+                    ${isActive
+                      ? 'bg-gradient-to-r from-yellow-500/10 to-transparent text-yellow-500 border-l-2 border-yellow-500'
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }
                   `}

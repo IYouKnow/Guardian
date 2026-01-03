@@ -232,7 +232,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
 
   if (isLoading) {
     return (
-      <div className="h-64 flex items-center justify-center bg-[#141414] border border-gray-800/50 rounded-2xl">
+      <div className="py-20 flex items-center justify-center bg-[#141414] border border-gray-800/50 rounded-2xl">
         <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
       </div>
     );
@@ -300,8 +300,8 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
   );
 
   return (
-    <div className="bg-[#141414] border border-gray-800/50 rounded-2xl overflow-hidden shadow-2xl">
-      <div className="overflow-x-auto">
+    <div className="bg-[#141414] border border-gray-800/50 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full overflow-x-auto custom-scrollbar">
         <Table>
           <TableHeader>
             <TableRow className="border-gray-800/50 hover:bg-transparent bg-white/[0.02]">
@@ -314,7 +314,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
             </TableRow>
           </TableHeader>
           <TableBody>
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence mode="wait" initial={false}>
               {processedInvites.length === 0 ? (
                 <TableRow key="empty">
                   <TableCell colSpan={6} className="text-center py-20">
