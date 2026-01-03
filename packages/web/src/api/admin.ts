@@ -12,6 +12,7 @@ export interface Invite {
     created_by: number;
     note: string;
     status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'REVOKED';
+    used_by: string;
 }
 
 export interface HealthResponse {

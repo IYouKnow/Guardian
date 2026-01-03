@@ -111,7 +111,14 @@ export default function InviteTable() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-gray-400">
-                    {invite.use_count} / {invite.max_uses === 0 ? '∞' : invite.max_uses}
+                    <div className="flex flex-col">
+                      <span>{invite.use_count} / {invite.max_uses === 0 ? '∞' : invite.max_uses}</span>
+                      {invite.used_by && (
+                        <span className="text-[10px] text-gray-500 mt-0.5">
+                          IDs: {invite.used_by}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-gray-400">
                     {invite.expires_at ? new Date(invite.expires_at).toLocaleDateString() : 'Never'}
