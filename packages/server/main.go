@@ -32,12 +32,28 @@ type Config struct {
 
 // --- Models ---
 type User struct {
-	ID           int
-	Username     string
-	PasswordHash string
-	IsAdmin      bool
-	DBPath       string // UUID filename
-	FriendlyName string // e.g., "My Home Vault"
+	ID           int        `json:"id"`
+	Username     string     `json:"username"`
+	PasswordHash string     `json:"-"`
+	IsAdmin      bool       `json:"is_admin"`
+	DBPath       string     `json:"db_path"`
+	FriendlyName string     `json:"friendly_name"`
+	Status       string     `json:"status"` // "ACTIVE", "INACTIVE", "SUSPENDED"
+	Role         string     `json:"role"`   // "Admin", "User"
+	CreatedAt    time.Time  `json:"created_at"`
+	LastLogin    *time.Time `json:"last_login"`
+}
+
+type AdminUserResponse struct {
+	ID           int        `json:"id"`
+	Username     string     `json:"username"`
+	IsAdmin      bool       `json:"is_admin"`
+	FriendlyName string     `json:"friendly_name"`
+	Status       string     `json:"status"`
+	Role         string     `json:"role"`
+	VaultItems   int        `json:"vault_items"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastLogin    *time.Time `json:"last_login"`
 }
 
 type Invite struct {
@@ -139,6 +155,7 @@ func main() {
 	mux.HandleFunc("GET /api/admin/invites", server.withAdminAuth(server.handleListInvites))
 	mux.HandleFunc("POST /api/admin/invites", server.withAdminAuth(server.handleGenerateInvite))
 	mux.HandleFunc("DELETE /api/admin/invites/{id}", server.withAdminAuth(server.handleDeleteInvite))
+	mux.HandleFunc("GET /api/admin/users", server.withAdminAuth(server.handleListUsers))
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
@@ -191,7 +208,10 @@ func initSystemDB(path string) (*sql.DB, error) {
 		is_admin BOOLEAN DEFAULT 0,
 		db_path TEXT NOT NULL,
 		friendly_name TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		status TEXT DEFAULT 'ACTIVE',
+		role TEXT DEFAULT 'User',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_login DATETIME
 	);
 
 	CREATE TABLE IF NOT EXISTS invites (
@@ -212,8 +232,11 @@ func initSystemDB(path string) (*sql.DB, error) {
 	`
 	_, err = db.Exec(query)
 
-	// Ensure used_by column exists (migration helper)
+	// Migrations
 	db.Exec("ALTER TABLE invites ADD COLUMN used_by TEXT")
+	db.Exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'ACTIVE'")
+	db.Exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'User'")
+	db.Exec("ALTER TABLE users ADD COLUMN last_login DATETIME")
 
 	return db, err
 }
@@ -421,10 +444,15 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Create User in System DB
+	role := "User"
+	if isAdmin {
+		role = "Admin"
+	}
+
 	res, err := s.systemDB.Exec(`
-		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name) 
-		VALUES (?, ?, ?, ?, ?)
-	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName)
+		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name, status, role) 
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName, "ACTIVE", role)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -496,6 +524,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
+
+	// Update last login
+	s.systemDB.Exec("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", id)
 
 	writeJSON(w, http.StatusOK, AuthResponse{Token: token, Username: req.Username, IsAdmin: isAdmin})
 }
@@ -756,6 +787,53 @@ func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.systemDB.Query(`
+		SELECT id, username, is_admin, friendly_name, status, role, db_path, created_at, last_login 
+		FROM users ORDER BY created_at DESC
+	`)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	users := []AdminUserResponse{}
+	for rows.Next() {
+		var u User
+		err := rows.Scan(
+			&u.ID, &u.Username, &u.IsAdmin, &u.FriendlyName,
+			&u.Status, &u.Role, &u.DBPath, &u.CreatedAt, &u.LastLogin,
+		)
+		if err != nil {
+			s.logger.Println("User scan error:", err)
+			continue
+		}
+
+		// Count vault items
+		itemCount := 0
+		userDBPath := filepath.Join(s.config.DataDir, u.DBPath)
+		if db, err := sql.Open("sqlite", userDBPath); err == nil {
+			db.QueryRow("SELECT COUNT(*) FROM vault_items").Scan(&itemCount)
+			db.Close()
+		}
+
+		users = append(users, AdminUserResponse{
+			ID:           u.ID,
+			Username:     u.Username,
+			IsAdmin:      u.IsAdmin,
+			FriendlyName: u.FriendlyName,
+			Status:       u.Status,
+			Role:         u.Role,
+			VaultItems:   itemCount,
+			CreatedAt:    u.CreatedAt,
+			LastLogin:    u.LastLogin,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, users)
 }
 
 // --- Helpers ---
