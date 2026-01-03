@@ -51,7 +51,8 @@ type Invite struct {
 	MaxUses   int        `json:"max_uses"` // 0 for unlimited
 	CreatedBy int        `json:"created_by"`
 	Note      string     `json:"note"`
-	Status    string     `json:"status"` // "ACTIVE", "USED", "EXPIRED", "REVOKED"
+	Status    string     `json:"status"`  // "ACTIVE", "USED", "EXPIRED", "REVOKED"
+	UsedBy    string     `json:"used_by"` // Comma-separated list of user IDs
 }
 
 type RegisterRequest struct {
@@ -190,10 +191,15 @@ func initSystemDB(path string) (*sql.DB, error) {
 		created_by INTEGER NOT NULL,
 		note TEXT,
 		status TEXT DEFAULT 'ACTIVE',
+		used_by TEXT,
 		FOREIGN KEY(created_by) REFERENCES users(id)
 	);
 	`
 	_, err = db.Exec(query)
+
+	// Ensure used_by column exists (migration helper)
+	db.Exec("ALTER TABLE invites ADD COLUMN used_by TEXT")
+
 	return db, err
 }
 
@@ -400,7 +406,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Create User in System DB
-	_, err = s.systemDB.Exec(`
+	res, err := s.systemDB.Exec(`
 		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name) 
 		VALUES (?, ?, ?, ?, ?)
 	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName)
@@ -415,15 +421,21 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newUserID, _ := res.LastInsertId()
+
 	// 5. Update Invite Usage (if applicable)
 	if !isAdmin {
 		_, err := s.systemDB.Exec(`
 			UPDATE invites 
 			SET use_count = use_count + 1, 
 			    used_at = CURRENT_TIMESTAMP,
+			    used_by = CASE 
+					WHEN used_by IS NULL OR used_by = "" THEN CAST(? AS TEXT) 
+					ELSE used_by || "," || CAST(? AS TEXT) 
+				END,
 			    status = CASE WHEN max_uses > 0 AND use_count + 1 >= max_uses THEN 'USED' ELSE status END
 			WHERE token = ?
-		`, req.InviteToken)
+		`, newUserID, newUserID, req.InviteToken)
 		if err != nil {
 			s.logger.Println("Warning: Failed to update invite usage:", err)
 		}
@@ -589,7 +601,7 @@ func generateInviteToken() string {
 
 func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.systemDB.Query(`
-		SELECT id, token, created_at, expires_at, expires_in, used_at, use_count, max_uses, created_by, note, status 
+		SELECT id, token, created_at, expires_at, expires_in, used_at, use_count, max_uses, created_by, note, status, used_by 
 		FROM invites ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -601,15 +613,19 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 	invites := []Invite{}
 	for rows.Next() {
 		var inv Invite
-		var createdAtStr, expiresAtStr, usedAtStr sql.NullString
+		var createdAtStr, expiresAtStr, usedAtStr, usedByStr sql.NullString
 		err := rows.Scan(
 			&inv.ID, &inv.Token, &createdAtStr, &expiresAtStr,
 			&inv.ExpiresIn, &usedAtStr, &inv.UseCount, &inv.MaxUses,
-			&inv.CreatedBy, &inv.Note, &inv.Status,
+			&inv.CreatedBy, &inv.Note, &inv.Status, &usedByStr,
 		)
 		if err != nil {
 			s.logger.Println("Scan error:", err)
 			continue
+		}
+
+		if usedByStr.Valid {
+			inv.UsedBy = usedByStr.String
 		}
 
 		// Parse SQL strings to time.Time
@@ -682,15 +698,19 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch the newly created invite to return full object
 	var inv Invite
-	var createdAtStr, expiresAtStr sql.NullString
+	var createdAtStr, expiresAtStr, usedByStr sql.NullString
 	err = s.systemDB.QueryRow(`
-		SELECT id, token, created_at, expires_at, expires_in, use_count, max_uses, created_by, note, status 
+		SELECT id, token, created_at, expires_at, expires_in, use_count, max_uses, created_by, note, status, used_by 
 		FROM invites WHERE token = ?
 	`, token).Scan(
 		&inv.ID, &inv.Token, &createdAtStr, &expiresAtStr,
 		&inv.ExpiresIn, &inv.UseCount, &inv.MaxUses,
-		&inv.CreatedBy, &inv.Note, &inv.Status,
+		&inv.CreatedBy, &inv.Note, &inv.Status, &usedByStr,
 	)
+
+	if usedByStr.Valid {
+		inv.UsedBy = usedByStr.String
+	}
 
 	if createdAtStr.Valid {
 		inv.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAtStr.String)
