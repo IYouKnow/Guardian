@@ -23,6 +23,27 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
   const [expiresIn, setExpiresIn] = useState("12h");
   const [note, setNote] = useState("");
 
+  const calculateExpiry = (duration: string) => {
+    if (!duration || duration.toLowerCase() === 'never') return null;
+
+    const match = duration.match(/^(\d+)([smhd])$/);
+    if (!match) return null;
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    const date = new Date();
+
+    switch (unit) {
+      case 's': date.setSeconds(date.getSeconds() + value); break;
+      case 'm': date.setMinutes(date.getMinutes() + value); break;
+      case 'h': date.setHours(date.getHours() + value); break;
+      case 'd': date.setDate(date.getDate() + value); break;
+    }
+    return date;
+  };
+
+  const expiryDate = calculateExpiry(expiresIn);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -129,8 +150,14 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
                 placeholder="e.g., 7d, 24h, never"
                 className="h-11 bg-[#0a0a0a] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
               />
-              <p className="text-[10px] text-gray-500 px-1">
-                Format: <code className="text-yellow-500/70">1d</code>, <code className="text-yellow-500/70">12h</code>, or <code className="text-yellow-500/70">never</code>
+              <p className="text-[10px] text-gray-500 px-1 flex justify-between items-center">
+                <span>Format: <code className="text-yellow-500/70">1d</code>, <code className="text-yellow-500/70">12h</code>, or <code className="text-yellow-500/70">never</code></span>
+                {expiryDate && (
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 bg-yellow-500/5 border border-yellow-500/10 rounded-md text-yellow-500/60 font-medium">
+                    <span className="w-1 h-1 rounded-full bg-yellow-500/40 animate-pulse" />
+                    Expires: {expiryDate.toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}
+                  </span>
+                )}
               </p>
             </div>
 

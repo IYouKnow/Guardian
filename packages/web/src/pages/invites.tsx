@@ -1,19 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Filter } from 'lucide-react';
-import InviteTable from '@/components/invites/InviteTable';
+import InviteTable, { type InviteTableHandle } from '@/components/invites/InviteTable';
 import CreateInviteModal from '@/components/invites/CreateInviteModal';
+import { adminApi, type Invite } from '@/api/admin';
+import { toast } from 'sonner';
 
 export default function Invites() {
+  const tableRef = useRef<InviteTableHandle>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'USED' | 'EXPIRED'>('ALL');
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchInvites = async () => {
+    setIsLoading(true);
+    try {
+      const data = await adminApi.getInvites();
+      setInvites(data);
+    } catch (error) {
+      toast.error('Failed to fetch invites');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInvites();
+  }, []);
 
   const handleCreateSuccess = () => {
-    setRefreshKey(prev => prev + 1);
+    fetchInvites();
   };
+
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    tableRef.current?.clearFilters();
+  };
+
+  const stats = useMemo(() => {
+    return {
+      total: invites.length,
+      active: invites.filter(i => i.status === 'ACTIVE').length,
+      used: invites.filter(i => i.status === 'USED').length,
+      expired: invites.filter(i => i.status === 'EXPIRED').length,
+    };
+  }, [invites]);
+
+  const filteredInvites = useMemo(() => {
+    return invites.filter(invite => {
+      const matchesSearch = invite.token.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (invite.note && invite.note.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = statusFilter === 'ALL' || invite.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [invites, searchQuery, statusFilter]);
 
   return (
     <div className="space-y-8">
@@ -44,18 +89,24 @@ export default function Invites() {
         className="grid grid-cols-2 lg:grid-cols-4 gap-4"
       >
         {[
-          { label: 'Total Invites', value: '156', color: 'yellow' },
-          { label: 'Active', value: '42', color: 'green' },
-          { label: 'Used', value: '98', color: 'blue' },
-          { label: 'Expired', value: '16', color: 'gray' },
+          { label: 'Total Invites', value: stats.total, color: 'yellow', filter: 'ALL' },
+          { label: 'Active', value: stats.active, color: 'green', filter: 'ACTIVE' },
+          { label: 'Used', value: stats.used, color: 'blue', filter: 'USED' },
+          { label: 'Expired', value: stats.expired, color: 'gray', filter: 'EXPIRED' },
         ].map((stat) => (
-          <div
+          <motion.div
             key={stat.label}
-            className="bg-[#141414] border border-gray-800/50 rounded-xl p-4"
+            onClick={() => setStatusFilter(stat.filter as any)}
+            className={`cursor-pointer p-4 rounded-xl border transition-all duration-200 ${statusFilter === stat.filter
+              ? 'bg-[#1a1a1a] border-yellow-500/50'
+              : 'bg-[#141414] border-gray-800/50 hover:border-gray-700'
+              }`}
           >
-            <p className="text-gray-500 text-sm">{stat.label}</p>
-            <p className="text-2xl font-bold text-white mt-1">{stat.value}</p>
-          </div>
+            <p className="text-gray-500 text-sm font-medium">{stat.label}</p>
+            <p className={`text-2xl font-bold mt-1 ${statusFilter === stat.filter ? 'text-yellow-400' : 'text-white'}`}>
+              {isLoading ? '...' : stat.value}
+            </p>
+          </motion.div>
         ))}
       </motion.div>
 
@@ -77,10 +128,11 @@ export default function Invites() {
         </div>
         <Button
           variant="outline"
+          onClick={handleClearFilters}
           className="h-11 px-4 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl"
         >
           <Filter className="w-4 h-4 mr-2" />
-          Filters
+          Clear Filters
         </Button>
       </motion.div>
 
@@ -90,7 +142,13 @@ export default function Invites() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <InviteTable key={refreshKey} />
+        <InviteTable
+          ref={tableRef}
+          invites={filteredInvites}
+          isLoading={isLoading}
+          onRefresh={fetchInvites}
+          onResetFilters={handleClearFilters}
+        />
       </motion.div>
 
       {/* Create Invite Modal */}
