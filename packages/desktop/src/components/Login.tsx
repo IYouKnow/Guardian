@@ -2,7 +2,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { Theme, AccentColor } from "../types";
-import { getAccentColorClasses } from "../utils/accentColors";
+import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
 
 interface LoginProps {
   onLogin: (mode: "local" | "server", credentials: any) => Promise<void>;
@@ -31,57 +31,7 @@ export default function Login({
 
   const accentClasses = getAccentColorClasses(accentColor);
 
-  const getThemeClasses = () => {
-    switch (theme) {
-      case "light":
-        return {
-          bg: "bg-[#f8fafc]",
-          card: "bg-white/80 backdrop-blur-xl",
-          text: "text-slate-900",
-          textMuted: "text-slate-500",
-          border: "border-slate-200",
-          input: "bg-slate-100",
-        };
-      case "slate":
-        return {
-          bg: "bg-slate-950",
-          card: "bg-slate-900/40 backdrop-blur-xl",
-          text: "text-slate-100",
-          textMuted: "text-slate-400",
-          border: "border-slate-800",
-          input: "bg-slate-800/50",
-        };
-      case "editor":
-        return {
-          bg: "bg-[#0d0d0d]",
-          card: "bg-[#1a1a1a]/60 backdrop-blur-xl",
-          text: "text-[#d4d4d4]",
-          textMuted: "text-[#858585]",
-          border: "border-[#333333]",
-          input: "bg-[#252526]",
-        };
-      case "violet":
-        return {
-          bg: "bg-[#120a1f]",
-          card: "bg-[#23173a]/50 backdrop-blur-xl",
-          text: "text-[#f8f8f2]",
-          textMuted: "text-[#c9a0dc]/70",
-          border: "border-[#4a3a6b]",
-          input: "bg-[#2d1b4d]",
-        };
-      default: // dark
-        return {
-          bg: "bg-black",
-          card: "bg-[#0a0a0a]/60 backdrop-blur-xl",
-          text: "text-white",
-          textMuted: "text-zinc-500",
-          border: "border-zinc-800/50",
-          input: "bg-zinc-900/50",
-        };
-    }
-  };
-
-  const themeClasses = getThemeClasses();
+  const themeClasses = getThemeClasses(theme);
 
   useEffect(() => {
     if (lastVaultPath) {

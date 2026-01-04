@@ -1,5 +1,5 @@
 import { Theme, AccentColor } from "../types";
-import { getAccentColorClasses } from "../utils/accentColors";
+import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
 
 interface SidebarProps {
@@ -25,57 +25,7 @@ export default function Sidebar({
   theme,
   accentColor,
 }: SidebarProps) {
-  const getThemeClasses = () => {
-    switch (theme) {
-      case "light":
-        return {
-          bg: "bg-white/40",
-          item: "hover:bg-slate-200/50",
-          active: "bg-slate-200/80",
-          text: "text-slate-900",
-          textMuted: "text-slate-500",
-          border: "border-slate-200",
-        };
-      case "slate":
-        return {
-          bg: "bg-slate-900/40",
-          item: "hover:bg-slate-800/50",
-          active: "bg-slate-800/80",
-          text: "text-slate-100",
-          textMuted: "text-slate-400",
-          border: "border-slate-800",
-        };
-      case "editor":
-        return {
-          bg: "bg-[#1a1a1a]/40",
-          item: "hover:bg-[#252526]/50",
-          active: "bg-[#252526]/80",
-          text: "text-[#d4d4d4]",
-          textMuted: "text-[#858585]",
-          border: "border-[#333333]",
-        };
-      case "violet":
-        return {
-          bg: "bg-[#23173a]/40",
-          item: "hover:bg-[#2d1b4d]/50",
-          active: "bg-[#2d1b4d]/80",
-          text: "text-[#f8f8f2]",
-          textMuted: "text-[#c9a0dc]/70",
-          border: "border-[#4a3a6b]",
-        };
-      default: // dark
-        return {
-          bg: "bg-[#0a0a0a]/40",
-          item: "hover:bg-zinc-900/50",
-          active: "bg-zinc-900/80",
-          text: "text-white",
-          textMuted: "text-zinc-500",
-          border: "border-zinc-800/50",
-        };
-    }
-  };
-
-  const themeClasses = getThemeClasses();
+  const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor);
 
   return (

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Theme, AccentColor } from "../types";
-import { getAccentColorClasses } from "../utils/accentColors";
+import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SettingsProps {
@@ -52,86 +52,7 @@ export default function Settings({
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
-  const getThemeClasses = () => {
-    if (theme === "light") {
-      return {
-        bg: "bg-[#fafafa]",
-        text: "text-gray-800",
-        sectionBg: "bg-white/80",
-        divider: "border-gray-200",
-        textSecondary: "text-gray-600",
-        textTertiary: "text-gray-400",
-        hoverBg: "hover:bg-gray-100/50",
-        activeBg: "bg-gray-100",
-        activeText: "text-gray-900",
-        border: "border-gray-200",
-        cardBg: "bg-white",
-        inputBg: "bg-gray-50",
-      };
-    } else if (theme === "slate") {
-      return {
-        bg: "bg-[#0f172a]",
-        text: "text-slate-100",
-        sectionBg: "bg-[#1e293b]/50",
-        divider: "border-slate-800",
-        textSecondary: "text-slate-400",
-        textTertiary: "text-slate-500",
-        hoverBg: "hover:bg-slate-800/50",
-        activeBg: "bg-slate-800/80",
-        activeText: "text-slate-100",
-        border: "border-slate-800",
-        cardBg: "bg-slate-800/40",
-        inputBg: "bg-slate-900/50",
-      };
-    } else if (theme === "editor") {
-      return {
-        bg: "bg-[#1e1e1e]",
-        text: "text-[#d4d4d4]",
-        sectionBg: "bg-[#252526]/50",
-        divider: "border-[#3e3e42]",
-        textSecondary: "text-[#858585]",
-        textTertiary: "text-[#6a6a6a]",
-        hoverBg: "hover:bg-[#2a2d2e]/70",
-        activeBg: "bg-[#2a2d2e]/80",
-        activeText: "text-[#d4d4d4]",
-        border: "border-[#333333]",
-        cardBg: "bg-[#252526]/40",
-        inputBg: "bg-[#1e1e1e]",
-      };
-    } else if (theme === "violet") {
-      return {
-        bg: "bg-[#1a1b26]",
-        text: "text-[#a9b1d6]",
-        sectionBg: "bg-[#24283b]/50",
-        divider: "border-[#414868]/40",
-        textSecondary: "text-[#787c99]",
-        textTertiary: "text-[#565f89]",
-        hoverBg: "hover:bg-[#414868]/30",
-        activeBg: "bg-[#414868]/50",
-        activeText: "text-[#c0caf5]",
-        border: "border-[#414868]/30",
-        cardBg: "bg-[#24283b]/40",
-        inputBg: "bg-[#16161e]",
-      };
-    } else {
-      return {
-        bg: "bg-[#0a0a0a]",
-        text: "text-white",
-        sectionBg: "bg-[#111111]/50",
-        divider: "border-white/5",
-        textSecondary: "text-gray-400",
-        textTertiary: "text-gray-600",
-        hoverBg: "hover:bg-white/5",
-        activeBg: "bg-white/10",
-        activeText: "text-white",
-        border: "border-white/5",
-        cardBg: "bg-[#111111]/40",
-        inputBg: "bg-black",
-      };
-    }
-  };
-
-  const themeClasses = getThemeClasses();
+  const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor);
 
   const navItems = [

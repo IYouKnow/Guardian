@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
 import { Theme, AccentColor } from "./types";
-import { getAccentColorClasses } from "./utils/accentColors";
+import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Sidebar from "./components/Sidebar";
@@ -225,48 +225,7 @@ function App() {
     }
   };
 
-  const getThemeClasses = () => {
-
-    switch (preferences.theme) {
-      case "light":
-        return {
-          bg: "bg-[#f8fafc]",
-          text: "text-slate-900",
-          textMuted: "text-slate-500",
-          border: "border-slate-200",
-        };
-      case "slate":
-        return {
-          bg: "bg-slate-950",
-          text: "text-slate-100",
-          textMuted: "text-slate-400",
-          border: "border-slate-800",
-        };
-      case "editor":
-        return {
-          bg: "bg-[#0d0d0d]",
-          text: "text-[#d4d4d4]",
-          textMuted: "text-[#858585]",
-          border: "border-[#333333]",
-        };
-      case "violet":
-        return {
-          bg: "bg-[#120a1f]",
-          text: "text-[#f8f8f2]",
-          textMuted: "text-[#c9a0dc]/70",
-          border: "border-[#4a3a6b]",
-        };
-      default: // dark
-        return {
-          bg: "bg-black",
-          text: "text-white",
-          textMuted: "text-zinc-500",
-          border: "border-zinc-800/50",
-        };
-    }
-  };
-
-  const themeClasses = getThemeClasses();
+  const themeClasses = getThemeClasses(preferences.theme);
   const accentClasses = getAccentColorClasses(preferences.accentColor);
 
   if (preferencesLoading) {
