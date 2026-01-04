@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, Download } from 'lucide-react';
 import InviteTable, { type InviteTableHandle } from '@/components/invites/InviteTable';
 import CreateInviteModal from '@/components/invites/CreateInviteModal';
+import ExportInvitesModal from '@/components/invites/ExportInvitesModal';
 import { adminApi, type Invite } from '@/api/admin';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
@@ -13,6 +14,7 @@ export default function Invites() {
   const { themeClasses, accentClasses } = useTheme();
   const tableRef = useRef<InviteTableHandle>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'USED' | 'EXPIRED'>('ALL');
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -42,6 +44,10 @@ export default function Invites() {
     setSearchQuery('');
     setStatusFilter('ALL');
     tableRef.current?.clearFilters();
+  };
+
+  const handleExport = () => {
+    setShowExportModal(true);
   };
 
   const stats = useMemo(() => {
@@ -128,14 +134,24 @@ export default function Invites() {
             className={`pl-11 h-11 ${themeClasses.inputBg} ${themeClasses.border} ${themeClasses.text} placeholder:${themeClasses.textTertiary} focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-xl transition-all duration-300`}
           />
         </div>
-        <Button
-          variant="outline"
-          onClick={handleClearFilters}
-          className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0`}
-        >
-          <Filter className="w-4 h-4 mr-2" />
-          Clear Filters
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleClearFilters}
+            className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0`}
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Clear Filters
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0`}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </motion.div>
 
       {/* Invite Table */}
@@ -158,6 +174,13 @@ export default function Invites() {
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
         onSuccess={handleCreateSuccess}
+      />
+
+      {/* Export Invites Modal */}
+      <ExportInvitesModal
+        open={showExportModal}
+        onOpenChange={setShowExportModal}
+        invites={invites}
       />
     </div>
   );

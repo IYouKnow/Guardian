@@ -37,7 +37,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   if (currentPageName === 'Login') {
     return (
       <>
-        <Toaster position="top-right" theme={theme === 'light' ? 'light' : 'dark'} />
+        <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
         {children}
       </>
     );
@@ -45,7 +45,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
 
   return (
     <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300`}>
-      <Toaster position="top-right" theme={theme === 'light' ? 'light' : 'dark'} />
+      <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
 
       {/* Mobile Header */}
       <div className={`lg:hidden fixed top-0 left-0 right-0 z-50 ${themeClasses.bg}/95 backdrop-blur-xl border-b ${themeClasses.divider} transition-colors duration-300`}>

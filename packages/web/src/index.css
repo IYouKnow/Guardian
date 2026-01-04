@@ -27,3 +27,43 @@
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Sonner Progress Bar Animation */
+[data-sonner-toast] {
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+[data-sonner-toast]::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  transform-origin: left;
+  animation: sonner-progress 2000ms linear forwards;
+  background: white;
+  opacity: 0.15;
+}
+
+[data-sonner-toast][data-type='success']::after,
+[data-sonner-toast][data-type='error']::after {
+  background: white;
+  opacity: 0.2;
+}
+
+@keyframes sonner-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Pause animation on hover */
+[data-sonner-toast]:hover::after {
+  animation-play-state: paused;
+}

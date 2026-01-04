@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Copy,
+  Check,
   Trash2,
   Loader2,
   ArrowUpDown,
@@ -120,6 +121,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
   const [inviteToDelete, setInviteToDelete] = useState<Invite | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const statusStyles = {
     ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -141,9 +143,11 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
     }
   }));
 
-  const copyCode = (code: string) => {
+  const copyCode = (code: string, id: number) => {
     navigator.clipboard.writeText(code);
+    setCopiedId(id);
     toast.success('Invite code copied to clipboard');
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleDelete = async () => {
@@ -362,10 +366,32 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => copyCode(invite.token)}
+                            onClick={() => copyCode(invite.token, invite.id)}
                             className={`absolute right-1 h-7 w-7 ${themeClasses.textTertiary} hover:${themeClasses.text} hover:${themeClasses.hoverBg}`}
                           >
-                            <Copy className="w-3.5 h-3.5" />
+                            <AnimatePresence mode="wait" initial={false}>
+                              {copiedId === invite.id ? (
+                                <motion.div
+                                  key="check"
+                                  initial={{ scale: 0.5, opacity: 0 }}
+                                  animate={{ scale: 1.1, opacity: 1 }}
+                                  exit={{ scale: 0.5, opacity: 0 }}
+                                  transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                                >
+                                  <Check className={`w-3.5 h-3.5 ${accentClasses.textClass}`} />
+                                </motion.div>
+                              ) : (
+                                <motion.div
+                                  key="copy"
+                                  initial={{ scale: 0.8, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  exit={{ scale: 0.8, opacity: 0 }}
+                                  transition={{ duration: 0.1 }}
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </Button>
                         </div>
                       </div>

@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Plus, Search, Filter, Download } from 'lucide-react';
 import UserTable from '@/components/users/UserTable';
 import CreateUserModal from '@/components/users/CreateUserModal';
+import ExportUsersModal from '@/components/users/ExportUsersModal';
 import { adminApi, type AdminUser } from '@/api/admin';
 import { useTheme } from '../context/ThemeContext';
 
 export default function Users() {
   const { themeClasses, accentClasses } = useTheme();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,7 @@ export default function Users() {
         </Button>
         <Button
           variant="outline"
+          onClick={() => setShowExportModal(true)}
           className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl`}
         >
           <Download className="w-4 h-4 mr-2" />
@@ -166,6 +169,13 @@ export default function Users() {
 
       {/* Create User Modal */}
       <CreateUserModal open={showCreateModal} onOpenChange={setShowCreateModal} />
+
+      {/* Export Users Modal */}
+      <ExportUsersModal
+        open={showExportModal}
+        onOpenChange={setShowExportModal}
+        users={users}
+      />
     </div>
   );
 }
