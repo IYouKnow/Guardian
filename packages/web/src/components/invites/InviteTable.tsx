@@ -32,15 +32,10 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import DeleteInviteModal from './DeleteInviteModal';
-
-const statusStyles = {
-  ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
-  USED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  EXPIRED: 'bg-red-500/10 text-red-500 border-red-500/20',
-  REVOKED: 'bg-red-500/10 text-red-400 border-red-500/20',
-};
+import { useTheme } from '../../context/ThemeContext';
 
 function CountdownTimer({ expiresAt, status }: { expiresAt: string | null, status: string }) {
+  const { themeClasses, accentClasses } = useTheme();
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,11 +72,11 @@ function CountdownTimer({ expiresAt, status }: { expiresAt: string | null, statu
     return () => clearInterval(timer);
   }, [expiresAt, status]);
 
-  if (!expiresAt) return <span className="text-gray-500">-</span>;
+  if (!expiresAt) return <span className={`${themeClasses.textTertiary}`}>-</span>;
   if (status !== 'ACTIVE' || !timeLeft) {
     if (status === 'EXPIRED') {
       return (
-        <div className="inline-flex items-center px-2.5 py-1 bg-[#0a0a0a] border border-red-500/10 rounded-md shadow-inner">
+        <div className={`inline-flex items-center px-2.5 py-1 ${themeClasses.inputBg} border border-red-500/10 rounded-md shadow-inner`}>
           <span className="font-mono text-[11px] tracking-wider text-red-500/80 font-medium whitespace-nowrap">
             {new Date(expiresAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
           </span>
@@ -89,15 +84,15 @@ function CountdownTimer({ expiresAt, status }: { expiresAt: string | null, statu
       );
     }
     return (
-      <span className="text-gray-500">
+      <span className={`${themeClasses.textSecondary}`}>
         {new Date(expiresAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
       </span>
     );
   }
 
   return (
-    <div className="inline-flex items-center px-2.5 py-1 bg-[#0a0a0a] border border-white/5 rounded-md shadow-inner">
-      <span className="font-mono text-[11px] tracking-wider text-yellow-500/90 font-medium whitespace-nowrap">
+    <div className={`inline-flex items-center px-2.5 py-1 ${themeClasses.inputBg} border ${themeClasses.border} rounded-md shadow-inner`}>
+      <span className={`font-mono text-[11px] tracking-wider ${accentClasses.textClass} font-medium whitespace-nowrap`}>
         {timeLeft}
       </span>
     </div>
@@ -118,12 +113,20 @@ interface InviteTableProps {
 type SortKey = keyof Invite | 'uses';
 
 const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, isLoading, onRefresh, onResetFilters }, ref) => {
+  const { themeClasses, accentClasses } = useTheme();
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
   const [filters, setFilters] = useState<Record<string, string[]>>({});
   const [inviteToDelete, setInviteToDelete] = useState<Invite | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [now, setNow] = useState(Date.now());
+
+  const statusStyles = {
+    ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
+    USED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    EXPIRED: 'bg-red-500/10 text-red-500 border-red-500/20',
+    REVOKED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  };
 
   // Update 'now' every second to trigger live expiry updates
   useEffect(() => {
@@ -232,17 +235,17 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
 
   if (isLoading) {
     return (
-      <div className="py-20 flex items-center justify-center bg-[#141414] border border-gray-800/50 rounded-2xl">
-        <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+      <div className={`py-20 flex items-center justify-center ${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl`}>
+        <Loader2 className={`w-8 h-8 animate-spin ${accentClasses.textClass}`} />
       </div>
     );
   }
 
   const ColumnHeader = ({ title, sortKey, filterKey }: { title: string, sortKey?: SortKey, filterKey?: keyof Invite }) => (
-    <TableHead className="text-gray-400 font-medium group">
+    <TableHead className={`${themeClasses.textSecondary} font-medium group`}>
       <div className="flex items-center gap-1">
         <div
-          className={`flex items-center gap-2 cursor-pointer select-none hover:text-white transition-colors ${sortConfig?.key === sortKey ? 'text-white' : ''}`}
+          className={`flex items-center gap-2 cursor-pointer select-none hover:${themeClasses.text} transition-colors ${sortConfig?.key === sortKey ? themeClasses.text : ''}`}
           onClick={() => sortKey && handleSort(sortKey)}
         >
           {title}
@@ -260,33 +263,33 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
         {filterKey && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 hover:bg-white/10">
-                <ChevronDown className={`w-3.5 h-3.5 ${filters[filterKey] ? 'text-yellow-500' : ''}`} />
+              <Button variant="ghost" size="icon" className={`h-6 w-6 p-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 hover:${themeClasses.hoverBg}`}>
+                <ChevronDown className={`w-3.5 h-3.5 ${filters[filterKey] ? accentClasses.textClass : ''}`} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48 bg-[#1a1a1a] border-gray-800 text-gray-300">
-              <DropdownMenuLabel className="text-xs text-gray-500 uppercase tracking-wider">Filter {title}</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-gray-800" />
+            <DropdownMenuContent align="start" className={`w-48 ${themeClasses.sectionBg} border ${themeClasses.border} ${themeClasses.text} backdrop-blur-xl`}>
+              <DropdownMenuLabel className={`text-xs ${themeClasses.textTertiary} uppercase tracking-wider`}>Filter {title}</DropdownMenuLabel>
+              <DropdownMenuSeparator className={`${themeClasses.divider}`} />
               {getUniqueValues(filterKey).map(val => (
                 <DropdownMenuCheckboxItem
                   key={val}
                   checked={filters[filterKey]?.includes(val)}
                   onCheckedChange={() => toggleFilter(filterKey, val)}
-                  className="focus:bg-white/5 focus:text-white"
+                  className={`focus:${themeClasses.hoverBg} focus:${themeClasses.text}`}
                 >
                   {val}
                 </DropdownMenuCheckboxItem>
               ))}
               {filters[filterKey] && (
                 <>
-                  <DropdownMenuSeparator className="bg-gray-800" />
+                  <DropdownMenuSeparator className={`${themeClasses.divider}`} />
                   <DropdownMenuItem
                     onClick={() => {
                       const newFilters = { ...filters };
                       delete newFilters[filterKey];
                       setFilters(newFilters);
                     }}
-                    className="text-xs text-center justify-center text-yellow-500/80 hover:text-yellow-400 focus:bg-white/5"
+                    className={`text-xs text-center justify-center ${accentClasses.textClass} hover:${accentClasses.textClass}/80 focus:${themeClasses.hoverBg}`}
                   >
                     Clear Filter
                   </DropdownMenuItem>
@@ -300,17 +303,17 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
   );
 
   return (
-    <div className="bg-[#141414] border border-gray-800/50 rounded-2xl shadow-2xl overflow-hidden">
+    <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl shadow-2xl overflow-hidden`}>
       <div className="w-full overflow-x-auto custom-scrollbar">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-800/50 hover:bg-transparent bg-white/[0.02]">
+            <TableRow className={`${themeClasses.divider} hover:bg-transparent bg-white/[0.02]`}>
               <ColumnHeader title="Invite Code" sortKey="token" />
               <ColumnHeader title="Status" sortKey="status" filterKey="status" />
               <ColumnHeader title="Uses" sortKey="uses" />
               <ColumnHeader title="Expires At" sortKey="expires_at" />
               <ColumnHeader title="Note" sortKey="note" />
-              <TableHead className="text-gray-400 font-medium text-right pr-6">Actions</TableHead>
+              <TableHead className={`${themeClasses.textSecondary} font-medium text-right pr-6`}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -323,8 +326,8 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                       animate={{ opacity: 1 }}
                       className="flex flex-col items-center gap-3"
                     >
-                      <Filter className="w-8 h-8 text-gray-700" />
-                      <div className="text-gray-500">No invites match your filters.</div>
+                      <Filter className={`w-8 h-8 ${themeClasses.textTertiary}`} />
+                      <div className={`${themeClasses.textSecondary}`}>No invites match your filters.</div>
                       <Button
                         variant="link"
                         onClick={() => {
@@ -332,7 +335,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                           setSortConfig(null);
                           onResetFilters?.();
                         }}
-                        className="text-yellow-500/80 hover:text-yellow-400"
+                        className={`${accentClasses.textClass} hover:${accentClasses.textClass}/80`}
                       >
                         Reset all table filters
                       </Button>
@@ -348,19 +351,19 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ delay: index * 0.03, duration: 0.2 }}
-                    className="border-gray-800/50 hover:bg-white/[0.02] transition-colors group/row"
+                    className={`${themeClasses.divider} hover:${themeClasses.hoverBg} transition-colors group/row`}
                   >
                     <TableCell className="py-4">
                       <div className="flex items-center gap-2 group/code w-fit">
                         <div className="relative flex items-center">
-                          <code className="pl-3 pr-10 py-1.5 bg-[#0a0a0a] rounded-lg text-yellow-400 font-mono text-sm border border-yellow-500/10 min-w-[140px]">
+                          <code className={`pl-3 pr-10 py-1.5 ${themeClasses.inputBg} rounded-lg ${accentClasses.textClass} font-mono text-sm border ${accentClasses.borderClass.replace('border-', 'border-')}/10 min-w-[140px]`}>
                             {invite.token}
                           </code>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => copyCode(invite.token)}
-                            className="absolute right-1 h-7 w-7 text-gray-500 hover:text-white hover:bg-white/10"
+                            className={`absolute right-1 h-7 w-7 ${themeClasses.textTertiary} hover:${themeClasses.text} hover:${themeClasses.hoverBg}`}
                           >
                             <Copy className="w-3.5 h-3.5" />
                           </Button>
@@ -372,21 +375,21 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                         {invite.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-gray-400">
+                    <TableCell className={`${themeClasses.textSecondary}`}>
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-300">{invite.use_count} / {invite.max_uses === 0 ? '∞' : invite.max_uses}</span>
+                        <span className={`font-medium ${themeClasses.textSecondary}`}>{invite.use_count} / {invite.max_uses === 0 ? '∞' : invite.max_uses}</span>
                         {invite.used_by && (
-                          <span className="text-[10px] text-gray-500 mt-0.5 truncate max-w-[120px]">
+                          <span className={`text-[10px] ${themeClasses.textTertiary} mt-0.5 truncate max-w-[120px]`}>
                             {invite.used_by}
                           </span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-gray-400">
+                    <TableCell className={`${themeClasses.textSecondary}`}>
                       <CountdownTimer expiresAt={invite.expires_at} status={invite.status} />
                     </TableCell>
-                    <TableCell className="text-gray-400 text-sm max-w-[200px] truncate">
-                      {invite.note || <span className="text-gray-700">-</span>}
+                    <TableCell className={`${themeClasses.textSecondary} text-sm max-w-[200px] truncate`}>
+                      {invite.note || <span className={`${themeClasses.textTertiary}`}>-</span>}
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <div className="flex items-center justify-end gap-1 transition-opacity">
@@ -395,7 +398,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                           size="icon"
                           disabled={invite.use_count > 0 || deletingId === invite.id}
                           onClick={() => setInviteToDelete(invite)}
-                          className="h-8 w-8 text-gray-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent"
+                          className={`h-8 w-8 ${themeClasses.textSecondary} hover:text-red-400 hover:${themeClasses.hoverBg} disabled:opacity-30 disabled:hover:bg-transparent`}
                         >
                           {deletingId === invite.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />

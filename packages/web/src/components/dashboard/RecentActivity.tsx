@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Clock, UserPlus, Key, Shield, AlertTriangle, LogIn, type LucideIcon } from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
 
 type ActivityType = 'login' | 'create' | 'access' | 'security' | 'warning';
 
@@ -29,21 +30,23 @@ const typeColors: Record<ActivityType, string> = {
 };
 
 export default function RecentActivity() {
+  const { themeClasses, accentClasses } = useTheme();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4, duration: 0.4 }}
-      className="bg-[#141414] border border-gray-800/50 rounded-2xl p-6"
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 transition-all duration-300`}
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-yellow-500/10">
-            <Clock className="w-5 h-5 text-yellow-500" />
+          <div className={`p-2 rounded-lg ${accentClasses.bgClass}/10 transition-all duration-300`}>
+            <Clock className={`w-5 h-5 ${accentClasses.textClass} transition-all duration-300`} />
           </div>
           <div>
-            <h3 className="text-white font-semibold">Recent Activity</h3>
-            <p className="text-gray-500 text-sm">Latest system events</p>
+            <h3 className={`${themeClasses.text} font-semibold transition-all duration-300`}>Recent Activity</h3>
+            <p className={`${themeClasses.textSecondary} text-sm transition-all duration-300`}>Latest system events</p>
           </div>
         </div>
       </div>
@@ -55,16 +58,16 @@ export default function RecentActivity() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 + index * 0.1, duration: 0.3 }}
-            className="flex items-start gap-4 p-3 rounded-xl hover:bg-white/[0.02] transition-colors"
+            className={`flex items-start gap-4 p-3 rounded-xl ${themeClasses.hoverBg} transition-all duration-300`}
           >
-            <div className={`p-2 rounded-lg ${typeColors[activity.type]}`}>
+            <div className={`p-2 rounded-lg ${typeColors[activity.type]} transition-all duration-300`}>
               <activity.icon className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">{activity.action}</p>
-              <p className="text-gray-500 text-xs truncate">{activity.user}</p>
+              <p className={`${themeClasses.text} text-sm font-medium truncate transition-all duration-300`}>{activity.action}</p>
+              <p className={`${themeClasses.textSecondary} text-xs truncate transition-all duration-300`}>{activity.user}</p>
             </div>
-            <span className="text-gray-600 text-xs whitespace-nowrap">{activity.time}</span>
+            <span className={`${themeClasses.textTertiary} text-xs whitespace-nowrap transition-all duration-300`}>{activity.time}</span>
           </motion.div>
         ))}
       </div>

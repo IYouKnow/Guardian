@@ -6,8 +6,10 @@ import { Plus, Search, Filter, Download } from 'lucide-react';
 import UserTable from '@/components/users/UserTable';
 import CreateUserModal from '@/components/users/CreateUserModal';
 import { adminApi, type AdminUser } from '@/api/admin';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Users() {
+  const { themeClasses, accentClasses } = useTheme();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -38,10 +40,10 @@ export default function Users() {
 
   const stats = useMemo(() => {
     return [
-      { label: 'Total Users', value: users.length.toString(), color: 'yellow' },
-      { label: 'Active Users', value: users.filter(u => u.status === 'ACTIVE').length.toString(), color: 'green' },
-      { label: 'Admins', value: users.filter(u => u.role === 'Admin').length.toString(), color: 'blue' },
-      { label: 'Vault Items', value: users.reduce((acc, u) => acc + u.vault_items, 0).toLocaleString(), color: 'purple' },
+      { label: 'Total Users', value: users.length.toString() },
+      { label: 'Active Users', value: users.filter(u => u.status === 'ACTIVE').length.toString() },
+      { label: 'Admins', value: users.filter(u => u.role === 'Admin').length.toString() },
+      { label: 'Vault Items', value: users.reduce((acc, u) => acc + u.vault_items, 0).toLocaleString() },
     ];
   }, [users]);
 
@@ -54,12 +56,12 @@ export default function Users() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold text-white">User Management</h1>
-          <p className="text-gray-500 mt-1">Manage and monitor user accounts</p>
+          <h1 className={`text-3xl font-bold ${themeClasses.text} transition-all duration-300`}>User Management</h1>
+          <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Manage and monitor user accounts</p>
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
-          className="h-11 px-5 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-black font-semibold rounded-xl shadow-lg shadow-yellow-500/20"
+          className={`h-11 px-5 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} text-black font-semibold rounded-xl shadow-lg ${accentClasses.shadowClass}`}
         >
           <Plus className="w-5 h-5 mr-2" />
           Add User
@@ -76,10 +78,10 @@ export default function Users() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-[#141414] border border-gray-800/50 rounded-xl p-4"
+            className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-4 transition-all duration-300`}
           >
-            <p className="text-gray-500 text-sm">{stat.label}</p>
-            <p className="text-2xl font-bold text-white mt-1">{stat.value}</p>
+            <p className={`${themeClasses.textSecondary} text-sm transition-all duration-300`}>{stat.label}</p>
+            <p className={`text-2xl font-bold ${themeClasses.text} mt-1 transition-all duration-300`}>{stat.value}</p>
           </div>
         ))}
       </motion.div>
@@ -92,24 +94,24 @@ export default function Users() {
         className="flex flex-col sm:flex-row gap-3"
       >
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${themeClasses.textTertiary} transition-all duration-300`} />
           <Input
             placeholder="Search users by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-11 h-11 bg-[#141414] border-gray-800 text-white placeholder:text-gray-600 focus:border-yellow-500/50 rounded-xl"
+            className={`pl-11 h-11 ${themeClasses.inputBg} ${themeClasses.border} ${themeClasses.text} placeholder:${themeClasses.textTertiary} focus:${accentClasses.focusBorderClass}/50 rounded-xl transition-all duration-300`}
           />
         </div>
         <Button
           variant="outline"
-          className="h-11 px-4 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl"
+          className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl`}
         >
           <Filter className="w-4 h-4 mr-2" />
           Filters
         </Button>
         <Button
           variant="outline"
-          className="h-11 px-4 bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-xl"
+          className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl`}
         >
           <Download className="w-4 h-4 mr-2" />
           Export
@@ -133,12 +135,12 @@ export default function Users() {
           transition={{ delay: 0.4 }}
           className="flex items-center justify-between"
         >
-          <p className="text-gray-500 text-sm">Showing {filteredUsers.length} users</p>
+          <p className={`${themeClasses.textSecondary} text-sm`}>Showing {filteredUsers.length} users</p>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
+              className={`bg-transparent ${themeClasses.border} ${themeClasses.textTertiary} rounded-lg`}
               disabled
             >
               Previous
@@ -146,14 +148,14 @@ export default function Users() {
             <Button
               variant="outline"
               size="sm"
-              className="bg-yellow-500/10 border-yellow-500/20 text-yellow-500 rounded-lg"
+              className={`${accentClasses.bgClass}/10 border-${accentClasses.bgClass.split('-')[1]}-500/20 ${accentClasses.textClass} rounded-lg`}
             >
               1
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="bg-transparent border-gray-800 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg"
+              className={`bg-transparent ${themeClasses.border} ${themeClasses.textTertiary} rounded-lg`}
               disabled
             >
               Next

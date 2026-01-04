@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, type TooltipProps } from 'recharts';
 import { Activity } from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
+import { getAccentColorHex } from '../../utils/theme';
 
 interface DataPoint {
   name: string;
@@ -19,10 +21,11 @@ const data: DataPoint[] = [
 ];
 
 const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+  const { themeClasses } = useTheme();
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-3 shadow-xl">
-        <p className="text-gray-400 text-xs mb-2">{label}</p>
+      <div className={`${themeClasses.sectionBg} border ${themeClasses.border} backdrop-blur-xl rounded-xl p-3 shadow-xl`}>
+        <p className={`${themeClasses.textTertiary} text-xs mb-2`}>{label}</p>
         {payload.map((entry, index) => (
           <p key={index} className="text-sm font-medium" style={{ color: entry.color }}>
             {entry.name}: {entry.value}
@@ -35,31 +38,34 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>)
 };
 
 export default function ActivityChart() {
+  const { themeClasses, accentClasses, accentColor, theme } = useTheme();
+  const hexColor = getAccentColorHex(accentColor);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3, duration: 0.4 }}
-      className="bg-[#141414] border border-gray-800/50 rounded-2xl p-6"
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 transition-all duration-300`}
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-yellow-500/10">
-            <Activity className="w-5 h-5 text-yellow-500" />
+          <div className={`p-2 rounded-lg ${accentClasses.bgClass}/10 transition-all duration-300`}>
+            <Activity className={`w-5 h-5 ${accentClasses.textClass} transition-all duration-300`} />
           </div>
           <div>
-            <h3 className="text-white font-semibold">Weekly Activity</h3>
-            <p className="text-gray-500 text-sm">Logins & item access</p>
+            <h3 className={`${themeClasses.text} font-semibold transition-all duration-300`}>Weekly Activity</h3>
+            <p className={`${themeClasses.textSecondary} text-sm transition-all duration-300`}>Logins & item access</p>
           </div>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-yellow-500" />
-            <span className="text-gray-400">Logins</span>
+            <div className={`w-3 h-3 rounded-full ${accentClasses.bgClass} transition-all duration-300`} />
+            <span className={`${themeClasses.textSecondary} transition-all duration-300`}>Logins</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-yellow-500/40" />
-            <span className="text-gray-400">Items</span>
+            <div className={`w-3 h-3 rounded-full ${accentClasses.bgClass}/40 transition-all duration-300`} />
+            <span className={`${themeClasses.textSecondary} transition-all duration-300`}>Items</span>
           </div>
         </div>
       </div>
@@ -69,30 +75,30 @@ export default function ActivityChart() {
           <AreaChart data={data}>
             <defs>
               <linearGradient id="loginGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f5c518" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#f5c518" stopOpacity={0} />
+                <stop offset="0%" stopColor={hexColor} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={hexColor} stopOpacity={0} />
               </linearGradient>
               <linearGradient id="itemsGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f5c518" stopOpacity={0.15} />
-                <stop offset="100%" stopColor="#f5c518" stopOpacity={0} />
+                <stop offset="0%" stopColor={hexColor} stopOpacity={0.15} />
+                <stop offset="100%" stopColor={hexColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <XAxis
               dataKey="name"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#6b7280', fontSize: 12 }}
+              tick={{ fill: theme === 'light' ? '#94a3b8' : '#64748b', fontSize: 12 }}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#6b7280', fontSize: 12 }}
+              tick={{ fill: theme === 'light' ? '#94a3b8' : '#64748b', fontSize: 12 }}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area
               type="monotone"
               dataKey="logins"
-              stroke="#f5c518"
+              stroke={hexColor}
               strokeWidth={2}
               fill="url(#loginGradient)"
               name="Logins"
@@ -100,7 +106,7 @@ export default function ActivityChart() {
             <Area
               type="monotone"
               dataKey="items"
-              stroke="#f5c51866"
+              stroke={`${hexColor}66`}
               strokeWidth={2}
               fill="url(#itemsGradient)"
               name="Items"
