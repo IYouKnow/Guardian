@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Theme, AccentColor } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { getAccentColorClasses } from "../utils/theme";
 
 const Icons = {
     Appearance: () => (
@@ -157,10 +158,7 @@ export default function Settings() {
     );
 }
 
-// Helper component to avoid import issues inside the loop if I didn't import the utility
-// But I can just import the utility. Let me fix the imports.
-import { getAccentColorClasses } from "../utils/theme";
-
+// Helper component to avoid import issues inside the loop
 function ColorButton({ color, activeColor, onClick }: { color: AccentColor, activeColor: AccentColor, onClick: () => void }) {
     const colorClasses = getAccentColorClasses(color);
     const isActive = activeColor === color;

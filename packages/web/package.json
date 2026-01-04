@@ -28,7 +28,8 @@
     "react-router-dom": "^7.1.3",
     "recharts": "^2.15.4",
     "sonner": "^1.7.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "@guardian/shared": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
