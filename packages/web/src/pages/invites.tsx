@@ -100,8 +100,8 @@ export default function Invites() {
             key={stat.label}
             onClick={() => setStatusFilter(stat.filter as any)}
             className={`cursor-pointer p-4 rounded-xl border transition-all duration-300 ${statusFilter === stat.filter
-              ? `${themeClasses.activeBg} ${accentClasses.borderClass.replace('border-', 'border-')}/50`
-              : `${themeClasses.cardBg} ${themeClasses.border} ${themeClasses.hoverBg}`
+              ? `${themeClasses.activeBg} border-${accentClasses.base}`
+              : `${themeClasses.cardBg} border-transparent ${themeClasses.hoverBg}`
               }`}
           >
             <p className={`${themeClasses.textSecondary} text-sm font-medium transition-all duration-300`}>{stat.label}</p>

@@ -100,7 +100,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
 
         {generatedInvite ? (
           <div className="space-y-6 mt-4">
-            <div className={`p-4 ${themeClasses.inputBg} rounded-xl border ${themeClasses.border}`}>
+            <div className={`p-4 ${themeClasses.inputBg} rounded-xl`}>
               <p className={`${themeClasses.textSecondary} text-sm mb-2`}>Your invite code</p>
               <div className="flex items-center justify-between">
                 <code className={`text-xl font-mono ${accentClasses.textClass}`}>{generatedInvite.token}</code>
@@ -155,7 +155,7 @@ export default function CreateInviteModal({ open, onOpenChange, onSuccess }: Cre
               <p className={`text-[10px] ${themeClasses.textTertiary} px-1 flex justify-between items-center`}>
                 <span>Format: <code className={`${accentClasses.textClass}`}>1d</code>, <code className={`${accentClasses.textClass}`}>12h</code>, or <code className={`${accentClasses.textClass}`}>never</code></span>
                 {expiryDate && (
-                  <span className={`flex items-center gap-1.5 px-2 py-0.5 ${accentClasses.bgClass}/5 border ${accentClasses.borderClass.replace('border-', 'border-')}/10 rounded-md ${accentClasses.textClass} font-medium`}>
+                  <span className={`flex items-center gap-1.5 px-2 py-0.5 ${accentClasses.bgClass}/5 border border-${accentClasses.base}/20 rounded-md ${accentClasses.textClass} font-medium`}>
                     <span className={`w-1 h-1 rounded-full ${accentClasses.bgClass} animate-pulse`} />
                     Expires: {expiryDate.toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}
                   </span>

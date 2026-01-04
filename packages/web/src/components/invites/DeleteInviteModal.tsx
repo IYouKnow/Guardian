@@ -41,7 +41,7 @@ export default function DeleteInviteModal({
                 </DialogHeader>
 
                 <div className="flex justify-center py-6">
-                    <code className={`px-4 py-2 ${themeClasses.inputBg} rounded-xl ${accentClasses.textClass} font-mono text-lg border ${accentClasses.borderClass.replace('border-', 'border-')}/20 shadow-inner`}>
+                    <code className={`px-4 py-2 ${themeClasses.inputBg} rounded-xl ${accentClasses.textClass} font-mono text-lg shadow-inner`}>
                         {token}
                     </code>
                 </div>

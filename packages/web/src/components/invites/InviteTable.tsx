@@ -356,7 +356,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                     <TableCell className="py-4">
                       <div className="flex items-center gap-2 group/code w-fit">
                         <div className="relative flex items-center">
-                          <code className={`pl-3 pr-10 py-1.5 ${themeClasses.inputBg} rounded-lg ${accentClasses.textClass} font-mono text-sm border ${accentClasses.borderClass.replace('border-', 'border-')}/10 min-w-[140px]`}>
+                          <code className={`pl-3 pr-10 py-1.5 ${themeClasses.inputBg} rounded-lg ${accentClasses.textClass} font-mono text-sm min-w-[140px]`}>
                             {invite.token}
                           </code>
                           <Button

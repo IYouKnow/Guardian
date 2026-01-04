@@ -30,7 +30,7 @@ export default function StatsCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4 }}
-      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 hover:${accentClasses.borderClass.replace('border-', 'border-')}/20 transition-all duration-300 group`}
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 hover:border-${accentClasses.base}/30 transition-all duration-300 group`}
     >
       <div className="flex items-start justify-between mb-4">
         <div className={`p-3 rounded-xl bg-gradient-to-br ${accentClasses.bgClass}/10 to-${accentClasses.bgClass.split('-')[1]}-600/5 group-hover:${accentClasses.bgClass}/20 transition-all`}>

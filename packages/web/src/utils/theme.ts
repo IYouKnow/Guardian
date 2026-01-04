@@ -101,18 +101,18 @@ export const getAccentColorClasses = (color: AccentColor) => {
 export const getThemeClasses = (theme: Theme) => {
     if (theme === "light") {
         return {
-            bg: "bg-[#fafafa]",
-            text: "text-gray-800",
-            sectionBg: "bg-white/80",
-            divider: "border-gray-200",
-            textSecondary: "text-gray-600",
-            textTertiary: "text-gray-400",
-            hoverBg: "hover:bg-gray-100/50",
-            activeBg: "bg-gray-100",
-            activeText: "text-gray-900",
-            border: "border-gray-200",
+            bg: "bg-[#f4f4f5]",
+            text: "text-slate-900",
+            sectionBg: "bg-white",
+            divider: "border-slate-200",
+            textSecondary: "text-slate-600",
+            textTertiary: "text-slate-400",
+            hoverBg: "hover:bg-slate-200/50",
+            activeBg: "bg-slate-200/80",
+            activeText: "text-slate-900",
+            border: "border-slate-300/40",
             cardBg: "bg-white",
-            inputBg: "bg-gray-50",
+            inputBg: "bg-slate-100/50",
         };
     } else if (theme === "slate") {
         return {

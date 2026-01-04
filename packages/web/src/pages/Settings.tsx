@@ -35,7 +35,7 @@ export default function Settings() {
                                 key={item.id}
                                 onClick={() => setActiveSection(item.id)}
                                 className={`w-full flex items-center gap-2.5 md:gap-3 px-3.5 md:px-4 py-3 md:py-3.5 rounded-xl transition-all duration-300 group relative ${activeSection === item.id
-                                    ? `${themeClasses.activeBg} ${themeClasses.activeText} shadow-sm`
+                                    ? `${accentClasses.bgClass}/20 ${accentClasses.textClass} shadow-sm`
                                     : `${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                                     }`}
                             >
@@ -90,19 +90,27 @@ export default function Settings() {
                                             >
                                                 <div className={`
                           w-full aspect-[4/3] rounded-xl md:rounded-2xl border-2 transition-all duration-500 overflow-hidden relative
-                          ${theme === t ? `border-transparent ring-2 ${accentClasses.focusRingClass} shadow-xl scale-105` : `${themeClasses.border} opacity-50 grayscale hover:grayscale-0 hover:opacity-100`}
+                          ${theme === t ? `border-transparent ring-1 ring-offset-2 ring-offset-transparent ring-${accentClasses.base} shadow-xl scale-105` : `${themeClasses.border} hover:scale-105 hover:shadow-lg`}
                         `}>
-                                                    <div className={`absolute inset-0 p-1.5 md:p-2 flex flex-col gap-1.5 md:gap-2 ${t === 'light' ? 'bg-[#fafafa]' :
+                                                    <div className={`absolute inset-0 p-1.5 md:p-2 flex flex-col gap-1.5 md:gap-2 ${t === 'light' ? 'bg-[#f4f4f5]' :
                                                         t === 'slate' ? 'bg-[#0f172a]' :
                                                             t === 'editor' ? 'bg-[#1e1e1e]' :
-                                                                t === 'violet' ? 'bg-[#1a1b26]' : 'bg-[#050505]'
+                                                                t === 'violet' ? 'bg-[#1a1b26]' : 'bg-[#0a0a0a]'
                                                         }`}>
-                                                        <div className={`h-2 md:h-2.5 w-3/4 rounded-full ${t === 'light' ? 'bg-gray-200' : 'bg-white/10'}`} />
+                                                        <div className={`h-2 md:h-2.5 w-3/4 rounded-full ${t === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
                                                         <div className="flex-1 grid grid-cols-2 gap-1.5 md:gap-2">
-                                                            <div className={`rounded-md md:rounded-lg ${t === 'light' ? 'bg-gray-100' : 'bg-white/5'}`} />
-                                                            <div className={`rounded-md md:rounded-lg ${t === 'light' ? 'bg-gray-100' : 'bg-white/5'}`} />
+                                                            <div className={`rounded-md md:rounded-lg ${t === 'light' ? 'bg-white shadow-sm' :
+                                                                t === 'slate' ? 'bg-[#1e293b]' :
+                                                                    t === 'editor' ? 'bg-[#252526]' :
+                                                                        t === 'violet' ? 'bg-[#24283b]' : 'bg-[#161616]'
+                                                                }`} />
+                                                            <div className={`rounded-md md:rounded-lg ${t === 'light' ? 'bg-white shadow-sm' :
+                                                                t === 'slate' ? 'bg-[#1e293b]' :
+                                                                    t === 'editor' ? 'bg-[#252526]' :
+                                                                        t === 'violet' ? 'bg-[#24283b]' : 'bg-[#161616]'
+                                                                }`} />
                                                         </div>
-                                                        <div className={`h-4 md:h-5 w-full rounded-md md:rounded-lg ${theme === t ? 'opacity-100 shadow-md' : 'opacity-30'} ${accentClasses.bgClass} transition-opacity duration-500`} />
+                                                        <div className={`h-4 md:h-5 w-full rounded-md md:rounded-lg ${theme === t ? 'opacity-100 shadow-md' : 'opacity-70'} ${accentClasses.bgClass} transition-opacity duration-500`} />
                                                     </div>
                                                 </div>
                                                 <span className={`text-[9px] font-black uppercase tracking-widest ${theme === t ? accentClasses.textClass : themeClasses.textSecondary}`}>
@@ -162,7 +170,7 @@ function ColorButton({ color, activeColor, onClick }: { color: AccentColor, acti
             onClick={onClick}
             className={`
                 relative w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl transition-all duration-500 group
-                ${isActive ? `ring-2 ring-offset-4 ring-offset-transparent ${colorClasses.focusRingClass} scale-110 shadow-lg` : 'hover:scale-110 opacity-70 hover:opacity-100'}
+                ${isActive ? `ring-1 ring-offset-2 ring-offset-transparent ring-${colorClasses.base} scale-110 shadow-lg` : 'hover:scale-110'}
                 ${colorClasses.bgClass}
             `}
         >

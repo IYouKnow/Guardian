@@ -120,19 +120,19 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
                   to={createPageUrl(item.page)}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300
+                    flex items-center gap-3 px-4 py-3 rounded-xl
                     ${isActive
-                      ? `${accentClasses.bgClass}/10 ${accentClasses.textClass} border-l-2 ${accentClasses.borderClass.replace('border-', 'border-')}`
+                      ? `${accentClasses.bgClass}/20 ${accentClasses.textClass} border-l-[3px] border-current shadow-sm`
                       : `${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                     }
                     ${isActive ? '' : `hover:${themeClasses.text}`}
                   `}
                 >
-                  <div className={`${isActive ? accentClasses.textClass : ''} transition-all duration-300`}>
+                  <div className={`${isActive ? accentClasses.textClass : ''}`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <span className={`font-medium ${isActive ? accentClasses.textClass : ''} transition-all duration-300`}>{item.name}</span>
-                  {isActive && <ChevronRight className={`w-4 h-4 ml-auto ${accentClasses.textClass} transition-all duration-300`} />}
+                  <span className={`font-medium ${isActive ? accentClasses.textClass : ''}`}>{item.name}</span>
+                  {isActive && <ChevronRight className={`w-4 h-4 ml-auto ${accentClasses.textClass}`} />}
                 </Link>
               );
             })}
