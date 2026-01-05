@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Theme, AccentColor } from "../types";
-import { getAccentColorClasses, getThemeClasses, AppearanceSettings, SettingsLayout } from "@guardian/shared";
+import { getAccentColorClasses, getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings } from "@guardian/shared";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SettingsProps {
@@ -12,9 +12,13 @@ interface SettingsProps {
   onItemSizeChange: (size: "small" | "medium" | "large") => void;
   accentColor: AccentColor;
   onAccentColorChange: (color: AccentColor) => void;
+  clipboardClearSeconds: number;
+  onClipboardClearSecondsChange: (seconds: number) => void;
+  revealCensorSeconds: number;
+  onRevealCensorSecondsChange: (seconds: number) => void;
 }
 
-type SettingsSection = "appearance" | "security" | "general";
+type SettingsSection = "appearance" | "security";
 
 const Icons = {
   Appearance: () => (
@@ -25,17 +29,6 @@ const Icons = {
   Security: () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-    </svg>
-  ),
-  General: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  Info: () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   )
 };
@@ -48,7 +41,11 @@ export default function Settings({
   itemSize,
   onItemSizeChange,
   accentColor,
-  onAccentColorChange
+  onAccentColorChange,
+  clipboardClearSeconds,
+  onClipboardClearSecondsChange,
+  revealCensorSeconds,
+  onRevealCensorSecondsChange
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -58,7 +55,6 @@ export default function Settings({
   const navItems = [
     { id: "appearance", label: "Appearance", icon: <Icons.Appearance /> },
     { id: "security", label: "Security", icon: <Icons.Security /> },
-    { id: "general", label: "General", icon: <Icons.General /> },
   ];
 
   return (
@@ -138,14 +134,6 @@ export default function Settings({
                 </div>
               </div>
 
-              <div className={`p-5 md:p-6 rounded-2xl md:rounded-3xl ${themeClasses.sectionBg} border ${themeClasses.border} flex flex-col sm:flex-row gap-4 md:gap-5 items-start sm:items-center shadow-lg transition-all`}>
-                <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 ${accentClasses.lightClass} ${accentClasses.textClass}`}>
-                  <Icons.Info />
-                </div>
-                <p className={`text-[9px] md:text-[10px] ${themeClasses.textSecondary} leading-relaxed font-bold tracking-tight max-w-sm`}>
-                  Display protocols are stored as metadata. Grid mode optimizes for visual recognition, while Table mode facilitates data auditing.
-                </p>
-              </div>
             </section>
           </motion.div>
         )}
@@ -156,53 +144,25 @@ export default function Settings({
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="space-y-16"
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="space-y-12 md:space-y-14"
           >
-            <header>
-              <h2 className="text-3xl font-black tracking-tight mb-3">Security Protocols</h2>
-              <p className={themeClasses.textSecondary}>Cryptographic and access control settings for your vault.</p>
+            <header className="md:hidden mb-8">
+              <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">Settings</h1>
             </header>
 
-            <div className={`p-16 rounded-[2.5rem] border-2 border-dashed ${themeClasses.border} ${themeClasses.sectionBg} text-center space-y-6`}>
-              <div className={`w-20 h-20 rounded-3xl mx-auto flex items-center justify-center ${themeClasses.hoverBg}`}>
-                <Icons.Security />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black tracking-tight">Advanced Guarding</h3>
-                <p className={`${themeClasses.textSecondary} text-sm max-w-sm mx-auto leading-relaxed`}>
-                  Multi-factor authentication and hardware key integration modules are being audited and will be deployed in a future security update.
-                </p>
-              </div>
-            </div>
+            <SecuritySettings
+              theme={theme}
+              accentColor={accentColor}
+              clipboardClearSeconds={clipboardClearSeconds}
+              onClipboardClearSecondsChange={onClipboardClearSecondsChange}
+              revealCensorSeconds={revealCensorSeconds}
+              onRevealCensorSecondsChange={onRevealCensorSecondsChange}
+            />
           </motion.div>
         )}
 
-        {activeSection === "general" && (
-          <motion.div
-            key="general"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-16"
-          >
-            <header>
-              <h2 className="text-3xl font-black tracking-tight mb-3">General Settings</h2>
-              <p className={themeClasses.textSecondary}>Global application parameters and system hooks.</p>
-            </header>
 
-            <div className={`p-16 rounded-[2.5rem] border-2 border-dashed ${themeClasses.border} ${themeClasses.sectionBg} text-center space-y-6`}>
-              <div className={`w-20 h-20 rounded-3xl mx-auto flex items-center justify-center ${themeClasses.hoverBg}`}>
-                <Icons.General />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black tracking-tight">System Modules</h3>
-                <p className={`${themeClasses.textSecondary} text-sm max-w-sm mx-auto leading-relaxed`}>
-                  Deep OS integration, auto-start, and telemetry-free update systems are currently in development.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </AnimatePresence>
     </SettingsLayout>
   );

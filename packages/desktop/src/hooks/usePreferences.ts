@@ -9,6 +9,8 @@ interface Preferences {
   itemSize: "small" | "medium" | "large";
   sidebarWidth: number;
   lastVaultPath: string | null;
+  clipboardClearSeconds: number;
+  revealCensorSeconds: number;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -18,6 +20,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   itemSize: "medium",
   sidebarWidth: 288,
   lastVaultPath: null,
+  clipboardClearSeconds: 10,
+  revealCensorSeconds: 5,
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -44,6 +48,8 @@ export function usePreferences() {
         const savedItemSize = await store.get<"small" | "medium" | "large">("itemSize");
         const savedSidebarWidth = await store.get<number>("sidebarWidth");
         const savedLastVaultPath = await store.get<string | null>("lastVaultPath");
+        const savedClipboardClearSeconds = await store.get<number>("clipboardClearSeconds");
+        const savedRevealCensorSeconds = await store.get<number>("revealCensorSeconds");
 
         setPreferences({
           theme: savedTheme ?? DEFAULT_PREFERENCES.theme,
@@ -52,6 +58,8 @@ export function usePreferences() {
           itemSize: savedItemSize ?? DEFAULT_PREFERENCES.itemSize,
           sidebarWidth: savedSidebarWidth ?? DEFAULT_PREFERENCES.sidebarWidth,
           lastVaultPath: savedLastVaultPath ?? DEFAULT_PREFERENCES.lastVaultPath,
+          clipboardClearSeconds: savedClipboardClearSeconds ?? DEFAULT_PREFERENCES.clipboardClearSeconds,
+          revealCensorSeconds: savedRevealCensorSeconds ?? DEFAULT_PREFERENCES.revealCensorSeconds,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -109,6 +117,16 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const setClipboardClearSeconds = useCallback(
+    (seconds: number) => updatePreference("clipboardClearSeconds", seconds),
+    [updatePreference]
+  );
+
+  const setRevealCensorSeconds = useCallback(
+    (seconds: number) => updatePreference("revealCensorSeconds", seconds),
+    [updatePreference]
+  );
+
   const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
     setPreferences((prev) => ({
       ...prev,
@@ -135,6 +153,8 @@ export function usePreferences() {
     setItemSize,
     setSidebarWidth,
     setLastVaultPath,
+    setClipboardClearSeconds,
+    setRevealCensorSeconds,
     loadFromVault,
   };
 }

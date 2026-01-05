@@ -46,6 +46,8 @@ function App() {
     setItemSize,
     setSidebarWidth,
     setLastVaultPath,
+    setClipboardClearSeconds,
+    setRevealCensorSeconds,
     loadFromVault,
   } = usePreferences();
 
@@ -61,6 +63,11 @@ function App() {
 
   const { toasts, removeToast, success, error: showError } = useToast();
 
+  // Wrap saveVaultFile to always include preferences
+  const handleSavePasswords = async (entries: any[]) => {
+    return saveVaultFile(entries, preferences);
+  };
+
   const {
     passwords,
     filteredPasswords,
@@ -74,8 +81,19 @@ function App() {
     loadPasswords,
     getVaultEntries,
   } = usePasswords({
-    onSave: saveVaultFile,
+    onSave: handleSavePasswords,
   });
+
+  // Debounced save for preferences
+  useEffect(() => {
+    if (preferencesLoading || !isAuthenticated) return;
+
+    const handler = setTimeout(() => {
+      saveVaultFile(getVaultEntries(), preferences);
+    }, 1000);
+
+    return () => clearTimeout(handler);
+  }, [preferences, saveVaultFile, getVaultEntries, preferencesLoading, isAuthenticated]);
 
   // Sidebar resize handlers
   useEffect(() => {
@@ -126,6 +144,12 @@ function App() {
 
   const handleCopyPassword = (password: string) => {
     copyToClipboard(password);
+
+    if (preferences.clipboardClearSeconds > 0) {
+      setTimeout(() => {
+        navigator.clipboard.writeText("");
+      }, preferences.clipboardClearSeconds * 1000);
+    }
   };
 
   const handleAddPassword = async (newPassword: any) => {
@@ -312,22 +336,14 @@ function App() {
                 theme={preferences.theme}
                 itemSize={preferences.itemSize}
                 accentColor={preferences.accentColor}
-                onAccentColorChange={(color) => {
-                  setAccentColor(color);
-                  saveVaultFile(getVaultEntries(), { ...preferences, accentColor: color });
-                }}
-                onThemeChange={(theme) => {
-                  setTheme(theme);
-                  saveVaultFile(getVaultEntries(), { ...preferences, theme });
-                }}
-                onViewModeChange={(mode) => {
-                  setViewMode(mode);
-                  saveVaultFile(getVaultEntries(), { ...preferences, viewMode: mode });
-                }}
-                onItemSizeChange={(size) => {
-                  setItemSize(size);
-                  saveVaultFile(getVaultEntries(), { ...preferences, itemSize: size });
-                }}
+                onAccentColorChange={setAccentColor}
+                onThemeChange={setTheme}
+                onViewModeChange={setViewMode}
+                onItemSizeChange={setItemSize}
+                clipboardClearSeconds={preferences.clipboardClearSeconds}
+                onClipboardClearSecondsChange={setClipboardClearSeconds}
+                revealCensorSeconds={preferences.revealCensorSeconds}
+                onRevealCensorSecondsChange={setRevealCensorSeconds}
               />
             </motion.div>
           ) : (
