@@ -72,7 +72,7 @@ export const SettingsLayout = ({
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto pb-20 px-2 md:px-4 scrollbar-hide min-w-0">
                     {/* Header for Mobile/Title */}
-                    <header className="md:hidden mb-8 flex items-center gap-4">
+                    <header className="md:hidden mb-6 flex items-center gap-4">
                         {onBack && (
                             <button onClick={onBack} className={`p-2 -ml-2 rounded-lg transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`}>
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -80,6 +80,23 @@ export const SettingsLayout = ({
                         )}
                         <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">{title}</h1>
                     </header>
+
+                    {/* Mobile Navigation (Horizontal Scroll) */}
+                    <div className="md:hidden mb-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
+                        {navItems.map((item) => (
+                            <button
+                                key={item.id}
+                                onClick={() => onSectionChange(item.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${activeSection === item.id
+                                        ? `${accentClasses.bgClass}/10 ${accentClasses.textClass} border-${accentColor}-400/20`
+                                        : `${themeClasses.inputBg} ${themeClasses.textSecondary} ${themeClasses.border}`
+                                    }`}
+                            >
+                                <span className={`w-4 h-4 ${activeSection === item.id ? '' : 'opacity-70'}`}>{item.icon}</span>
+                                {item.label}
+                            </button>
+                        ))}
+                    </div>
                     {children}
                 </div>
             </div>

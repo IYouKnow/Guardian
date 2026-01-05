@@ -64,6 +64,8 @@ export interface VaultSettings {
   accentColor?: string;
   viewMode?: "grid" | "table";
   itemSize?: "small" | "medium" | "large";
+  clipboardClearSeconds?: number;
+  revealCensorSeconds?: number;
 }
 
 export interface VaultEntry {
