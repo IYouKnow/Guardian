@@ -1,4 +1,4 @@
-import { Theme, AccentColor } from "../types";
+import type { Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 
 interface SidebarProps {

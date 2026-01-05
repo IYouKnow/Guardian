@@ -1,5 +1,6 @@
 import type { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
+import { getThemeClasses } from "../utils/theme";
 
 interface PasswordDetailProps {
   password: PasswordEntry;
@@ -18,80 +19,11 @@ export default function PasswordDetail({
   theme,
   accentColor,
 }: PasswordDetailProps) {
-  const getThemeClasses = () => {
-    if (theme === "light") {
-      return {
-        bg: "bg-[#fafafa]",
-        cardBg: "bg-white",
-        sectionBg: "bg-gray-100/30",
-        divider: "border-gray-100",
-        text: "text-gray-800",
-        textSecondary: "text-gray-500",
-        textTertiary: "text-gray-400",
-        inputBg: "bg-gray-50",
-        hoverBg: "hover:bg-gray-100",
-        border: "border-gray-200",
-      };
-    } else if (theme === "slate") {
-      return {
-        bg: "bg-[#0f172a]",
-        cardBg: "bg-slate-800/40",
-        sectionBg: "bg-slate-900/30",
-        divider: "border-slate-800/50",
-        text: "text-slate-100",
-        textSecondary: "text-slate-400",
-        textTertiary: "text-slate-500",
-        inputBg: "bg-slate-900/50",
-        hoverBg: "hover:bg-slate-800/50",
-        border: "border-slate-800",
-      };
-    } else if (theme === "editor") {
-      return {
-        bg: "bg-[#1e1e1e]",
-        cardBg: "bg-[#252526]/40",
-        sectionBg: "bg-[#121212]/30",
-        divider: "border-[#333333]",
-        text: "text-[#d4d4d4]",
-        textSecondary: "text-gray-300",
-        textTertiary: "text-gray-400",
-        inputBg: "bg-[#1e1e1e]",
-        hoverBg: "hover:bg-[#2a2d2e]/70",
-        border: "border-[#333333]",
-      };
-    } else if (theme === "violet") {
-      return {
-        bg: "bg-[#1a1b26]",
-        cardBg: "bg-[#24283b]/40",
-        sectionBg: "bg-[#16161e]/30",
-        divider: "border-[#414868]/20",
-        text: "text-[#a9b1d6]",
-        textSecondary: "text-gray-300",
-        textTertiary: "text-gray-400",
-        inputBg: "bg-[#16161e]",
-        hoverBg: "hover:bg-[#414868]/30",
-        border: "border-[#414868]/30",
-      };
-    } else {
-      return {
-        bg: "bg-[#050505]",
-        cardBg: "bg-[#0a0a0a]",
-        sectionBg: "bg-[#111111]/30",
-        divider: "border-white/10",
-        text: "text-white",
-        textSecondary: "text-gray-300",
-        textTertiary: "text-gray-500",
-        inputBg: "bg-[#0a0a0a]",
-        hoverBg: "hover:bg-white/10",
-        border: "border-white/10",
-      };
-    }
-  };
-
-  const themeClasses = getThemeClasses();
+  const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor);
 
   return (
-    <div className={`flex flex-col h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text} font-sans border-l ${themeClasses.border}`}>
+    <div className={`flex flex-col h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text} font-sans`}>
       {/* Mini Header */}
       <header className={`px-5 py-4 flex items-center justify-between shrink-0 border-b ${themeClasses.border}`}>
         <div className="flex items-center gap-3 min-w-0">
@@ -103,15 +35,6 @@ export default function PasswordDetail({
             <p className={`text-[10px] ${themeClasses.textTertiary}`}>Account Details</p>
           </div>
         </div>
-        <button
-          onClick={onBack}
-          className={`p-1.5 rounded-lg transition-all duration-300 ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.text}`}
-          title="Close"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </header>
 
       {/* Content Area */}
