@@ -37,7 +37,7 @@ export const AppearanceSettings = ({
             {/* Theme Selector */}
             <section>
                 <label className={`text-[9px] font-black uppercase tracking-[0.2em] mb-6 md:mb-8 block ${themeClasses.textTertiary}`}>Color Profile</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-5">
+                <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-5">
                     {themes.map((t) => {
                         const tClasses = getThemeClasses(t);
                         return (
@@ -50,7 +50,7 @@ export const AppearanceSettings = ({
                                     w-full aspect-[4/3] rounded-xl md:rounded-2xl border-2 transition-all duration-500 overflow-hidden relative
                                     ${theme === t
                                         ? `border-transparent ring-2 ${accentClasses.focusRingClass.replace('focus:', '')} shadow-xl scale-105`
-                                        : `${themeClasses.border} opacity-50 grayscale hover:grayscale-0 hover:opacity-100`
+                                        : `${themeClasses.border} opacity-80 hover:opacity-100`
                                     }
                                 `}>
                                     <div className={`absolute inset-0 p-1.5 md:p-2 flex flex-col gap-1.5 md:gap-2 ${tClasses.bg}`}>

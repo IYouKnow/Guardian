@@ -17,6 +17,7 @@ interface SettingsLayoutProps {
     theme: Theme;
     accentColor: AccentColor;
     children: React.ReactNode;
+    onBack?: () => void;
 }
 
 export const SettingsLayout = ({
@@ -27,7 +28,8 @@ export const SettingsLayout = ({
     onSectionChange,
     theme,
     accentColor,
-    children
+    children,
+    onBack
 }: SettingsLayoutProps) => {
     const themeClasses = getThemeClasses(theme);
     const accentClasses = getAccentColorClasses(accentColor);
@@ -70,7 +72,12 @@ export const SettingsLayout = ({
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto pb-20 px-2 md:px-4 scrollbar-hide min-w-0">
                     {/* Header for Mobile/Title */}
-                    <header className="md:hidden mb-8">
+                    <header className="md:hidden mb-8 flex items-center gap-4">
+                        {onBack && (
+                            <button onClick={onBack} className={`p-2 -ml-2 rounded-lg transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            </button>
+                        )}
                         <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">{title}</h1>
                     </header>
                     {children}
