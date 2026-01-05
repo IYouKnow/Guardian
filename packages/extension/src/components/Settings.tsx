@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { SettingsLayout } from "../../../shared/ui/SettingsLayout";
 import { AppearanceSettings } from "../../../shared/ui/AppearanceSettings";
+import { SecuritySettings } from "../../../shared/ui/SecuritySettings";
+import { getThemeClasses } from "../utils/theme";
+import { getAccentColorClasses } from "../utils/accentColors";
 import type { Theme, AccentColor } from "../types";
 
 interface SettingsProps {
@@ -8,6 +11,10 @@ interface SettingsProps {
     onThemeChange: (theme: Theme) => void;
     accentColor: AccentColor;
     onAccentColorChange: (color: AccentColor) => void;
+    clipboardClearSeconds: number;
+    onClipboardClearSecondsChange: (seconds: number) => void;
+    revealCensorSeconds: number;
+    onRevealCensorSecondsChange: (seconds: number) => void;
     onBack: () => void;
     onLogout: () => void;
 }
@@ -17,10 +24,16 @@ export default function Settings({
     onThemeChange,
     accentColor,
     onAccentColorChange,
+    clipboardClearSeconds,
+    onClipboardClearSecondsChange,
+    revealCensorSeconds,
+    onRevealCensorSecondsChange,
     onBack,
     onLogout,
 }: SettingsProps) {
     const [activeSection, setActiveSection] = useState("appearance");
+    const themeClasses = getThemeClasses(theme);
+    const accentClasses = getAccentColorClasses(accentColor);
 
     const navItems = [
         {
@@ -33,11 +46,11 @@ export default function Settings({
             ),
         },
         {
-            id: "logout",
-            label: "Lock Vault",
+            id: "security",
+            label: "Security",
             icon: (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
             )
         }
@@ -67,6 +80,18 @@ export default function Settings({
                         accentColor={accentColor}
                         onThemeChange={onThemeChange}
                         onAccentColorChange={onAccentColorChange}
+                        showTitle={true}
+                    />
+                )}
+
+                {activeSection === "security" && (
+                    <SecuritySettings
+                        theme={theme}
+                        accentColor={accentColor}
+                        clipboardClearSeconds={clipboardClearSeconds}
+                        onClipboardClearSecondsChange={onClipboardClearSecondsChange}
+                        revealCensorSeconds={revealCensorSeconds}
+                        onRevealCensorSecondsChange={onRevealCensorSecondsChange}
                         showTitle={true}
                     />
                 )}

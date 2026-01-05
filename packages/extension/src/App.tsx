@@ -45,6 +45,8 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>("dark");
   const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
+  const [clipboardClearSeconds, setClipboardClearSeconds] = useState(10);
+  const [revealCensorSeconds, setRevealCensorSeconds] = useState(5);
   const [loginMode, setLoginMode] = useState<"local" | "server">("local");
 
   const filePollIntervalRef = useRef<number | null>(null);
@@ -61,6 +63,8 @@ function App() {
         const settings = await loadSettings();
         if (settings.theme) setTheme(settings.theme as Theme);
         if (settings.accentColor) setAccentColor(settings.accentColor as AccentColor);
+        if (settings.clipboardClearSeconds) setClipboardClearSeconds(settings.clipboardClearSeconds);
+        if (settings.revealCensorSeconds) setRevealCensorSeconds(settings.revealCensorSeconds);
 
         // 1. Get stored session from service worker
         const session = await new Promise<{ isLoggedIn: boolean; passwords: PasswordEntry[]; lastModified: number, mode?: 'local' | 'server' }>((resolve) => {
@@ -106,6 +110,25 @@ function App() {
 
     initApp();
   }, []);
+
+  // Debounced settings save
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const current = await loadSettings();
+        await saveSettings({
+          ...current,
+          theme,
+          accentColor,
+          clipboardClearSeconds,
+          revealCensorSeconds
+        });
+      } catch (e) {
+        console.error("Failed to auto-save settings", e);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [theme, accentColor, clipboardClearSeconds, revealCensorSeconds]);
 
   // Cleanup polling
   useEffect(() => {
@@ -248,17 +271,13 @@ function App() {
       return (
         <Settings
           theme={theme}
-          onThemeChange={async (t: Theme) => {
-            setTheme(t);
-            const s = await loadSettings();
-            saveSettings({ ...s, theme: t });
-          }}
+          onThemeChange={setTheme}
           accentColor={accentColor}
-          onAccentColorChange={async (c: AccentColor) => {
-            setAccentColor(c);
-            const s = await loadSettings();
-            saveSettings({ ...s, accentColor: c });
-          }}
+          onAccentColorChange={setAccentColor}
+          clipboardClearSeconds={clipboardClearSeconds}
+          onClipboardClearSecondsChange={setClipboardClearSeconds}
+          revealCensorSeconds={revealCensorSeconds}
+          onRevealCensorSecondsChange={setRevealCensorSeconds}
           onBack={() => setShowSettings(false)}
           onLogout={handleLogout}
         />
@@ -289,7 +308,12 @@ function App() {
                     </svg>
                   </button>
                 )}
-                <button onClick={() => setShowSettings(true)} className={`p-1 rounded-md transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`}>
+                <button onClick={handleLogout} className={`p-1 rounded-md transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`} title="Lock Vault">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </button>
+                <button onClick={() => setShowSettings(true)} className={`p-1 rounded-md transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`} title="Settings">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -322,7 +346,14 @@ function App() {
                 passwords={filteredPasswords}
                 onCardClick={setSelectedPassword}
                 onCopyUsername={(username) => navigator.clipboard.writeText(username)}
-                onCopyPassword={(password) => navigator.clipboard.writeText(password)}
+                onCopyPassword={(password) => {
+                  navigator.clipboard.writeText(password);
+                  if (clipboardClearSeconds > 0) {
+                    setTimeout(() => {
+                      navigator.clipboard.writeText("");
+                    }, clipboardClearSeconds * 1000);
+                  }
+                }}
                 theme={theme}
                 accentColor={accentColor}
                 selectedId={selectedPassword?.id}
@@ -346,10 +377,18 @@ function App() {
                 <PasswordDetail
                   password={selectedPassword}
                   onCopyUsername={() => navigator.clipboard.writeText(selectedPassword.username)}
-                  onCopyPassword={() => navigator.clipboard.writeText(selectedPassword.password)}
+                  onCopyPassword={() => {
+                    navigator.clipboard.writeText(selectedPassword.password);
+                    if (clipboardClearSeconds > 0) {
+                      setTimeout(() => {
+                        navigator.clipboard.writeText("");
+                      }, clipboardClearSeconds * 1000);
+                    }
+                  }}
                   onBack={() => setSelectedPassword(null)}
                   theme={theme}
                   accentColor={accentColor}
+                  revealCensorSeconds={revealCensorSeconds}
                 />
               </motion.div>
             ) : (

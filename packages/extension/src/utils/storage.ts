@@ -15,6 +15,8 @@ export interface ExtensionSettings {
   theme?: "dark" | "slate" | "light" | "editor" | "violet";
   accentColor?: "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
   autoLockMinutes?: number;
+  clipboardClearSeconds?: number;
+  revealCensorSeconds?: number;
 }
 
 export interface SessionData {
@@ -46,10 +48,10 @@ function getStorage(): chrome.storage.StorageArea {
 export async function saveVault(masterPassword: string, entries: VaultEntry[]): Promise<void> {
   try {
     const encryptedVault = await createVault(masterPassword, entries);
-    
+
     // Convert Uint8Array to base64 for storage
     const base64Vault = btoa(String.fromCharCode(...encryptedVault));
-    
+
     await getStorage().set({ [VAULT_STORAGE_KEY]: base64Vault });
   } catch (error) {
     console.error("Error saving vault:", error);
@@ -64,19 +66,19 @@ export async function loadVaultFromStorage(masterPassword: string): Promise<Vaul
   try {
     const result = await getStorage().get(VAULT_STORAGE_KEY);
     const base64Vault = result[VAULT_STORAGE_KEY];
-    
+
     if (!base64Vault) {
       // No vault exists, return empty array
       return [];
     }
-    
+
     // Convert base64 back to Uint8Array
     const binaryString = atob(base64Vault);
     const vaultBytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       vaultBytes[i] = binaryString.charCodeAt(i);
     }
-    
+
     const decryptedVault = await loadVault(masterPassword, vaultBytes);
     return decryptedVault.entries;
   } catch (error) {

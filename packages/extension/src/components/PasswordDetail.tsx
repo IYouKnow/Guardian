@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { getThemeClasses } from "../utils/theme";
@@ -9,6 +11,7 @@ interface PasswordDetailProps {
   onBack: () => void;
   theme: Theme;
   accentColor: AccentColor;
+  revealCensorSeconds?: number;
 }
 
 export default function PasswordDetail({
@@ -18,103 +21,211 @@ export default function PasswordDetail({
   onBack,
   theme,
   accentColor,
+  revealCensorSeconds = 5,
 }: PasswordDetailProps) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedUser, setCopiedUser] = useState(false);
+  const [copiedPass, setCopiedPass] = useState(false);
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor);
 
+  const handleCopyUser = () => {
+    onCopyUsername();
+    setCopiedUser(true);
+    setTimeout(() => setCopiedUser(false), 2000);
+  };
+
+  const handleCopyPass = () => {
+    onCopyPassword();
+    setCopiedPass(true);
+    setTimeout(() => setCopiedPass(false), 2000);
+  };
+
   return (
     <div className={`flex flex-col h-full overflow-hidden ${themeClasses.bg} ${themeClasses.text} font-sans`}>
-      {/* Mini Header */}
-      <header className={`px-5 py-4 flex items-center justify-between shrink-0 border-b ${themeClasses.border}`}>
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-sm shrink-0`}>
+      {/* Modern Header - Horizontal */}
+      <div className="pt-6 pb-6 px-6 flex items-center gap-4 shrink-0">
+        <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center shadow-lg shrink-0`}>
+          <span className={`text-2xl font-bold ${accentClasses.textClass}`}>
             {password.title.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold truncate">{password.title}</h1>
-            <p className={`text-[10px] ${themeClasses.textTertiary}`}>Account Details</p>
-          </div>
+          </span>
         </div>
-      </header>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <h1 className="text-xl font-bold tracking-tight truncate">{password.title}</h1>
+          <p className={`text-xs ${themeClasses.textTertiary} mt-0.5 font-medium tracking-wide uppercase truncate`}>
+            {password.website || "No Website"}
+          </p>
+        </div>
+      </div>
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-hide">
-        {/* BREACH STATUS */}
-        {password.breached && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-6 h-6 bg-red-500/20 rounded-lg flex items-center justify-center shrink-0">
-              <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-red-500">Security Alert</p>
-              <p className="text-[10px] text-red-500/80 leading-tight">This password was found in a known data breach.</p>
-            </div>
-          </div>
-        )}
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-5">
 
-        {/* USERNAME SECTION */}
-        <section className="space-y-1.5">
-          <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Username</label>
-          <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3 relative group`}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium tracking-wide truncate">{password.username || "None"}</p>
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={handleCopyUser}
+            className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl ${themeClasses.inputBg} border ${themeClasses.border} hover:border-${accentColor}-400/50 hover:bg-${accentColor}-400/5 transition-all group`}
+          >
+            <div className={`p-2 rounded-full ${themeClasses.bg} group-hover:bg-${accentColor}-400/20 text-${accentColor}-400 transition-colors relative`}>
+              <AnimatePresence mode="wait">
+                {copiedUser ? (
+                  <motion.div
+                    key="check"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="copy"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                  >
+                    <svg className={`w-5 h-5 ${themeClasses.textSecondary} group-hover:${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <span className="text-[10px] font-semibold text-center opacity-70 group-hover:opacity-100">
+              {copiedUser ? "Copied!" : "Copy User"}
+            </span>
+          </button>
+
+          <button
+            onClick={handleCopyPass}
+            className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl ${themeClasses.inputBg} border ${themeClasses.border} hover:border-${accentColor}-400/50 hover:bg-${accentColor}-400/5 transition-all group`}
+          >
+            <div className={`p-2 rounded-full ${themeClasses.bg} group-hover:bg-${accentColor}-400/20 text-${accentColor}-400 transition-colors relative`}>
+              <AnimatePresence mode="wait">
+                {copiedPass ? (
+                  <motion.div
+                    key="check"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="copy"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                  >
+                    <svg className={`w-5 h-5 ${themeClasses.textSecondary} group-hover:${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <span className="text-[10px] font-semibold text-center opacity-70 group-hover:opacity-100">
+              {copiedPass ? "Copied!" : "Copy Pass"}
+            </span>
+          </button>
+        </div>
+
+        {/* Credentials Card */}
+        <div className={`rounded-2xl border ${themeClasses.border} overflow-hidden`}>
+          {/* Username Row */}
+          <div className={`p-3 flex items-center justify-between border-b ${themeClasses.border} ${themeClasses.inputBg}/50`}>
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-transparent`}>
+                <svg className={`w-4 h-4 ${themeClasses.textTertiary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
               </div>
-              <button
-                onClick={onCopyUsername}
-                className={`p-2 rounded-lg ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${accentClasses.textClass} transition-all active:scale-90`}
-                title="Copy Username"
-              >
-                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* PASSWORD SECTION */}
-        <section className="space-y-1.5">
-          <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Password</label>
-          <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3 relative group`}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-mono tracking-wider truncate">{password.password}</p>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">Username / Email</span>
+                <span className="text-xs truncate font-medium select-all">{password.username || "—"}</span>
               </div>
-              <button
-                onClick={onCopyPassword}
-                className={`p-2 rounded-lg ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${accentClasses.textClass} transition-all active:scale-90`}
-                title="Copy Password"
-              >
-                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
-              </button>
             </div>
           </div>
-        </section>
 
-        {/* WEBSITE SECTION */}
-        {password.website && (
-          <section className="space-y-1.5">
-            <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Website</label>
-            <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3`}>
-              <p className="text-sm truncate">{password.website}</p>
+          {/* Password Row */}
+          <div className={`p-3 flex items-center justify-between ${themeClasses.inputBg}/50 relative`}>
+            <div className="flex items-center gap-3 overflow-hidden w-full">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-transparent`}>
+                <svg className={`w-4 h-4 ${themeClasses.textTertiary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">Password</span>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs truncate font-mono font-medium ${showPassword ? "" : "blur-sm opacity-60"} transition-all duration-300 select-none`}>
+                    {password.password}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const nextState = !showPassword;
+                      setShowPassword(nextState);
+                      if (nextState) {
+                        // Only auto-hide if setting is > 0 (0 means never)
+                        if (revealCensorSeconds > 0) {
+                          setTimeout(() => setShowPassword(false), revealCensorSeconds * 1000);
+                        }
+                      }
+                    }}
+                    className={`p-1.5 rounded-md ${themeClasses.hoverBg} ${themeClasses.textTertiary} hover:${themeClasses.activeText} transition-colors`}
+                  >
+                    {showPassword ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
-          </section>
+          </div>
+          {password.passwordStrength && (
+            <div className={`h-1 w-full flex`}>
+              <div className={`h-full flex-1 ${password.passwordStrength === 'weak' ? 'bg-red-500' : 'bg-green-500'} opacity-50`}></div>
+              <div className={`h-full flex-1 ${['medium', 'strong', 'very-strong'].includes(password.passwordStrength) ? 'bg-green-500' : 'bg-transparent'} opacity-50`}></div>
+              <div className={`h-full flex-1 ${['strong', 'very-strong'].includes(password.passwordStrength) ? 'bg-green-500' : 'bg-transparent'} opacity-50`}></div>
+            </div>
+          )}
+        </div>
+
+        {/* Additional Info */}
+        {(password.website || password.notes) && (
+          <div className="space-y-4">
+            {password.website && (
+              <a
+                href={password.website.startsWith('http') ? password.website : `https://${password.website}`}
+                target="_blank"
+                rel="noreferrer"
+                className={`flex items-center gap-3 p-3 rounded-xl ${themeClasses.inputBg} border ${themeClasses.border} group hover:border-${accentColor}-400/50 transition-all`}
+              >
+                <div className={`p-2 rounded-lg bg-${accentColor}-400/10 text-${accentColor}-400 group-hover:bg-${accentColor}-400 group-hover:text-black transition-all`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider opacity-50">Website</p>
+                  <p className="text-xs truncate font-medium group-hover:underline">{password.website}</p>
+                </div>
+                <svg className={`w-4 h-4 ${themeClasses.textTertiary} group-hover:${themeClasses.activeText}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+              </a>
+            )}
+
+            {password.notes && (
+              <div className={`p-4 rounded-xl ${themeClasses.inputBg} border ${themeClasses.border}`}>
+                <p className="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-2">Notes</p>
+                <p className={`text-xs ${themeClasses.textSecondary} whitespace-pre-wrap leading-relaxed font-mono`}>{password.notes}</p>
+              </div>
+            )}
+          </div>
         )}
 
-        {/* NOTES SECTION */}
-        {password.notes && (
-          <section className="space-y-1.5">
-            <label className={`block text-[10px] font-medium ${themeClasses.textTertiary} ml-1`}>Notes</label>
-            <div className={`${themeClasses.inputBg} border ${themeClasses.border} rounded-xl p-3`}>
-              <p className={`text-xs ${themeClasses.textSecondary} whitespace-pre-wrap leading-relaxed`}>{password.notes}</p>
-            </div>
-          </section>
-        )}
+        {/* Delete / Danger Zone (Placeholder for future) */}
       </div>
     </div>
   );
