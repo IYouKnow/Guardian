@@ -1,0 +1,38 @@
+# Node / pnpm
+node_modules/
+dist/
+*.log
+pnpm-lock.yaml
+
+# Vite
+.env
+.env.*.local
+.vite/
+
+# Tauri
+packages/desktop/src-tauri/target/
+packages/desktop/src-tauri/gen/
+packages/desktop/src-tauri/Cargo.lock
+
+# Capacitor
+packages/app/android/
+packages/app/ios/
+packages/app/capacitor.config.ts.bak
+packages/app/.capacitor/
+
+# OS junk (Windows)
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Extension builds
+packages/extension/dist/
+packages/extension/.vite/
