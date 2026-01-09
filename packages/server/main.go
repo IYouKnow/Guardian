@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -9,8 +10,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,11 +23,53 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const userIDKey contextKey = "user_id"
+
 // --- Configuration ---
-const (
-	SecretKey     = "super-secret-change-me" // In production, load from ENV
+var (
+	SecretKey     string
 	TokenDuration = 24 * time.Hour
 )
+
+func init() {
+	// Try to load .env file if it exists
+	loadEnv()
+
+	SecretKey = os.Getenv("JWT_SECRET")
+	if SecretKey == "" {
+		log.Println("WARNING: JWT_SECRET environment variable is not set.")
+		log.Fatal("Please set JWT_SECRET in your .env file or environment variables to secure your tokens.")
+	}
+}
+
+// loadEnv is a simple helper to load .env files without external dependencies
+func loadEnv() {
+	f, err := os.Open(".env")
+	if err != nil {
+		return // No .env file, skip
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			// Only set if not already set in environment
+			if os.Getenv(key) == "" {
+				os.Setenv(key, val)
+			}
+		}
+	}
+}
 
 type Config struct {
 	Port    string
@@ -111,8 +157,13 @@ type Server struct {
 
 func main() {
 	// 1. Configuration
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	config := Config{
-		Port:    "8080",
+		Port:    port,
 		DataDir: "./data",
 	}
 
@@ -176,11 +227,36 @@ func main() {
 		staticFileServer.ServeHTTP(w, r)
 	})
 
-	// 7. Start Server with CORS
-	logger.Printf("Server listening on http://localhost:%s", config.Port)
-	if err := http.ListenAndServe(":"+config.Port, corsHandler(mux)); err != nil {
-		logger.Fatalf("Server failed: %v", err)
+	// 7. Setup HTTP Server with graceful shutdown
+	httpServer := &http.Server{
+		Addr:    ":" + config.Port,
+		Handler: corsHandler(mux),
 	}
+
+	// Channel to listen for interrupt signals
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Start server in goroutine
+	go func() {
+		logger.Printf("Server listening on http://localhost:%s", config.Port)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-stop
+	logger.Println("Shutting down server...")
+
+	// Create shutdown context with timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Fatalf("Server shutdown failed: %v", err)
+	}
+	logger.Println("Server stopped gracefully")
 }
 
 // --- DB Init ---
@@ -290,7 +366,7 @@ func (s *Server) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), "user_id", userID)
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next(w, r.WithContext(ctx))
 	}
 }
@@ -312,7 +388,7 @@ func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "user_id", userID)
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next(w, r.WithContext(ctx))
 	}
 }
@@ -519,7 +595,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := createToken(id, req.Username)
+	token, err := createToken(id)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -534,7 +610,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 // --- Vault Handlers ---
 
 func (s *Server) getUserDB(ctx context.Context) (*sql.DB, error) {
-	userID := ctx.Value("user_id").(int)
+	userID := ctx.Value(userIDKey).(int)
 
 	var dbFilename string
 	err := s.systemDB.QueryRow("SELECT db_path FROM users WHERE id = ?", userID).Scan(&dbFilename)
@@ -575,6 +651,11 @@ func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Database iteration error", http.StatusInternalServerError)
+		return
 	}
 
 	writeJSON(w, http.StatusOK, items)
@@ -634,15 +715,17 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 
 // --- Admin Handlers ---
 
-func generateInviteToken() string {
+func generateInviteToken() (string, error) {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
 	for i := 0; i < 16; i++ {
 		b[i] = charset[b[i]%byte(len(charset))]
 	}
 	s := string(b)
-	return fmt.Sprintf("GRDN-%s-%s-%s-%s", s[0:4], s[4:8], s[8:12], s[12:16])
+	return fmt.Sprintf("GRDN-%s-%s-%s-%s", s[0:4], s[4:8], s[8:12], s[12:16]), nil
 }
 
 func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
@@ -686,11 +769,16 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 		invites = append(invites, inv)
 	}
 
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Database iteration error", http.StatusInternalServerError)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, invites)
 }
 
 func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(int)
+	userID := r.Context().Value(userIDKey).(int)
 
 	var req CreateInviteRequest
 	if r.ContentLength > 0 {
@@ -705,7 +793,12 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 		req.MaxUses = 1
 	}
 
-	token := generateInviteToken()
+	token, err := generateInviteToken()
+	if err != nil {
+		s.logger.Println("Token generation error:", err)
+		http.Error(w, "Failed to generate invite token", http.StatusInternalServerError)
+		return
+	}
 
 	var expiresAt *time.Time
 	if req.ExpiresIn != "" && req.ExpiresIn != "never" {
@@ -727,7 +820,7 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, err := s.systemDB.Exec(`
+	_, err = s.systemDB.Exec(`
 		INSERT INTO invites (token, created_by, expires_at, expires_in, max_uses, note, status) 
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, token, userID, expiresAt, req.ExpiresIn, req.MaxUses, req.Note, "ACTIVE")
@@ -758,15 +851,21 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if id == "" {
+	idStr := r.PathValue("id")
+	if idStr == "" {
 		http.Error(w, "Missing invite ID", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid invite ID format", http.StatusBadRequest)
 		return
 	}
 
 	// Rule: Only delete if not used
 	var useCount int
-	err := s.systemDB.QueryRow("SELECT use_count FROM invites WHERE id = ?", id).Scan(&useCount)
+	err = s.systemDB.QueryRow("SELECT use_count FROM invites WHERE id = ?", id).Scan(&useCount)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Invite not found", http.StatusNotFound)
 		return
@@ -833,12 +932,17 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Database iteration error", http.StatusInternalServerError)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, users)
 }
 
 // --- Helpers ---
 
-func createToken(userID int, username string) (string, error) {
+func createToken(userID int) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID,
 		"iss": "guardian-server",
