@@ -1,0 +1,30 @@
+# Guardian Server - Docker Compose
+# Standard setup using the pre-built image from GitHub
+
+services:
+  guardian-server:
+    container_name: guardian-server
+    image: ghcr.io/iyouknow/guardian-server:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - PORT=8080
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+    volumes:
+      - guardian-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - guardian-network
+
+volumes:
+  guardian-data:
+    name: guardian-data
+
+networks:
+  guardian-network:
+    name: guardian-network
