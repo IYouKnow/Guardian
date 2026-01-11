@@ -30,10 +30,23 @@ RUN pnpm --filter guardian-web exec vite build
 # ==========================================
 FROM golang:1.25-alpine AS server-builder
 WORKDIR /build
-COPY packages/server/go.mod packages/server/go.sum ./
+
+# Install git for private modules if needed, though not used here
+RUN apk add --no-cache git
+
+# Copy dependency files first for better caching
+COPY packages/server/go.mod ./
+COPY packages/server/go.sum ./
+
+# Download dependencies
 RUN go mod download
-COPY packages/server/*.go ./
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o server .
+
+# Copy the rest of the source
+COPY packages/server/main.go ./
+
+# Build the binary
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X 'main.Version=${VERSION}'" -o server .
 
 # ==========================================
 # STAGE 3: Final Server Image

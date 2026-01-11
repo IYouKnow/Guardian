@@ -3,6 +3,7 @@ name: Build and Publish Server
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "server-v*.*.*" ]
     paths:
       - 'packages/server/**'
       - 'packages/web/**'
@@ -41,14 +42,27 @@ jobs:
         id: repo_owner
         run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
 
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.repo_owner.outputs.owner }}/guardian-server
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=match,pattern=server-v(.*),group=1
+            type=match,pattern=server-v(\d+)\.\d+\.\d+,group=1
+            type=match,pattern=server-v(\d+\.\d+)\.\d+,group=1
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          # Use root as context so we can see shared/web/server
           context: .
           file: ./packages/server/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ steps.repo_owner.outputs.owner }}/guardian-server:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
