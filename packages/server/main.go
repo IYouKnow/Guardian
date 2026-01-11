@@ -32,6 +32,7 @@ const userIDKey contextKey = "user_id"
 var (
 	SecretKey     string
 	TokenDuration = 24 * time.Hour
+	Version       = "dev" // Default version, will be overridden by CI/CD during tagged builds
 )
 
 func init() {
@@ -427,7 +428,7 @@ func (s *Server) validateToken(r *http.Request) (int, error) {
 // --- Handlers ---
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "0.4.0-multi"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": Version})
 }
 
 func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
