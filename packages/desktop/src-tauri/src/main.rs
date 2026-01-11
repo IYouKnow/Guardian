@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    guardiandesktop_lib::run()
+    guardian_desktop_lib::run()
 }

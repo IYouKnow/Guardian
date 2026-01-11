@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Theme, AccentColor } from "../types";
-import { getAccentColorClasses, getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings } from "@guardian/shared";
+import { getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings } from "@guardian/shared";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SettingsProps {
@@ -50,7 +50,7 @@ export default function Settings({
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
   const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses(accentColor, theme);
+
 
   const navItems = [
     { id: "appearance", label: "Appearance", icon: <Icons.Appearance /> },

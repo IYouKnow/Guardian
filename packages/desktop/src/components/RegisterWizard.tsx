@@ -1,8 +1,9 @@
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
+import TitleBar from "./TitleBar";
 
 interface RegisterWizardProps {
   mode: "local" | "server";
@@ -203,162 +204,154 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
   };
 
   return (
-    <div className={`relative flex h-screen w-full font-sans ${themeClasses.bg} ${themeClasses.text} items-center justify-center p-6 overflow-hidden transition-colors duration-500`}>
-      {/* Background gradients */}
-      <div className={`absolute top-[-5%] right-[-5%] w-[35%] h-[35%] rounded-full blur-[100px] opacity-15 ${accentClasses.bgClass} transition-colors duration-700`} />
-      <div className={`absolute bottom-[-5%] left-[-5%] w-[35%] h-[35%] rounded-full blur-[100px] opacity-10 ${accentClasses.bgClass} transition-colors duration-700`} />
+    <div className={`relative flex flex-col h-screen w-full font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
+      <TitleBar theme={selectedTheme} accentColor={selectedAccentColor} />
 
-      <div className="relative z-10 w-full max-w-lg">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8"
-        >
-          <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl ${accentClasses.lightClass} border border-white/5 mb-4 shadow-xl`}>
-            <svg className={`w-7 h-7 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {mode === "server" ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              )}
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1">{mode === "server" ? "Join Server" : "Create Vault"}</h1>
-          <p className={`${themeClasses.textMuted} text-sm font-medium`}>Setup your secure storage</p>
-        </motion.div>
+      <div className="flex-1 flex items-center justify-center p-6 overflow-hidden relative">
+        {/* Background gradients */}
+        <div className={`absolute top-[-5%] right-[-5%] w-[35%] h-[35%] rounded-full blur-[100px] opacity-15 ${accentClasses.bgClass} transition-colors duration-700`} />
+        <div className={`absolute bottom-[-5%] left-[-5%] w-[35%] h-[35%] rounded-full blur-[100px] opacity-10 ${accentClasses.bgClass} transition-colors duration-700`} />
 
-        <motion.div
-          layout
-          className={`${themeClasses.card} rounded-[1.5rem] border ${themeClasses.border} overflow-hidden shadow-2xl relative`}
-        >
-          <div className="absolute top-0 left-0 w-full h-[2px] bg-white/5">
-            <motion.div
-              className={`h-full ${accentClasses.bgClass}`}
-              initial={{ width: 0 }}
-              animate={{ width: `${(currentStep / steps.length) * 100}%` }}
-              transition={{ duration: 0.4 }}
-            />
-          </div>
-
-          <div className="p-8">
-            <div className="flex items-center justify-between mb-8">
-              <span className={`text-[0.65rem] font-bold uppercase tracking-wider ${accentClasses.textClass}`}>
-                Step {currentStep} of {steps.length}
-              </span>
-              <div className="flex gap-1">
-                {steps.map((s) => (
-                  <div key={s.id} className={`h-1 rounded-full transition-all duration-300 ${currentStep === s.id ? `w-4 ${accentClasses.bgClass}` : `w-1 ${themeClasses.indicator}`}`} />
-                ))}
-              </div>
+        <div className="relative z-10 w-full max-w-md">
+          <motion.div
+            layout
+            className={`${themeClasses.card} rounded-[1.5rem] border ${themeClasses.border} overflow-hidden shadow-2xl relative`}
+          >
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-white/5">
+              <motion.div
+                className={`h-full ${accentClasses.bgClass}`}
+                initial={{ width: 0 }}
+                animate={{ width: `${(currentStep / steps.length) * 100}%` }}
+                transition={{ duration: 0.4 }}
+              />
             </div>
 
-            <form onSubmit={currentStep === steps.length ? handleFinish : (e) => { e.preventDefault(); handleNext(); }}>
-              <div className="min-h-[200px]">
-                <AnimatePresence mode="wait" custom={direction}>
-                  <motion.div
-                    key={currentStep} custom={direction} variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }}
-                  >
-                    <header className="mb-6">
-                      <h2 className="text-xl font-bold mb-1">{steps[currentStep - 1].title}</h2>
-                      <p className={`${themeClasses.textMuted} text-sm`}>
-                        {steps[currentStep - 1].description}
-                      </p>
-                    </header>
-
-                    {/* --- LOCAL STEPS --- */}
-                    {mode === "local" && (
-                      <>
-                        {currentStep === 1 && (
-                          <InputField label="Vault Name" placeholder="e.g. Work Documents" value={vaultName} onChange={(v: string) => { setVaultName(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
-                        )}
-                        {currentStep === 2 && (
-                          <div className="space-y-2">
-                            <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>File Path</label>
-                            <div className="flex gap-2">
-                              <div className={`flex-1 ${themeClasses.input} border ${themeClasses.border} rounded-xl px-4 py-3.5 flex items-center overflow-hidden`}>
-                                <span className={`text-sm truncate ${vaultPath ? themeClasses.text : themeClasses.textMuted}`}>{vaultPath || "Click browse to select..."}</span>
-                              </div>
-                              <button type="button" onClick={handleSelectLocation} className={`px-5 rounded-xl ${themeClasses.item} border ${themeClasses.border} hover:border-white/10 transition-colors font-bold text-[0.65rem] uppercase tracking-wider`}>Browse</button>
-                            </div>
-                            {error && <p className="text-red-400 text-xs font-medium ml-1">{error}</p>}
-                          </div>
-                        )}
-                        {currentStep === 3 && (
-                          <div className="space-y-4">
-                            <PasswordField label="Master Password" value={masterPassword} onChange={(v: string) => { setMasterPassword(v); setError(""); }} show={showPassword} setShow={setShowPassword} theme={themeClasses} accent={accentClasses} placeholder="Password" />
-                            <PasswordField label="Confirm Password" value={confirmPassword} onChange={(v: string) => { setConfirmPassword(v); setError(""); }} show={showConfirmPassword} setShow={setShowConfirmPassword} theme={themeClasses} accent={accentClasses} placeholder="Repeat password" error={error} />
-                          </div>
-                        )}
-                        {currentStep === 4 && (
-                          <div className="grid grid-cols-1 gap-2">
-                            {(["dark", "slate", "editor", "violet", "light"] as Theme[]).map((t) => (
-                              <ThemeOption key={t} id={t} selected={selectedTheme === t} onClick={() => setSelectedTheme(t)} theme={themeClasses} accent={accentClasses} />
-                            ))}
-                          </div>
-                        )}
-                        {currentStep === 5 && (
-                          <div className="grid grid-cols-4 gap-3">
-                            {(["yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"] as AccentColor[]).map((c) => (
-                              <ColorOption key={c} id={c} selected={selectedAccentColor === c} onClick={() => setSelectedAccentColor(c)} />
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* --- SERVER STEPS --- */}
-                    {mode === "server" && (
-                      <>
-                        {currentStep === 1 && (
-                          <InputField label="Server URL" placeholder="http://localhost:8080" value={serverUrl} onChange={(v: string) => { setServerUrl(v); setError(""); setServerStatus("CHECKING"); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
-                        )}
-                        {currentStep === 2 && (
-                          <div className="space-y-4">
-                            {serverStatus === "SETUP" && (
-                              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-200 mb-2">
-                                <strong>First Run Detected:</strong> You will be registered as the Server Administrator. No invite needed.
-                              </div>
-                            )}
-                            {serverStatus === "READY" && (
-                              <InputField label="Invite Token" placeholder="Paste your invite code" value={inviteToken} onChange={(v: string) => { setInviteToken(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus />
-                            )}
-
-                            <InputField label="Username" placeholder="jdoe" value={username} onChange={(v: string) => { setUsername(v); setError(""); }} theme={themeClasses} accent={accentClasses} />
-
-                            <PasswordField label="Account Password" value={masterPassword} onChange={(v: string) => { setMasterPassword(v); setError(""); }} show={showPassword} setShow={setShowPassword} theme={themeClasses} accent={accentClasses} placeholder="Password" />
-                            <PasswordField label="Confirm Password" value={confirmPassword} onChange={(v: string) => { setConfirmPassword(v); setError(""); }} show={showConfirmPassword} setShow={setShowConfirmPassword} theme={themeClasses} accent={accentClasses} placeholder="Repeat password" error={error} />
-                          </div>
-                        )}
-                        {currentStep === 3 && (
-                          <>
-                            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-xs text-yellow-200 mb-4">
-                              This enables you to have multiple database files on the server (e.g. "Personal", "Work").
-                            </div>
-                            <InputField label="Database Friendly Name (Optional)" placeholder={username} value={dbName} onChange={(v: string) => { setDbName(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
-                          </>
-                        )}
-                      </>
-                    )}
-
-                  </motion.div>
-                </AnimatePresence>
+            <div className="p-6 pt-8">
+              <div className="text-center mb-6">
+                <h1 className="text-2xl font-bold tracking-tight mb-0.5">{mode === "server" ? "Join Server" : "Create Vault"}</h1>
+                <p className={`${themeClasses.textMuted} text-xs font-medium`}>Setup your secure storage</p>
+              </div>
+              <div className="flex items-center justify-between mb-8">
+                <span className={`text-[0.65rem] font-bold uppercase tracking-wider ${accentClasses.textClass}`}>
+                  Step {currentStep} of {steps.length}
+                </span>
+                <div className="flex gap-1">
+                  {steps.map((s) => (
+                    <div key={s.id} className={`h-1 rounded-full transition-all duration-300 ${currentStep === s.id ? `w-4 ${accentClasses.bgClass}` : `w-1 ${themeClasses.indicator}`}`} />
+                  ))}
+                </div>
               </div>
 
-              <div className="flex items-center justify-between mt-10">
-                <button type="button" onClick={currentStep === 1 ? onBackToLogin : handlePrevious} className={`flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-                  {currentStep === 1 ? "Cancel" : "Back"}
-                </button>
+              <form onSubmit={currentStep === steps.length ? handleFinish : (e) => { e.preventDefault(); handleNext(); }}>
+                <div className="min-h-[200px]">
+                  <AnimatePresence mode="wait" custom={direction}>
+                    <motion.div
+                      key={currentStep} custom={direction} variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.2 }}
+                    >
+                      <header className="mb-6">
+                        <h2 className="text-xl font-bold mb-1">{steps[currentStep - 1].title}</h2>
+                        <p className={`${themeClasses.textMuted} text-sm`}>
+                          {steps[currentStep - 1].description}
+                        </p>
+                      </header>
 
-                <motion.button whileTap={{ scale: 0.98 }} type="submit" disabled={isCreating} className={`px-7 py-3 rounded-xl ${accentClasses.bgClass} text-black font-bold text-[0.65rem] uppercase tracking-wider shadow-lg ${accentClasses.shadowClass} disabled:opacity-50 flex items-center gap-2`}>
-                  {isCreating ? (
-                    <><div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />Creating...</>
-                  ) : (
-                    <>{currentStep === steps.length ? "Finish Setup" : "Continue"} <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg></>
-                  )}
-                </motion.button>
-              </div>
-            </form>
-          </div>
-        </motion.div>
+                      {/* --- LOCAL STEPS --- */}
+                      {mode === "local" && (
+                        <>
+                          {currentStep === 1 && (
+                            <InputField label="Vault Name" placeholder="e.g. Work Documents" value={vaultName} onChange={(v: string) => { setVaultName(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
+                          )}
+                          {currentStep === 2 && (
+                            <div className="space-y-2">
+                              <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>File Path</label>
+                              <div className="flex gap-2">
+                                <div className={`flex-1 ${themeClasses.input} border ${themeClasses.border} rounded-xl px-4 py-3.5 flex items-center overflow-hidden`}>
+                                  <span className={`text-sm truncate ${vaultPath ? themeClasses.text : themeClasses.textMuted}`}>{vaultPath || "Click browse to select..."}</span>
+                                </div>
+                                <button type="button" onClick={handleSelectLocation} className={`px-5 rounded-xl ${themeClasses.item} border ${themeClasses.border} hover:border-white/10 transition-colors font-bold text-[0.65rem] uppercase tracking-wider`}>Browse</button>
+                              </div>
+                              {error && <p className="text-red-400 text-xs font-medium ml-1">{error}</p>}
+                            </div>
+                          )}
+                          {currentStep === 3 && (
+                            <div className="space-y-4">
+                              <PasswordField label="Master Password" value={masterPassword} onChange={(v: string) => { setMasterPassword(v); setError(""); }} show={showPassword} setShow={setShowPassword} theme={themeClasses} accent={accentClasses} placeholder="Password" />
+                              <PasswordField label="Confirm Password" value={confirmPassword} onChange={(v: string) => { setConfirmPassword(v); setError(""); }} show={showConfirmPassword} setShow={setShowConfirmPassword} theme={themeClasses} accent={accentClasses} placeholder="Repeat password" error={error} />
+                            </div>
+                          )}
+                          {currentStep === 4 && (
+                            <div className="grid grid-cols-1 gap-2">
+                              {(["dark", "slate", "editor", "violet", "light"] as Theme[]).map((t) => (
+                                <ThemeOption key={t} id={t} selected={selectedTheme === t} onClick={() => setSelectedTheme(t)} theme={themeClasses} accent={accentClasses} />
+                              ))}
+                            </div>
+                          )}
+                          {currentStep === 5 && (
+                            <div className="grid grid-cols-4 gap-3">
+                              {(["yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"] as AccentColor[]).map((c) => (
+                                <ColorOption key={c} id={c} selected={selectedAccentColor === c} onClick={() => setSelectedAccentColor(c)} />
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* --- SERVER STEPS --- */}
+                      {mode === "server" && (
+                        <>
+                          {currentStep === 1 && (
+                            <InputField label="Server URL" placeholder="http://localhost:8080" value={serverUrl} onChange={(v: string) => { setServerUrl(v); setError(""); setServerStatus("CHECKING"); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
+                          )}
+                          {currentStep === 2 && (
+                            <div className="space-y-4">
+                              {serverStatus === "SETUP" && (
+                                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-200 mb-2">
+                                  <strong>First Run Detected:</strong> You will be registered as the Server Administrator. No invite needed.
+                                </div>
+                              )}
+                              {serverStatus === "READY" && (
+                                <InputField label="Invite Token" placeholder="Paste your invite code" value={inviteToken} onChange={(v: string) => { setInviteToken(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus />
+                              )}
+
+                              <InputField label="Username" placeholder="jdoe" value={username} onChange={(v: string) => { setUsername(v); setError(""); }} theme={themeClasses} accent={accentClasses} />
+
+                              <PasswordField label="Account Password" value={masterPassword} onChange={(v: string) => { setMasterPassword(v); setError(""); }} show={showPassword} setShow={setShowPassword} theme={themeClasses} accent={accentClasses} placeholder="Password" />
+                              <PasswordField label="Confirm Password" value={confirmPassword} onChange={(v: string) => { setConfirmPassword(v); setError(""); }} show={showConfirmPassword} setShow={setShowConfirmPassword} theme={themeClasses} accent={accentClasses} placeholder="Repeat password" error={error} />
+                            </div>
+                          )}
+                          {currentStep === 3 && (
+                            <>
+                              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-xs text-yellow-200 mb-4">
+                                This enables you to have multiple database files on the server (e.g. "Personal", "Work").
+                              </div>
+                              <InputField label="Database Friendly Name (Optional)" placeholder={username} value={dbName} onChange={(v: string) => { setDbName(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
+                            </>
+                          )}
+                        </>
+                      )}
+
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                <div className="flex items-center justify-between mt-10">
+                  <button type="button" onClick={currentStep === 1 ? onBackToLogin : handlePrevious} className={`flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                    {currentStep === 1 ? "Cancel" : "Back"}
+                  </button>
+
+                  <motion.button whileTap={{ scale: 0.98 }} type="submit" disabled={isCreating} className={`px-7 py-3 rounded-xl ${accentClasses.bgClass} text-black font-bold text-[0.65rem] uppercase tracking-wider shadow-lg ${accentClasses.shadowClass} disabled:opacity-50 flex items-center gap-2`}>
+                    {isCreating ? (
+                      <><div className="w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />Creating...</>
+                    ) : (
+                      <>{currentStep === steps.length ? "Finish Setup" : "Continue"} <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg></>
+                    )}
+                  </motion.button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -367,26 +360,26 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
 // Reusable Sub-components
 function InputField({ label, placeholder, value, onChange, theme, accent, autoFocus = false, error }: any) {
   return (
-    <div className="space-y-2">
-      <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${theme.textMuted}`}>{label}</label>
-      <input autoFocus={autoFocus} type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full ${theme.input} border ${theme.border} focus:${accent.borderClass} rounded-xl px-4 py-3.5 ${theme.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accent.focusRingClass}`} />
-      {error && <p className="text-red-400 text-xs font-medium ml-1">{error}</p>}
+    <div className="space-y-1.5">
+      <label className={`block text-[0.6rem] font-bold uppercase tracking-wider ${theme.textMuted}`}>{label}</label>
+      <input autoFocus={autoFocus} type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full ${theme.input} border ${theme.border} focus:${accent.borderClass} rounded-xl px-4 py-3 ${theme.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accent.focusRingClass}`} />
+      {error && <p className="text-red-400 text-[0.65rem] font-medium ml-1">{error}</p>}
     </div>
   );
 }
 
 function PasswordField({ label, value, onChange, show, setShow, theme, accent, placeholder, error }: any) {
   return (
-    <div className="space-y-2">
-      <label className={`block text-[0.65rem] font-bold uppercase tracking-wider ${theme.textMuted}`}>{label}</label>
+    <div className="space-y-1.5">
+      <label className={`block text-[0.6rem] font-bold uppercase tracking-wider ${theme.textMuted}`}>{label}</label>
       <div className="relative">
-        <input type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full ${theme.input} border ${theme.border} focus:${accent.borderClass} rounded-xl px-4 py-4 pr-12 ${theme.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accent.focusRingClass}`} />
+        <input type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`w-full ${theme.input} border ${theme.border} focus:${accent.borderClass} rounded-xl px-4 py-3 pr-12 ${theme.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accent.focusRingClass}`} />
         <button type="button" onClick={() => setShow(!show)} className={`absolute right-4 top-1/2 -translate-y-1/2 ${theme.textMuted} hover:${theme.text} transition-colors p-1`}>
           {show ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
             : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>}
         </button>
       </div>
-      {error && <p className="text-red-400 text-xs font-medium ml-1">{error}</p>}
+      {error && <p className="text-red-400 text-[0.65rem] font-medium ml-1">{error}</p>}
     </div>
   );
 }
@@ -415,3 +408,4 @@ function ColorOption({ id, selected, onClick }: any) {
     </button>
   );
 }
+

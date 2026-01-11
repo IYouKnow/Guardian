@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
-import { Theme, AccentColor } from "./types";
+
 import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
+import TitleBar from "./components/TitleBar";
 import PasswordGrid from "./components/PasswordGrid";
 import PasswordTable from "./components/PasswordTable";
 import AddPasswordModal from "./components/AddPasswordModal";
@@ -288,122 +289,126 @@ function App() {
   }
 
   return (
-    <div className={`relative flex h-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
-      {/* Global Background Elements */}
-      <div className={`absolute top-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-10 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
-      <div className={`absolute bottom-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-5 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
+    <div className={`relative flex flex-col h-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
+      <TitleBar theme={preferences.theme} accentColor={preferences.accentColor} />
 
-      <div
-        ref={sidebarRef}
-        style={{ width: `${preferences.sidebarWidth}px` }}
-        className="flex-shrink-0 relative z-30"
-      >
-        <Sidebar
-          categories={categories}
-          activeCategory={activeCategory}
-          onCategoryChange={(category) => {
-            setActiveCategory(category);
-            setShowSettings(false);
-          }}
-          onAddPassword={() => setShowAddModal(true)}
-          onLogout={handleLogout}
-          onSettings={() => setShowSettings(!showSettings)}
-          showSettings={showSettings}
-          theme={preferences.theme}
-          accentColor={preferences.accentColor}
-        />
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Global Background Elements */}
+        <div className={`absolute top-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-10 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
+        <div className={`absolute bottom-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-5 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
 
-        {/* Resize handle */}
         <div
-          onMouseDown={(e) => { e.preventDefault(); setIsResizing(true); }}
-          className={`absolute top-0 right-0 h-full cursor-col-resize z-40 transition-all ${isResizing ? "bg-white/10" : "bg-transparent hover:bg-white/5"}`}
-          style={{ width: "2px" }}
-        />
-      </div>
+          ref={sidebarRef}
+          style={{ width: `${preferences.sidebarWidth}px` }}
+          className="flex-shrink-0 relative z-30"
+        >
+          <Sidebar
+            categories={categories}
+            activeCategory={activeCategory}
+            onCategoryChange={(category) => {
+              setActiveCategory(category);
+              setShowSettings(false);
+            }}
+            onAddPassword={() => setShowAddModal(true)}
+            onLogout={handleLogout}
+            onSettings={() => setShowSettings(!showSettings)}
+            showSettings={showSettings}
+            theme={preferences.theme}
+            accentColor={preferences.accentColor}
+          />
 
-      <main className="flex-1 flex flex-col overflow-hidden min-w-0 relative z-20">
-        <AnimatePresence mode="wait">
-          {showSettings ? (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="flex-1 overflow-y-auto"
-            >
-              <Settings
-                viewMode={preferences.viewMode}
-                theme={preferences.theme}
-                itemSize={preferences.itemSize}
-                accentColor={preferences.accentColor}
-                onAccentColorChange={setAccentColor}
-                onThemeChange={setTheme}
-                onViewModeChange={setViewMode}
-                onItemSizeChange={setItemSize}
-                clipboardClearSeconds={preferences.clipboardClearSeconds}
-                onClipboardClearSecondsChange={setClipboardClearSeconds}
-                revealCensorSeconds={preferences.revealCensorSeconds}
-                onRevealCensorSecondsChange={setRevealCensorSeconds}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col overflow-hidden"
-            >
-              <Header
-                activeCategory={activeCategory}
-                passwordCount={filteredPasswords.length}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                theme={preferences.theme}
-                accentColor={preferences.accentColor}
-              />
+          {/* Resize handle */}
+          <div
+            onMouseDown={(e) => { e.preventDefault(); setIsResizing(true); }}
+            className={`absolute top-0 right-0 h-full cursor-col-resize z-40 transition-all ${isResizing ? "bg-white/10" : "bg-transparent hover:bg-white/5"}`}
+            style={{ width: "2px" }}
+          />
+        </div>
 
-              <div className="flex-1 overflow-y-auto p-8 relative">
-                {filteredPasswords.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center py-20">
-                    <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>
-                      <svg className={`w-8 h-8 ${themeClasses.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0 relative z-20">
+          <AnimatePresence mode="wait">
+            {showSettings ? (
+              <motion.div
+                key="settings"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="flex-1 overflow-y-auto"
+              >
+                <Settings
+                  viewMode={preferences.viewMode}
+                  theme={preferences.theme}
+                  itemSize={preferences.itemSize}
+                  accentColor={preferences.accentColor}
+                  onAccentColorChange={setAccentColor}
+                  onThemeChange={setTheme}
+                  onViewModeChange={setViewMode}
+                  onItemSizeChange={setItemSize}
+                  clipboardClearSeconds={preferences.clipboardClearSeconds}
+                  onClipboardClearSecondsChange={setClipboardClearSeconds}
+                  revealCensorSeconds={preferences.revealCensorSeconds}
+                  onRevealCensorSecondsChange={setRevealCensorSeconds}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <Header
+                  activeCategory={activeCategory}
+                  passwordCount={filteredPasswords.length}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  theme={preferences.theme}
+                  accentColor={preferences.accentColor}
+                />
+
+                <div className="flex-1 overflow-y-auto p-8 relative">
+                  {filteredPasswords.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center py-20">
+                      <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>
+                        <svg className={`w-8 h-8 ${themeClasses.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      </div>
+                      <p className={`${themeClasses.text} text-lg font-bold mb-1`}>
+                        {searchQuery ? "No matches found" : "Empty Secure Vault"}
+                      </p>
+                      <p className={`${themeClasses.textMuted} text-xs font-bold uppercase tracking-widest`}>
+                        {searchQuery ? "Try a different search term" : "Add your first record to begin"}
+                      </p>
                     </div>
-                    <p className={`${themeClasses.text} text-lg font-bold mb-1`}>
-                      {searchQuery ? "No matches found" : "Empty Secure Vault"}
-                    </p>
-                    <p className={`${themeClasses.textMuted} text-xs font-bold uppercase tracking-widest`}>
-                      {searchQuery ? "Try a different search term" : "Add your first record to begin"}
-                    </p>
-                  </div>
-                ) : preferences.viewMode === "grid" ? (
-                  <PasswordGrid
-                    passwords={filteredPasswords}
-                    onCopyUsername={handleCopyUsername}
-                    onCopyPassword={handleCopyPassword}
-                    onDelete={handleDeletePassword}
-                    theme={preferences.theme}
-                    itemSize={preferences.itemSize}
-                    accentColor={preferences.accentColor}
-                  />
-                ) : (
-                  <PasswordTable
-                    passwords={filteredPasswords}
-                    onCopyUsername={handleCopyUsername}
-                    onCopyPassword={handleCopyPassword}
-                    onDelete={handleDeletePassword}
-                    theme={preferences.theme}
-                    itemSize={preferences.itemSize}
-                    accentColor={preferences.accentColor}
-                  />
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
+                  ) : preferences.viewMode === "grid" ? (
+                    <PasswordGrid
+                      passwords={filteredPasswords}
+                      onCopyUsername={handleCopyUsername}
+                      onCopyPassword={handleCopyPassword}
+                      onDelete={handleDeletePassword}
+                      theme={preferences.theme}
+                      itemSize={preferences.itemSize}
+                      accentColor={preferences.accentColor}
+                    />
+                  ) : (
+                    <PasswordTable
+                      passwords={filteredPasswords}
+                      onCopyUsername={handleCopyUsername}
+                      onCopyPassword={handleCopyPassword}
+                      onDelete={handleDeletePassword}
+                      theme={preferences.theme}
+                      itemSize={preferences.itemSize}
+                      accentColor={preferences.accentColor}
+                    />
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
 
       <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} />
       <DeleteConfirmModal
