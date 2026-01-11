@@ -1,8 +1,9 @@
 export type Theme = "dark" | "slate" | "light" | "editor" | "violet";
 
-export type AccentColor = "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
+export type AccentColor = "black" | "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
 
-export const getAccentColorClasses = (color: AccentColor) => {
+export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark") => {
+    const isLight = theme === "light";
     const colorMap: Record<AccentColor, {
         base: string;
         hover: string;
@@ -23,7 +24,28 @@ export const getAccentColorClasses = (color: AccentColor) => {
         hoverBgClass: string;
         hoverBorderClass: string;
         hoverBgLightClass: string;
+        onContrast: string;
+        onContrastClass: string;
     }> = {
+        black: isLight ? {
+            base: "zinc-900", hover: "black", light: "zinc-800/20", border: "zinc-800/30",
+            baseClass: "border-zinc-900 bg-zinc-900", hoverClass: "hover:bg-black",
+            lightClass: "bg-zinc-800/20", borderClass: "border-zinc-800/30",
+            textClass: "text-zinc-900", bgClass: "bg-zinc-900", bgHoverClass: "hover:bg-black",
+            shadowClass: "shadow-zinc-900/20", hoverShadowClass: "hover:shadow-zinc-900/10", focusRingClass: "focus:ring-zinc-900/50", focusBorderClass: "focus:border-zinc-900/50",
+            hoverTextClass: "hover:text-zinc-900", hoverBgClass: "hover:bg-zinc-900/10", hoverBorderClass: "hover:border-zinc-900/50",
+            hoverBgLightClass: "group-hover:bg-zinc-900/40",
+            onContrast: "white", onContrastClass: "text-white",
+        } : {
+            base: "zinc-100", hover: "white", light: "white/10", border: "white/20",
+            baseClass: "border-zinc-100 bg-zinc-100", hoverClass: "hover:bg-white",
+            lightClass: "bg-white/10", borderClass: "border-white/20",
+            textClass: "text-zinc-100", bgClass: "bg-zinc-100", bgHoverClass: "hover:bg-white",
+            shadowClass: "shadow-white/20", hoverShadowClass: "hover:shadow-white/10", focusRingClass: "focus:ring-white/50", focusBorderClass: "focus:border-white/50",
+            hoverTextClass: "hover:text-white", hoverBgClass: "hover:bg-white/10", hoverBorderClass: "hover:border-white/50",
+            hoverBgLightClass: "group-hover:bg-white/40",
+            onContrast: "black", onContrastClass: "text-black",
+        },
         yellow: {
             base: "yellow-400", hover: "yellow-500", light: "yellow-400/20", border: "yellow-400/30",
             baseClass: "border-yellow-400 bg-yellow-400", hoverClass: "hover:bg-yellow-500",
@@ -32,15 +54,17 @@ export const getAccentColorClasses = (color: AccentColor) => {
             shadowClass: "shadow-yellow-400/20", hoverShadowClass: "hover:shadow-yellow-400/10", focusRingClass: "focus:ring-yellow-400/50", focusBorderClass: "focus:border-yellow-400/50",
             hoverTextClass: "hover:text-yellow-400", hoverBgClass: "hover:bg-yellow-400/10", hoverBorderClass: "hover:border-yellow-400/50",
             hoverBgLightClass: "group-hover:bg-yellow-400/40",
+            onContrast: "black", onContrastClass: "text-black",
         },
         blue: {
-            base: "blue-400", hover: "blue-500", light: "blue-400/20", border: "blue-400/30",
-            baseClass: "border-blue-400 bg-blue-400", hoverClass: "hover:bg-blue-500",
-            lightClass: "bg-blue-400/20", borderClass: "border-blue-400/30",
-            textClass: "text-blue-400", bgClass: "bg-blue-400", bgHoverClass: "hover:bg-blue-500",
-            shadowClass: "shadow-blue-400/20", hoverShadowClass: "hover:shadow-blue-400/10", focusRingClass: "focus:ring-blue-400/50", focusBorderClass: "focus:border-blue-400/50",
-            hoverTextClass: "hover:text-blue-400", hoverBgClass: "hover:bg-blue-400/10", hoverBorderClass: "hover:border-blue-400/50",
-            hoverBgLightClass: "group-hover:bg-blue-400/40",
+            base: "blue-500", hover: "blue-600", light: "blue-500/20", border: "blue-500/30",
+            baseClass: "border-blue-500 bg-blue-500", hoverClass: "hover:bg-blue-600",
+            lightClass: "bg-blue-500/20", borderClass: "border-blue-500/30",
+            textClass: "text-blue-500", bgClass: "bg-blue-500", bgHoverClass: "hover:bg-blue-600",
+            shadowClass: "shadow-blue-500/20", hoverShadowClass: "hover:shadow-blue-500/10", focusRingClass: "focus:ring-blue-500/50", focusBorderClass: "focus:border-blue-500/50",
+            hoverTextClass: "hover:text-blue-500", hoverBgClass: "hover:bg-blue-500/10", hoverBorderClass: "hover:border-blue-500/50",
+            hoverBgLightClass: "group-hover:bg-blue-500/40",
+            onContrast: "white", onContrastClass: "text-white",
         },
         green: {
             base: "green-400", hover: "green-500", light: "green-400/20", border: "green-400/30",
@@ -50,6 +74,7 @@ export const getAccentColorClasses = (color: AccentColor) => {
             shadowClass: "shadow-green-400/20", hoverShadowClass: "hover:shadow-green-400/10", focusRingClass: "focus:ring-green-400/50", focusBorderClass: "focus:border-green-400/50",
             hoverTextClass: "hover:text-green-400", hoverBgClass: "hover:bg-green-400/10", hoverBorderClass: "hover:border-green-400/50",
             hoverBgLightClass: "group-hover:bg-green-400/40",
+            onContrast: "black", onContrastClass: "text-black",
         },
         purple: {
             base: "purple-400", hover: "purple-500", light: "purple-400/20", border: "purple-400/30",
@@ -59,6 +84,7 @@ export const getAccentColorClasses = (color: AccentColor) => {
             shadowClass: "shadow-purple-400/20", hoverShadowClass: "hover:shadow-purple-400/10", focusRingClass: "focus:ring-purple-400/50", focusBorderClass: "focus:border-purple-400/50",
             hoverTextClass: "hover:text-purple-400", hoverBgClass: "hover:bg-purple-400/10", hoverBorderClass: "hover:border-purple-400/50",
             hoverBgLightClass: "group-hover:bg-purple-400/40",
+            onContrast: "white", onContrastClass: "text-white",
         },
         pink: {
             base: "pink-400", hover: "pink-500", light: "pink-400/20", border: "pink-400/30",
@@ -68,6 +94,7 @@ export const getAccentColorClasses = (color: AccentColor) => {
             shadowClass: "shadow-pink-400/20", hoverShadowClass: "hover:shadow-pink-400/10", focusRingClass: "focus:ring-pink-400/50", focusBorderClass: "focus:border-pink-400/50",
             hoverTextClass: "hover:text-pink-400", hoverBgClass: "hover:bg-pink-400/10", hoverBorderClass: "hover:border-pink-400/50",
             hoverBgLightClass: "group-hover:bg-pink-400/40",
+            onContrast: "white", onContrastClass: "text-white",
         },
         orange: {
             base: "orange-400", hover: "orange-500", light: "orange-400/20", border: "orange-400/30",
@@ -77,6 +104,7 @@ export const getAccentColorClasses = (color: AccentColor) => {
             shadowClass: "shadow-orange-400/20", hoverShadowClass: "hover:shadow-orange-400/10", focusRingClass: "focus:ring-orange-400/50", focusBorderClass: "focus:border-orange-400/50",
             hoverTextClass: "hover:text-orange-400", hoverBgClass: "hover:bg-orange-400/10", hoverBorderClass: "hover:border-orange-400/50",
             hoverBgLightClass: "group-hover:bg-orange-400/40",
+            onContrast: "black", onContrastClass: "text-black",
         },
         cyan: {
             base: "cyan-400", hover: "cyan-500", light: "cyan-400/20", border: "cyan-400/30",
@@ -86,15 +114,17 @@ export const getAccentColorClasses = (color: AccentColor) => {
             shadowClass: "shadow-cyan-400/20", hoverShadowClass: "hover:shadow-cyan-400/10", focusRingClass: "focus:ring-cyan-400/50", focusBorderClass: "focus:border-cyan-400/50",
             hoverTextClass: "hover:text-cyan-400", hoverBgClass: "hover:bg-cyan-400/10", hoverBorderClass: "hover:border-cyan-400/50",
             hoverBgLightClass: "group-hover:bg-cyan-400/40",
+            onContrast: "black", onContrastClass: "text-black",
         },
         red: {
-            base: "red-400", hover: "red-500", light: "red-400/20", border: "red-400/30",
-            baseClass: "border-red-400 bg-red-400", hoverClass: "hover:bg-red-500",
-            lightClass: "bg-red-400/20", borderClass: "border-red-400/30",
-            textClass: "text-red-400", bgClass: "bg-red-400", bgHoverClass: "hover:bg-red-500",
-            shadowClass: "shadow-red-400/20", hoverShadowClass: "hover:shadow-red-400/10", focusRingClass: "focus:ring-red-400/50", focusBorderClass: "focus:border-red-400/50",
-            hoverTextClass: "hover:text-red-400", hoverBgClass: "hover:bg-red-400/10", hoverBorderClass: "hover:border-red-400/50",
-            hoverBgLightClass: "group-hover:bg-red-400/40",
+            base: "red-500", hover: "red-600", light: "red-500/20", border: "red-500/30",
+            baseClass: "border-red-500 bg-red-500", hoverClass: "hover:bg-red-600",
+            lightClass: "bg-red-500/20", borderClass: "border-red-500/30",
+            textClass: "text-red-500", bgClass: "bg-red-500", bgHoverClass: "hover:bg-red-600",
+            shadowClass: "shadow-red-500/20", hoverShadowClass: "hover:shadow-red-500/10", focusRingClass: "focus:ring-red-500/50", focusBorderClass: "focus:border-red-500/50",
+            hoverTextClass: "hover:text-red-500", hoverBgClass: "hover:bg-red-500/10", hoverBorderClass: "hover:border-red-500/50",
+            hoverBgLightClass: "group-hover:bg-red-500/40",
+            onContrast: "white", onContrastClass: "text-white",
         },
     };
     return colorMap[color];
@@ -225,16 +255,18 @@ export const getThemeClasses = (theme: Theme) => {
     }
 };
 
-export const getAccentColorHex = (color: AccentColor) => {
+export const getAccentColorHex = (color: AccentColor, theme: Theme = "dark") => {
+    const isLight = theme === "light";
     const hexMap: Record<AccentColor, string> = {
+        black: isLight ? "#18181b" : "#f4f4f5",
         yellow: "#f5c518",
-        blue: "#60a5fa",
+        blue: "#3b82f6",
         green: "#4ade80",
         purple: "#c084fc",
         pink: "#f472b6",
         orange: "#fb923c",
         cyan: "#22d3ee",
-        red: "#f87171",
+        red: "#ef4444",
     };
     return hexMap[color];
 };

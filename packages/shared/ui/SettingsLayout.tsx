@@ -32,7 +32,7 @@ export const SettingsLayout = ({
     onBack
 }: SettingsLayoutProps) => {
     const themeClasses = getThemeClasses(theme);
-    const accentClasses = getAccentColorClasses(accentColor);
+    const accentClasses = getAccentColorClasses(accentColor, theme);
 
     return (
         <div className={`flex flex-col h-full w-full ${themeClasses.bg} ${themeClasses.text} overflow-hidden font-sans rounded-3xl transition-colors duration-300`}>
@@ -50,7 +50,7 @@ export const SettingsLayout = ({
                                 key={item.id}
                                 onClick={() => onSectionChange(item.id)}
                                 className={`w-full flex items-center gap-2.5 md:gap-3 px-3.5 md:px-4 py-3 md:py-3.5 rounded-xl transition-all duration-300 group relative ${activeSection === item.id
-                                    ? `${accentClasses.bgClass}/20 ${accentClasses.textClass} shadow-sm`
+                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
                                     : `${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                                     }`}
                             >
@@ -61,7 +61,7 @@ export const SettingsLayout = ({
                                 {activeSection === item.id && (
                                     <motion.div
                                         layoutId="section-indicator"
-                                        className={`absolute left-0 w-1 h-4 md:h-5 rounded-full ${accentClasses.bgClass}`}
+                                        className={`absolute left-0 w-1 h-4 md:h-5 rounded-full ${accentClasses.onContrastClass === 'text-white' ? 'bg-white/40' : 'bg-black/40'}`}
                                     />
                                 )}
                             </button>
@@ -88,8 +88,8 @@ export const SettingsLayout = ({
                                 key={item.id}
                                 onClick={() => onSectionChange(item.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${activeSection === item.id
-                                        ? `${accentClasses.bgClass}/10 ${accentClasses.textClass} border-${accentColor}-400/20`
-                                        : `${themeClasses.inputBg} ${themeClasses.textSecondary} ${themeClasses.border}`
+                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} ${accentClasses.shadowClass} border-transparent`
+                                    : `${themeClasses.inputBg} ${themeClasses.textSecondary} ${themeClasses.border}`
                                     }`}
                             >
                                 <span className={`w-4 h-4 ${activeSection === item.id ? '' : 'opacity-70'}`}>{item.icon}</span>

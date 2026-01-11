@@ -18,10 +18,10 @@ export const AppearanceSettings = ({
     showTitle = true
 }: AppearanceSettingsProps) => {
     const themeClasses = getThemeClasses(theme);
-    const accentClasses = getAccentColorClasses(accentColor);
+    const accentClasses = getAccentColorClasses(accentColor, theme);
 
     const themes: Theme[] = ["light", "dark", "slate", "editor", "violet"];
-    const accents: AccentColor[] = ["yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"];
+    const accents: AccentColor[] = ["black", "yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"];
 
     return (
         <div className="space-y-12 md:space-y-14">
@@ -78,7 +78,7 @@ export const AppearanceSettings = ({
                 <label className={`text-[9px] font-black uppercase tracking-[0.2em] mb-6 md:mb-8 block ${themeClasses.textTertiary}`}>Interface Accent</label>
                 <div className="flex flex-wrap gap-3 md:gap-4">
                     {accents.map((color) => {
-                        const colorClasses = getAccentColorClasses(color);
+                        const colorClasses = getAccentColorClasses(color, theme);
                         const isActive = accentColor === color;
                         return (
                             <button
@@ -96,7 +96,7 @@ export const AppearanceSettings = ({
                                 {isActive && (
                                     <motion.div
                                         layoutId="accent-check-shared"
-                                        className="absolute inset-0 flex items-center justify-center text-black"
+                                        className={`absolute inset-0 flex items-center justify-center ${colorClasses.onContrastClass}`}
                                     >
                                         <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
