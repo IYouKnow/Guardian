@@ -1,0 +1,90 @@
+name: Build and Publish Desktop
+
+on:
+  push:
+    tags: [ "desktop-v*.*.*" ]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: get_version
+        shell: bash
+        run: |
+          TAG_NAME=${{ github.ref_name }}
+          VERSION=${TAG_NAME#desktop-v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: install frontend dependencies
+        run: pnpm install
+
+      - name: Update version in tauri.conf.json
+        shell: bash
+        run: |
+          cd packages/desktop/src-tauri
+          node -e "const fs = require('fs'); const t = JSON.parse(fs.readFileSync('tauri.conf.json', 'utf8')); t.version = '${{ steps.get_version.outputs.version }}'; fs.writeFileSync('tauri.conf.json', JSON.stringify(t, null, 2));"
+
+      - name: Build Desktop App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: packages/desktop
+
+      - name: Rename and Collect Artifacts
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          BASE_DIR="packages/desktop/src-tauri/target/release/bundle"
+          mkdir -p artifacts
+
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            cp "$BASE_DIR/nsis/"*.exe "artifacts/Guardian-Desktop-v${VERSION}-windows-x64.exe"
+            cp "$BASE_DIR/msi/"*.msi "artifacts/Guardian-Desktop-v${VERSION}-windows-x64.msi" || true
+          elif [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
+            cp "$BASE_DIR/dmg/"*.dmg "artifacts/Guardian-Desktop-v${VERSION}-macos.dmg"
+          elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
+            cp "$BASE_DIR/deb/"*.deb "artifacts/Guardian-Desktop-v${VERSION}-linux-amd64.deb"
+            cp "$BASE_DIR/appimage/"*.AppImage "artifacts/Guardian-Desktop-v${VERSION}-linux-x86_64.AppImage"
+            cp "$BASE_DIR/rpm/"*.rpm "artifacts/Guardian-Desktop-v${VERSION}-linux-x86_64.rpm" || true
+          fi
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: desktop-v${{ steps.get_version.outputs.version }}
+          name: "Guardian Desktop v${{ steps.get_version.outputs.version }}"
+          body_path: .github/DESKTOP_RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: artifacts/*
