@@ -37,21 +37,21 @@ export default function RecentActivity() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4, duration: 0.4 }}
-      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 transition-all duration-300`}
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-5 h-full transition-all duration-300 flex flex-col`}
     >
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${accentClasses.bgClass}/10 transition-all duration-300`}>
             <Clock className={`w-5 h-5 ${accentClasses.textClass} transition-all duration-300`} />
           </div>
           <div>
-            <h3 className={`${themeClasses.text} font-semibold transition-all duration-300`}>Recent Activity</h3>
-            <p className={`${themeClasses.textSecondary} text-sm transition-all duration-300`}>Latest system events</p>
+            <h3 className={`${themeClasses.text} font-semibold text-sm transition-all duration-300`}>Recent Activity</h3>
+            <p className={`${themeClasses.textSecondary} text-xs transition-all duration-300`}>Latest system events</p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {activities.map((activity, index) => (
           <motion.div
             key={activity.id}

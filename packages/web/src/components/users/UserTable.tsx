@@ -35,7 +35,7 @@ export default function UserTable({ users, loading }: UserTableProps) {
   };
 
   const roleStyles: Record<string, string> = {
-    Admin: `${accentClasses.bgClass}/10 ${accentClasses.textClass} border-${accentClasses.bgClass.split('-')[1]}-500/20`,
+    Admin: `${accentClasses.textClass} ${accentClasses.lightClass} ${accentClasses.borderClass}`,
     User: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   };
 
@@ -99,13 +99,13 @@ export default function UserTable({ users, loading }: UserTableProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`${roleStyles[user.role] || roleStyles.User} border font-medium`}>
+                  <Badge variant="outline" className={`${roleStyles[user.role] || roleStyles.User} font-medium`}>
                     {user.role === 'Admin' && <Shield className="w-3 h-3 mr-1" />}
                     {user.role}
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`${statusStyles[user.status] || statusStyles.ACTIVE} border font-medium`}>
+                  <Badge variant="outline" className={`${statusStyles[user.status] || statusStyles.ACTIVE} font-medium`}>
                     {user.status}
                   </Badge>
                 </TableCell>

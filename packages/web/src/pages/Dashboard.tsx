@@ -16,7 +16,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -24,7 +24,7 @@ export default function Dashboard() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className={`text-3xl font-bold ${themeClasses.text} transition-all duration-300`}>Dashboard</h1>
+          <h1 className={`text-2xl font-bold ${themeClasses.text} transition-all duration-300`}>Dashboard</h1>
           <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Welcome back, Admin</p>
         </div>
         <div className="flex items-center gap-3">
@@ -36,18 +36,18 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((stat, index) => (
           <StatsCard key={stat.title} {...stat} delay={index * 0.1} />
         ))}
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+        <div className="lg:col-span-2 h-full">
           <ActivityChart />
         </div>
-        <div>
+        <div className="h-full">
           <RecentActivity />
         </div>
       </div>
@@ -57,9 +57,9 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.4 }}
-        className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 transition-all duration-300`}
+        className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-5 transition-all duration-300`}
       >
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-5">
           <div className={`p-2 rounded-lg ${accentClasses.bgClass}/10 transition-all duration-300`}>
             <Server className={`w-5 h-5 ${accentClasses.textClass} transition-all duration-300`} />
           </div>

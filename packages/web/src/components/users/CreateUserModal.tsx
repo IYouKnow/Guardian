@@ -75,7 +75,7 @@ export default function CreateUserModal({ open, onOpenChange }: CreateUserModalP
           <div className="space-y-2">
             <Label className={`${themeClasses.textSecondary} text-sm`}>Role</Label>
             <Select defaultValue="user">
-              <SelectTrigger className={`h-11 ${themeClasses.inputBg} ${themeClasses.border} ${themeClasses.text} focus:ring-${accentClasses.bgClass.split('-')[1]}-500/20 rounded-xl`}>
+              <SelectTrigger className={`h-11 ${themeClasses.inputBg} ${themeClasses.border} ${themeClasses.text} ${accentClasses.focusRingClass} rounded-xl`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className={`${themeClasses.sectionBg} border ${themeClasses.border} backdrop-blur-xl`}>

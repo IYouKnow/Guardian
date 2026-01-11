@@ -82,7 +82,7 @@ export default function Invites() {
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
-          className={`h-11 px-5 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} text-black font-semibold rounded-xl shadow-lg ${accentClasses.shadowClass} focus-visible:ring-0 focus-visible:ring-offset-0`}
+          className={`h-11 px-5 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} ${accentClasses.onContrastClass} font-semibold rounded-xl shadow-lg ${accentClasses.shadowClass} focus-visible:ring-0 focus-visible:ring-offset-0`}
         >
           <Plus className="w-5 h-5 mr-2" />
           Create Invite
@@ -168,6 +168,43 @@ export default function Invites() {
           onResetFilters={handleClearFilters}
         />
       </motion.div>
+
+      {/* Pagination */}
+      {!isLoading && filteredInvites.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="flex items-center justify-between"
+        >
+          <p className={`${themeClasses.textSecondary} text-sm`}>Showing {filteredInvites.length} invites</p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`bg-transparent ${themeClasses.border} ${themeClasses.textTertiary} rounded-lg`}
+              disabled
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} rounded-lg`}
+            >
+              1
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`bg-transparent ${themeClasses.border} ${themeClasses.textTertiary} rounded-lg`}
+              disabled
+            >
+              Next
+            </Button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Create Invite Modal */}
       <CreateInviteModal

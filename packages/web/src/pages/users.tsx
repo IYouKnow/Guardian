@@ -63,7 +63,7 @@ export default function Users() {
         </div>
         <Button
           onClick={() => setShowCreateModal(true)}
-          className={`h-11 px-5 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} text-black font-semibold rounded-xl shadow-lg ${accentClasses.shadowClass}`}
+          className={`h-11 px-5 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} ${accentClasses.onContrastClass} font-semibold rounded-xl shadow-lg ${accentClasses.shadowClass}`}
         >
           <Plus className="w-5 h-5 mr-2" />
           Add User
@@ -151,7 +151,7 @@ export default function Users() {
             <Button
               variant="outline"
               size="sm"
-              className={`${accentClasses.bgClass}/10 border-${accentClasses.bgClass.split('-')[1]}-500/20 ${accentClasses.textClass} rounded-lg`}
+              className={`${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} rounded-lg`}
             >
               1
             </Button>

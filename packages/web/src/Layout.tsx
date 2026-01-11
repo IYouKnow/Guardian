@@ -44,7 +44,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   }
 
   return (
-    <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300`}>
+    <div className={`h-screen overflow-hidden ${themeClasses.bg} transition-all duration-300`}>
       <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
 
       {/* Mobile Header */}
@@ -52,7 +52,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
         <div className="flex items-center justify-between h-16 px-4">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl ${accentClasses.bgClass} flex items-center justify-center transition-colors duration-300`}>
-              <Shield className="w-5 h-5 text-black" />
+              <Shield className={`w-5 h-5 ${accentClasses.onContrastClass}`} />
             </div>
             <span className={`font-bold ${themeClasses.text} transition-colors duration-300`}>Guardian</span>
           </div>
@@ -82,17 +82,17 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 z-50 h-full w-72 ${themeClasses.bg} border-r ${themeClasses.divider}
+        fixed top-0 left-0 z-50 h-full w-64 ${themeClasses.bg} border-r ${themeClasses.divider}
         transform transition-all duration-300
         lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className={`flex items-center justify-between h-16 px-6 border-b ${themeClasses.divider} transition-all duration-300`}>
+          <div className={`flex items-center justify-between h-14 px-5 border-b ${themeClasses.divider} transition-all duration-300`}>
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl ${accentClasses.bgClass} flex items-center justify-center shadow-lg transition-all duration-300`}>
-                <Shield className="w-5 h-5 text-black" />
+                <Shield className={`w-5 h-5 ${accentClasses.onContrastClass}`} />
               </div>
               <div>
                 <span className={`font-bold ${themeClasses.text} transition-all duration-300`}>Guardian</span>
@@ -120,27 +120,27 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
                   to={createPageUrl(item.page)}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    flex items-center gap-3 px-4 py-3 rounded-xl
+                    flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300
                     ${isActive
-                      ? `${accentClasses.bgClass}/20 ${accentClasses.textClass} border-l-[3px] border-current shadow-sm`
+                      ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
                       : `${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                     }
                     ${isActive ? '' : `hover:${themeClasses.text}`}
                   `}
                 >
-                  <div className={`${isActive ? accentClasses.textClass : ''}`}>
+                  <div className={`${isActive ? accentClasses.onContrastClass : ''}`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <span className={`font-medium ${isActive ? accentClasses.textClass : ''}`}>{item.name}</span>
-                  {isActive && <ChevronRight className={`w-4 h-4 ml-auto ${accentClasses.textClass}`} />}
+                  <span className={`font-medium ${isActive ? accentClasses.onContrastClass : ''}`}>{item.name}</span>
+                  {isActive && <ChevronRight className={`w-4 h-4 ml-auto ${accentClasses.onContrastClass}`} />}
                 </Link>
               );
             })}
           </nav>
 
           {/* Footer */}
-          <div className={`p-4 border-t ${themeClasses.divider} transition-all duration-300`}>
-            <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border} mb-4 transition-all duration-300`}>
+          <div className={`p-3 border-t ${themeClasses.divider} transition-all duration-300`}>
+            <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border} mb-3 transition-all duration-300`}>
               <p className={`${themeClasses.textTertiary} text-sm transition-all duration-300`}>Server Status</p>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -153,7 +153,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
                 localStorage.removeItem('guardian_token');
                 localStorage.removeItem('guardian_user');
               }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl ${themeClasses.textSecondary} hover:text-red-400 hover:bg-red-500/5 transition-all duration-300`}
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl ${themeClasses.textSecondary} hover:text-red-400 hover:bg-red-500/5 transition-all duration-300`}
             >
               <LogOut className="w-5 h-5" />
               <span className="font-medium">Sign Out</span>
@@ -163,8 +163,8 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:pl-72 pt-16 lg:pt-0 transition-all duration-300">
-        <div className="min-h-screen p-4 lg:p-8 transition-all duration-300">
+      <main className="lg:pl-64 h-full pt-16 lg:pt-0 transition-all duration-300 overflow-y-auto scrollbar-hide">
+        <div className="p-4 lg:p-6 transition-all duration-300">
           {children}
         </div>
       </main>

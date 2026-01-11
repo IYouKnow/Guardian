@@ -30,7 +30,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }, [accentColor]);
 
     const themeClasses = getThemeClasses(theme);
-    const accentClasses = getAccentColorClasses(accentColor);
+    const accentClasses = getAccentColorClasses(accentColor, theme);
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme, accentColor, setAccentColor, themeClasses, accentClasses }}>

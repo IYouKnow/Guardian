@@ -397,7 +397,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={`${statusStyles[invite.status]} border font-medium px-2.5 py-0.5`}>
+                      <Badge variant="outline" className={`${statusStyles[invite.status]} font-medium px-2.5 py-0.5`}>
                         {invite.status}
                       </Badge>
                     </TableCell>

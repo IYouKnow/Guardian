@@ -39,14 +39,14 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>)
 
 export default function ActivityChart() {
   const { themeClasses, accentClasses, accentColor, theme } = useTheme();
-  const hexColor = getAccentColorHex(accentColor);
+  const hexColor = getAccentColorHex(accentColor, theme);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3, duration: 0.4 }}
-      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 transition-all duration-300`}
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 h-full transition-all duration-300 flex flex-col`}
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -70,7 +70,7 @@ export default function ActivityChart() {
         </div>
       </div>
 
-      <div className="h-64">
+      <div className="flex-1 min-h-[240px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data}>
             <defs>

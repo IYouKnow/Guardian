@@ -17,6 +17,15 @@
   .glass-hover {
     @apply hover:bg-zinc-800/60 hover:border-zinc-700 transition-all duration-200;
   }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 /* Aggressive focus reset to remove problematic white/yellow lines */
