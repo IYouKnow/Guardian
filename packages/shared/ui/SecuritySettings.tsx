@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "framer-motion";
 import type { Theme, AccentColor } from "../themes/index";
 import { getThemeClasses, getAccentColorClasses } from "../themes/index";
