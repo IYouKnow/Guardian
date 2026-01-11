@@ -101,7 +101,7 @@ export default function PasswordCard({
   };
 
   const themeClasses = getThemeClasses();
-  const accentClasses = getAccentColorClasses(accentColor);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   return (
     <motion.div

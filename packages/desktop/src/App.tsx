@@ -250,7 +250,7 @@ function App() {
   };
 
   const themeClasses = getThemeClasses(preferences.theme);
-  const accentClasses = getAccentColorClasses(preferences.accentColor);
+  const accentClasses = getAccentColorClasses(preferences.accentColor, preferences.theme);
 
   if (preferencesLoading) {
     return (

@@ -121,7 +121,7 @@ export default function PasswordTable({
   };
 
   const themeClasses = getThemeClasses();
-  const accentClasses = getAccentColorClasses(accentColor);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   return (
     <div className="w-full overflow-x-auto min-w-0">

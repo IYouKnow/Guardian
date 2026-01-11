@@ -50,7 +50,7 @@ export default function Settings({
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
   const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses(accentColor);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   const navItems = [
     { id: "appearance", label: "Appearance", icon: <Icons.Appearance /> },

@@ -29,7 +29,7 @@ export default function Login({
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const accentClasses = getAccentColorClasses(accentColor);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   const themeClasses = getThemeClasses(theme);
 
@@ -125,14 +125,14 @@ export default function Login({
             <button
               type="button"
               onClick={() => setMode("local")}
-              className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "local" ? `${accentClasses.bgClass} text-black shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+              className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "local" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
             >
               Local File
             </button>
             <button
               type="button"
               onClick={() => setMode("server")}
-              className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "server" ? `${accentClasses.bgClass} text-black shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+              className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "server" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
             >
               Server
             </button>
@@ -238,7 +238,7 @@ export default function Login({
               whileTap={{ scale: 0.98 }}
               type="submit"
               disabled={isLoading}
-              className={`w-full py-4 rounded-xl ${accentClasses.bgClass} text-black font-bold text-[0.65rem] uppercase tracking-wider shadow-lg ${accentClasses.shadowClass} disabled:opacity-50 flex items-center justify-center gap-2`}
+              className={`w-full py-4 rounded-xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} font-bold text-[0.65rem] uppercase tracking-wider shadow-lg ${accentClasses.shadowClass} disabled:opacity-50 flex items-center justify-center gap-2`}
             >
               {isLoading ? (
                 <>

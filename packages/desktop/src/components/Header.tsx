@@ -65,7 +65,7 @@ export default function Header({
   };
 
   const themeClasses = getThemeClasses();
-  const accentClasses = getAccentColorClasses(accentColor);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   return (
     <header className={`${themeClasses.bg} backdrop-blur-xl border-b ${themeClasses.border} p-6 overflow-x-hidden relative z-20`}>
@@ -89,7 +89,7 @@ export default function Header({
           <button className={`px-4 py-2 ${themeClasses.button} ${themeClasses.text} rounded-xl text-[0.65rem] font-bold uppercase tracking-wider transition-all border ${themeClasses.border}`}>
             Link Account
           </button>
-          <button className={`px-4 py-2 ${accentClasses.bgClass} text-black rounded-xl text-[0.65rem] font-bold uppercase tracking-wider transition-all shadow-lg ${accentClasses.shadowClass}`}>
+          <button className={`px-4 py-2 ${accentClasses.bgClass} ${accentClasses.onContrastClass} rounded-xl text-[0.65rem] font-bold uppercase tracking-wider transition-all shadow-lg ${accentClasses.shadowClass}`}>
             Sync
           </button>
         </div>

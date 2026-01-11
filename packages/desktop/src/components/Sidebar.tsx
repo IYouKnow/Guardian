@@ -26,7 +26,7 @@ export default function Sidebar({
   accentColor,
 }: SidebarProps) {
   const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses(accentColor);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   return (
     <aside className={`w-full h-full backdrop-blur-xl ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col relative`}>
@@ -39,7 +39,7 @@ export default function Sidebar({
             className="flex items-center gap-3"
           >
             <div className={`w-8 h-8 rounded-lg ${accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass}`}>
-              <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 ${accentClasses.onContrastClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
@@ -69,13 +69,13 @@ export default function Sidebar({
                 <button
                   onClick={() => onCategoryChange(category)}
                   className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-between group ${activeCategory === category && !showSettings
-                    ? `${accentClasses.bgClass} text-black shadow-lg ${accentClasses.shadowClass}`
+                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
                     : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
                     }`}
                 >
                   <span>{category === "all" ? "Whole Vault" : category}</span>
                   {activeCategory === category && !showSettings && (
-                    <motion.div layoutId="active-indicator" className="w-1.5 h-1.5 rounded-full bg-black/40" />
+                    <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
                   )}
                 </button>
               </li>
@@ -92,7 +92,7 @@ export default function Sidebar({
               <button
                 onClick={onSettings}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-3 ${showSettings
-                  ? `${accentClasses.bgClass} text-black shadow-lg ${accentClasses.shadowClass}`
+                  ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
                   : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
                   }`}
               >
@@ -112,7 +112,7 @@ export default function Sidebar({
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={onAddPassword}
-          className={`w-full ${accentClasses.bgClass} text-black font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg ${accentClasses.shadowClass} flex items-center justify-center gap-2.5 text-[0.65rem] uppercase tracking-wider`}
+          className={`w-full ${accentClasses.bgClass} ${accentClasses.onContrastClass} font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg ${accentClasses.shadowClass} flex items-center justify-center gap-2.5 text-[0.65rem] uppercase tracking-wider`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
