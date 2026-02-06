@@ -293,9 +293,26 @@ function App() {
       <TitleBar theme={preferences.theme} accentColor={preferences.accentColor} />
 
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Global Background Elements */}
-        <div className={`absolute top-[-10%] right-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-10 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
-        <div className={`absolute bottom-[-10%] left-[-10%] w-[45%] h-[45%] rounded-full blur-[120px] opacity-5 ${accentClasses.bgClass} pointer-events-none transition-colors duration-700`} />
+        {/* Modern Background Layers */}
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+          {/* Subtle Grid/Dot Pattern */}
+          <div
+            className="absolute inset-0 opacity-[0.03] transition-opacity duration-500"
+            style={{
+              backgroundImage: `radial-gradient(${preferences.theme === 'light' ? '#000' : '#fff'} 1px, transparent 1px)`,
+              backgroundSize: '24px 24px'
+            }}
+          />
+
+          {/* Main Ambient Glow - Top Right */}
+          <div className={`absolute top-[-25%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] opacity-[0.15] ${accentClasses.bgClass} mix-blend-screen transition-all duration-1000 animate-pulse-slow`} />
+
+          {/* Secondary Glow - Bottom Left */}
+          <div className={`absolute bottom-[-25%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[130px] opacity-[0.1] ${accentClasses.bgClass} mix-blend-screen transition-all duration-1000`} />
+
+          {/* Center/Accent Highlight */}
+          <div className={`absolute top-[20%] left-[30%] w-[40%] h-[40%] rounded-full blur-[160px] opacity-[0.05] ${preferences.theme === 'light' ? 'bg-blue-400' : 'bg-white'} transition-all duration-1000`} />
+        </div>
 
         <div
           ref={sidebarRef}
