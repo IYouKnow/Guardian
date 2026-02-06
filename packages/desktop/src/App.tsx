@@ -5,7 +5,7 @@ import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
+
 import TitleBar from "./components/TitleBar";
 import PasswordGrid from "./components/PasswordGrid";
 import PasswordTable from "./components/PasswordTable";
@@ -332,6 +332,8 @@ function App() {
             showSettings={showSettings}
             theme={preferences.theme}
             accentColor={preferences.accentColor}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
 
           {/* Resize handle */}
@@ -375,14 +377,7 @@ function App() {
                 exit={{ opacity: 0 }}
                 className="flex-1 flex flex-col overflow-hidden"
               >
-                <Header
-                  activeCategory={activeCategory}
-                  passwordCount={filteredPasswords.length}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  theme={preferences.theme}
-                  accentColor={preferences.accentColor}
-                />
+
 
                 <div className="flex-1 overflow-y-auto p-8 relative">
                   {filteredPasswords.length === 0 ? (

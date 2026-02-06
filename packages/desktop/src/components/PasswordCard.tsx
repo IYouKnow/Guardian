@@ -106,8 +106,6 @@ export default function PasswordCard({
   return (
     <motion.div
       layout
-      whileHover={{ y: -4 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
       className={`relative group ${themeClasses.card} backdrop-blur-xl rounded-[1.5rem] border ${themeClasses.border} ${accentClasses.hoverBorderClass} transition-all duration-300 overflow-hidden shadow-xl hover:shadow-2xl ${accentClasses.hoverShadowClass}`}
     >
       <div className={sizeClasses.padding}>
