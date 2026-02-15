@@ -19,6 +19,8 @@ interface SettingsProps {
   onRevealCensorSecondsChange: (seconds: number) => void;
   onSync?: () => void;
   onLinkAccount?: () => void;
+  showNotifications: boolean;
+  onShowNotificationsChange: (show: boolean) => void;
 }
 
 type SettingsSection = "account" | "appearance" | "security";
@@ -55,7 +57,9 @@ export default function Settings({
   revealCensorSeconds,
   onRevealCensorSecondsChange,
   onSync,
-  onLinkAccount
+  onLinkAccount,
+  showNotifications,
+  onShowNotificationsChange
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -136,6 +140,20 @@ export default function Settings({
             <header className="md:hidden mb-8">
               <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">Settings</h1>
             </header>
+
+            <div className={`p-6 rounded-2xl ${themeClasses.sectionBg} border ${themeClasses.border} flex items-center justify-between`}>
+              <div>
+                <h3 className={`text-sm font-bold ${themeClasses.text}`}>Notifications</h3>
+                <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>Show toast notifications for actions</p>
+              </div>
+
+              <button
+                onClick={() => onShowNotificationsChange(!showNotifications)}
+                className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${showNotifications ? accentClasses.bgClass : 'bg-gray-700'}`}
+              >
+                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${showNotifications ? 'translate-x-6' : 'translate-x-0'}`} />
+              </button>
+            </div>
 
             <AppearanceSettings
               theme={theme}

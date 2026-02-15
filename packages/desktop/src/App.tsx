@@ -49,6 +49,7 @@ function App() {
     setLastVaultPath,
     setClipboardClearSeconds,
     setRevealCensorSeconds,
+    setShowNotifications,
     loadFromVault,
   } = usePreferences();
 
@@ -268,7 +269,7 @@ function App() {
     return (
       <>
         <Register mode={registerMode} onRegister={handleRegister} onBackToLogin={() => setShowRegister(false)} />
-        <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
+        <ToastContainer toasts={preferences.showNotifications ? toasts : []} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );
   }
@@ -283,7 +284,7 @@ function App() {
           theme={preferences.theme}
           accentColor={preferences.accentColor}
         />
-        <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
+        <ToastContainer toasts={preferences.showNotifications ? toasts : []} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );
   }
@@ -367,6 +368,8 @@ function App() {
                   onClipboardClearSecondsChange={setClipboardClearSeconds}
                   revealCensorSeconds={preferences.revealCensorSeconds}
                   onRevealCensorSecondsChange={setRevealCensorSeconds}
+                  showNotifications={preferences.showNotifications}
+                  onShowNotificationsChange={setShowNotifications}
                 />
               </motion.div>
             ) : (

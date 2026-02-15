@@ -11,6 +11,7 @@ interface Preferences {
   lastVaultPath: string | null;
   clipboardClearSeconds: number;
   revealCensorSeconds: number;
+  showNotifications: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -22,6 +23,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   lastVaultPath: null,
   clipboardClearSeconds: 10,
   revealCensorSeconds: 5,
+  showNotifications: true,
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -50,6 +52,7 @@ export function usePreferences() {
         const savedLastVaultPath = await store.get<string | null>("lastVaultPath");
         const savedClipboardClearSeconds = await store.get<number>("clipboardClearSeconds");
         const savedRevealCensorSeconds = await store.get<number>("revealCensorSeconds");
+        const savedShowNotifications = await store.get<boolean>("showNotifications");
 
         setPreferences({
           theme: savedTheme ?? DEFAULT_PREFERENCES.theme,
@@ -60,6 +63,7 @@ export function usePreferences() {
           lastVaultPath: savedLastVaultPath ?? DEFAULT_PREFERENCES.lastVaultPath,
           clipboardClearSeconds: savedClipboardClearSeconds ?? DEFAULT_PREFERENCES.clipboardClearSeconds,
           revealCensorSeconds: savedRevealCensorSeconds ?? DEFAULT_PREFERENCES.revealCensorSeconds,
+          showNotifications: savedShowNotifications ?? DEFAULT_PREFERENCES.showNotifications,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -127,6 +131,11 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const setShowNotifications = useCallback(
+    (show: boolean) => updatePreference("showNotifications", show),
+    [updatePreference]
+  );
+
   const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
     setPreferences((prev) => ({
       ...prev,
@@ -155,6 +164,7 @@ export function usePreferences() {
     setLastVaultPath,
     setClipboardClearSeconds,
     setRevealCensorSeconds,
+    setShowNotifications,
     loadFromVault,
   };
 }
