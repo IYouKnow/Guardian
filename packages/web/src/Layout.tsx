@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Settings,
   HardDrive,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -23,6 +24,7 @@ const navItems = [
   { name: 'Users', icon: Users, page: 'Users' },
   { name: 'Invites', icon: Ticket, page: 'Invites' },
   { name: 'Storage', icon: HardDrive, page: 'Storage' },
+  { name: 'Backup', icon: ShieldCheck, page: 'Backup' },
   { name: 'Settings', icon: Settings, page: 'Settings' },
 ];
 

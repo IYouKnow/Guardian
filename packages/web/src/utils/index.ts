@@ -9,6 +9,7 @@ export function createPageUrl(pageName: string): string {
     'Invites': '/invites',
     'Settings': '/settings',
     'Storage': '/storage',
+    'Backup': '/backup',
   };
 
   return pageMap[pageName] || '/dashboard';
@@ -25,6 +26,7 @@ export function getPageNameFromPath(path: string): string {
     '/invites': 'Invites',
     '/settings': 'Settings',
     '/storage': 'Storage',
+    '/backup': 'Backup',
   };
 
   return pathMap[path] || 'Dashboard';
