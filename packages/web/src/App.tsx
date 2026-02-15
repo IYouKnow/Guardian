@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/users';
 import Invites from './pages/invites';
 import Settings from './pages/Settings';
+import Storage from './pages/Storage';
 import { getPageNameFromPath } from './utils';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,16 @@ function App() {
               <ProtectedRoute>
                 <LayoutWrapper>
                   <Settings />
+                </LayoutWrapper>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/storage"
+            element={
+              <ProtectedRoute>
+                <LayoutWrapper>
+                  <Storage />
                 </LayoutWrapper>
               </ProtectedRoute>
             }

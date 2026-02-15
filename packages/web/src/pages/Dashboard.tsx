@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Users, Key, Database, Zap, Server } from 'lucide-react';
+import { Users, Key, Database, Zap, Server, AlertTriangle } from 'lucide-react';
 import StatsCard, { type StatsCardProps } from '@/components/dashboard/StatsCard';
 import ActivityChart from '@/components/dashboard/ActivityChart';
 import RecentActivity from '@/components/dashboard/RecentActivity';
@@ -33,6 +33,16 @@ export default function Dashboard() {
             <span className="text-green-400 text-sm font-medium transition-all duration-300">All Systems Operational</span>
           </div>
         </div>
+      </motion.div>
+
+      {/* Mock Data Warning */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
+      >
+        <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+        <span className="font-medium">Notice: This dashboard is currently using mock data. Real-time statistics are not yet connected.</span>
       </motion.div>
 
       {/* Stats Grid */}

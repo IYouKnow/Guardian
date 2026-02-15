@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Edit, Trash2, Key, Shield, UserX, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Key, Shield, UserX, Loader2, HardDrive } from 'lucide-react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { AdminUser } from '@/api/admin';
 import { useTheme } from '../../context/ThemeContext';
@@ -72,6 +72,7 @@ export default function UserTable({ users, loading }: UserTableProps) {
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Role</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Status</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Vault Items</TableHead>
+              <TableHead className={`${themeClasses.textSecondary} font-medium`}>Used Space</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Last Active</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium text-right`}>Actions</TableHead>
             </TableRow>
@@ -113,6 +114,12 @@ export default function UserTable({ users, loading }: UserTableProps) {
                   <div className={`flex items-center gap-2 ${themeClasses.text}`}>
                     <Key className={`w-4 h-4 ${themeClasses.textTertiary}`} />
                     {user.vault_items}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className={`flex items-center gap-2 ${themeClasses.text}`}>
+                    <HardDrive className={`w-4 h-4 ${themeClasses.textTertiary}`} />
+                    {user.used_space || '0 B'}
                   </div>
                 </TableCell>
                 <TableCell className={`${themeClasses.textSecondary}`}>

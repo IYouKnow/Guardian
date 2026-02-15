@@ -36,6 +36,7 @@ export interface AdminUser {
     vault_items: number;
     created_at: string;
     last_login: string | null;
+    used_space?: string;
 }
 
 export interface CreateInviteRequest {
