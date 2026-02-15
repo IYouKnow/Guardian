@@ -215,7 +215,7 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
         <div className="relative z-10 w-full max-w-md">
           <motion.div
             layout
-            className={`${themeClasses.card} rounded-[1.5rem] border ${themeClasses.border} overflow-hidden shadow-2xl relative`}
+            className={`${themeClasses.card} rounded-[1.5rem] border ${themeClasses.border} overflow-hidden shadow-2xl relative max-h-[85vh] flex flex-col`}
           >
             <div className="absolute top-0 left-0 w-full h-[2px] bg-white/5">
               <motion.div
@@ -226,12 +226,12 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
               />
             </div>
 
-            <div className="p-6 pt-8">
+            <div className="p-6 pt-8 overflow-y-auto">
               <div className="text-center mb-6">
                 <h1 className="text-2xl font-bold tracking-tight mb-0.5">{mode === "server" ? "Join Server" : "Create Vault"}</h1>
                 <p className={`${themeClasses.textMuted} text-xs font-medium`}>Setup your secure storage</p>
               </div>
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center justify-between mb-5">
                 <span className={`text-[0.65rem] font-bold uppercase tracking-wider ${accentClasses.textClass}`}>
                   Step {currentStep} of {steps.length}
                 </span>
@@ -334,7 +334,7 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
                   </AnimatePresence>
                 </div>
 
-                <div className="flex items-center justify-between mt-10">
+                <div className="flex items-center justify-between mt-6">
                   <button type="button" onClick={currentStep === 1 ? onBackToLogin : handlePrevious} className={`flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}>
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                     {currentStep === 1 ? "Cancel" : "Back"}

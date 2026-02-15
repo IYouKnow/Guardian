@@ -14,10 +14,8 @@
       {
         "label": "main",
         "title": "Guardian",
-        "width": 600,
+        "width": 1000,
         "height": 600,
-        "minWidth": 450,
-        "minHeight": 600,
         "resizable": true,
         "decorations": false
       }
