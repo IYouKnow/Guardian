@@ -306,7 +306,7 @@ function App() {
           />
 
           {/* Main Ambient Glow - Top Right */}
-          <div className={`absolute top-[-25%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] opacity-[0.15] ${accentClasses.bgClass} mix-blend-screen transition-all duration-1000 animate-pulse-slow`} />
+          <div className={`absolute top-[-25%] right-[-10%] w-[60%] h-[60%] rounded-full blur-[150px] opacity-[0.15] ${accentClasses.bgClass} mix-blend-screen transition-all duration-1000`} />
 
           {/* Secondary Glow - Bottom Left */}
           <div className={`absolute bottom-[-25%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[130px] opacity-[0.1] ${accentClasses.bgClass} mix-blend-screen transition-all duration-1000`} />

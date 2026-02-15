@@ -35,7 +35,7 @@ export const SettingsLayout = ({
     const accentClasses = getAccentColorClasses(accentColor, theme);
 
     return (
-        <div className={`flex flex-col h-full w-full ${themeClasses.bg} ${themeClasses.text} overflow-hidden font-sans rounded-3xl transition-colors duration-300`}>
+        <div className={`flex flex-col h-full w-full ${themeClasses.text} overflow-hidden font-sans rounded-3xl transition-colors duration-300`}>
             <div className="max-w-5xl mx-auto w-full h-full flex px-4 md:px-10 pt-6 md:pt-8 bg-transparent">
                 {/* Floating Sidebar Navigation */}
                 <div className="hidden md:block w-48 md:w-56 flex-shrink-0 pr-4 md:pr-10">
