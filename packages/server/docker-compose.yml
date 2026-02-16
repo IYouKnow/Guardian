@@ -1,5 +1,16 @@
 # Guardian Server - Docker Compose
 # Standard setup using the pre-built image from GitHub
+#
+# --- CLOUDFLARE TUNNEL SETUP (HTTPS) ---
+# 1. Create a Tunnel: Go to Cloudflare Zero Trust > Networks > Tunnels > Create a Tunnel.
+# 2. Select Docker: Choose the Docker environment for the installation.
+# 3. Get Token: Copy the token from the provided command (e.g., tunnel run --token <TOKEN>).
+# 4. Configure .env: Add TUNNEL_TOKEN=<your_token> to your .env file.
+# 5. Configure Public Hostname:
+#    - In the Tunnel settings, go to "Public Hostname".
+#    - Add a public hostname (e.g., guardian.yourdomain.com).
+#    - Service: http://guardian-server:8080
+# ---------------------------------------
 
 services:
   guardian-server:
@@ -20,6 +31,18 @@ services:
       retries: 3
     networks:
       - guardian-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared_tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - guardian-network
+    depends_on:
+      - guardian-server
 
 volumes:
   guardian-data:
