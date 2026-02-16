@@ -43,4 +43,8 @@ export const authApi = {
         const user = this.getStoredUser();
         return user?.is_admin || false;
     },
+
+    getToken(): string | null {
+        return localStorage.getItem('guardian_token');
+    },
 };
