@@ -1,4 +1,14 @@
-export type Theme = "dark" | "slate" | "light" | "editor" | "violet";
+export type Theme = "dark" | "slate" | "light" | "editor" | "violet" | "system";
+
+export const resolveTheme = (theme: Theme): Exclude<Theme, "system"> => {
+    if (theme === "system") {
+        if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+            return "light";
+        }
+        return "dark"; // Default system fallback
+    }
+    return theme;
+};
 
 export type AccentColor = "black" | "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
 
@@ -211,7 +221,7 @@ export const getThemeClasses = (theme: Theme) => {
             input: "bg-[#2d1b4d]",
             inputBg: "bg-[#16161e]",
         };
-    } else if (theme === "dark") {
+    } else if (theme === "dark" || theme === "system") {
         return {
             bg: "bg-[#0a0a0a]",
             text: "text-white",

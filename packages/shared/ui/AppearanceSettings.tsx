@@ -20,8 +20,10 @@ export const AppearanceSettings = ({
     const themeClasses = getThemeClasses(theme);
     const accentClasses = getAccentColorClasses(accentColor, theme);
 
-    const themes: Theme[] = ["light", "dark", "slate", "editor", "violet"];
+    const themes: Theme[] = ["system", "light", "dark", "slate", "editor", "violet"];
     const accents: AccentColor[] = ["black", "yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"];
+
+
 
     return (
         <div className="space-y-12 md:space-y-14">
@@ -37,9 +39,12 @@ export const AppearanceSettings = ({
             {/* Theme Selector */}
             <section>
                 <label className={`text-[9px] font-black uppercase tracking-[0.2em] mb-6 md:mb-8 block ${themeClasses.textTertiary}`}>Color Profile</label>
-                <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-5">
+                <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-5">
                     {themes.map((t) => {
-                        const tClasses = getThemeClasses(t);
+                        // For system, we show a special preview or just use dark as base
+                        const previewTheme = t === 'system' ? 'dark' : t;
+                        const tClasses = getThemeClasses(previewTheme);
+
                         return (
                             <button
                                 key={t}
@@ -53,14 +58,24 @@ export const AppearanceSettings = ({
                                         : `${themeClasses.border} opacity-80 hover:opacity-100`
                                     }
                                 `}>
-                                    <div className={`absolute inset-0 p-1.5 md:p-2 flex flex-col gap-1.5 md:gap-2 ${tClasses.bg}`}>
-                                        <div className={`h-2 md:h-2.5 w-3/4 rounded-full ${t === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
-                                        <div className="flex-1 grid grid-cols-2 gap-1.5 md:gap-2">
-                                            <div className={`rounded-md md:rounded-lg ${tClasses.sectionBg}`} />
-                                            <div className={`rounded-md md:rounded-lg ${tClasses.sectionBg}`} />
+                                    {t === 'system' ? (
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white to-black flex items-center justify-center">
+                                            <div className="bg-black/50 backdrop-blur-sm p-2 rounded-lg text-white">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                </svg>
+                                            </div>
                                         </div>
-                                        <div className={`h-4 md:h-5 w-full rounded-md md:rounded-lg ${theme === t ? 'opacity-100 shadow-md' : 'opacity-70'} ${accentClasses.bgClass} transition-opacity duration-500`} />
-                                    </div>
+                                    ) : (
+                                        <div className={`absolute inset-0 p-1.5 md:p-2 flex flex-col gap-1.5 md:gap-2 ${tClasses.bg}`}>
+                                            <div className={`h-2 md:h-2.5 w-3/4 rounded-full ${t === 'light' ? 'bg-slate-200' : 'bg-white/10'}`} />
+                                            <div className="flex-1 grid grid-cols-2 gap-1.5 md:gap-2">
+                                                <div className={`rounded-md md:rounded-lg ${tClasses.sectionBg}`} />
+                                                <div className={`rounded-md md:rounded-lg ${tClasses.sectionBg}`} />
+                                            </div>
+                                            <div className={`h-4 md:h-5 w-full rounded-md md:rounded-lg ${theme === t ? 'opacity-100 shadow-md' : 'opacity-70'} ${accentClasses.bgClass} transition-opacity duration-500`} />
+                                        </div>
+                                    )}
                                 </div>
                                 <span className={`text-[9px] font-black uppercase tracking-widest ${theme === t ? accentClasses.textClass : themeClasses.textSecondary}`}>
                                     {t}
