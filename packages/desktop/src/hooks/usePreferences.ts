@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { load, Store } from "@tauri-apps/plugin-store";
 import { Theme, AccentColor } from "../types";
 
+
 interface Preferences {
   theme: Theme;
   accentColor: AccentColor;
@@ -38,6 +39,26 @@ async function getStore(): Promise<Store> {
 export function usePreferences() {
   const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Track actual system preference
+  const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>("dark");
+
+  useEffect(() => {
+    // Initial check
+    const mql = window.matchMedia("(prefers-color-scheme: light)");
+    const updateSystemTheme = () => {
+      setSystemTheme(mql.matches ? "light" : "dark");
+    };
+
+    updateSystemTheme();
+
+    // Listen for changes
+    mql.addEventListener("change", updateSystemTheme);
+    return () => mql.removeEventListener("change", updateSystemTheme);
+  }, []);
+
+  // Calculate the ACTIVE theme (resolved)
+  const activeTheme = preferences.theme === "system" ? systemTheme : (preferences.theme as Exclude<Theme, "system">);
 
   // Load preferences from store on mount
   useEffect(() => {
@@ -155,6 +176,7 @@ export function usePreferences() {
 
   return {
     preferences,
+    activeTheme,
     isLoading,
     setTheme,
     setAccentColor,
@@ -168,4 +190,3 @@ export function usePreferences() {
     loadFromVault,
   };
 }
-

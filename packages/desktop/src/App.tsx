@@ -40,6 +40,7 @@ function App() {
   // Custom hooks
   const {
     preferences,
+    activeTheme,
     isLoading: preferencesLoading,
     setTheme,
     setAccentColor,
@@ -251,8 +252,8 @@ function App() {
     }
   };
 
-  const themeClasses = getThemeClasses(preferences.theme);
-  const accentClasses = getAccentColorClasses(preferences.accentColor, preferences.theme);
+  const themeClasses = getThemeClasses(activeTheme);
+  const accentClasses = getAccentColorClasses(preferences.accentColor, activeTheme);
 
   if (preferencesLoading) {
     return (
@@ -281,7 +282,7 @@ function App() {
           onLogin={handleLogin}
           onRegister={(mode) => { setRegisterMode(mode); setShowRegister(true); }}
           lastVaultPath={preferences.lastVaultPath}
-          theme={preferences.theme}
+          theme={activeTheme}
           accentColor={preferences.accentColor}
         />
         <ToastContainer toasts={preferences.showNotifications ? toasts : []} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
@@ -291,7 +292,7 @@ function App() {
 
   return (
     <div className={`relative flex flex-col h-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
-      <TitleBar theme={preferences.theme} accentColor={preferences.accentColor} />
+      <TitleBar theme={activeTheme} accentColor={preferences.accentColor} />
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Modern Background Layers */}
@@ -300,7 +301,7 @@ function App() {
           <div
             className="absolute inset-0 opacity-[0.03] transition-opacity duration-500"
             style={{
-              backgroundImage: `radial-gradient(${preferences.theme === 'light' ? '#000' : '#fff'} 1px, transparent 1px)`,
+              backgroundImage: `radial-gradient(${activeTheme === 'light' ? '#000' : '#fff'} 1px, transparent 1px)`,
               backgroundSize: '24px 24px'
             }}
           />
@@ -312,7 +313,7 @@ function App() {
           <div className={`absolute bottom-[-25%] left-[-10%] w-[50%] h-[50%] rounded-full blur-[130px] opacity-[0.1] ${accentClasses.bgClass} mix-blend-screen transition-all duration-1000`} />
 
           {/* Center/Accent Highlight */}
-          <div className={`absolute top-[20%] left-[30%] w-[40%] h-[40%] rounded-full blur-[160px] opacity-[0.05] ${preferences.theme === 'light' ? 'bg-blue-400' : 'bg-white'} transition-all duration-1000`} />
+          <div className={`absolute top-[20%] left-[30%] w-[40%] h-[40%] rounded-full blur-[160px] opacity-[0.05] ${activeTheme === 'light' ? 'bg-blue-400' : 'bg-white'} transition-all duration-1000`} />
         </div>
 
         <div
@@ -331,7 +332,7 @@ function App() {
             onLogout={handleLogout}
             onSettings={() => setShowSettings(!showSettings)}
             showSettings={showSettings}
-            theme={preferences.theme}
+            theme={activeTheme}
             accentColor={preferences.accentColor}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -403,7 +404,7 @@ function App() {
                       onCopyUsername={handleCopyUsername}
                       onCopyPassword={handleCopyPassword}
                       onDelete={handleDeletePassword}
-                      theme={preferences.theme}
+                      theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
                     />
@@ -413,7 +414,7 @@ function App() {
                       onCopyUsername={handleCopyUsername}
                       onCopyPassword={handleCopyPassword}
                       onDelete={handleDeletePassword}
-                      theme={preferences.theme}
+                      theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
                     />
@@ -433,7 +434,7 @@ function App() {
         onCancel={() => setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" })}
         isDeleting={isDeleting}
       />
-      <ToastContainer toasts={toasts} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
+      <ToastContainer toasts={toasts} onRemove={removeToast} theme={activeTheme} accentColor={preferences.accentColor} />
     </div>
   );
 }
