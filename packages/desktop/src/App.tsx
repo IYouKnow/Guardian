@@ -51,6 +51,7 @@ function App() {
     setClipboardClearSeconds,
     setRevealCensorSeconds,
     setShowNotifications,
+    setSyncTheme,
     loadFromVault,
   } = usePreferences();
 
@@ -61,10 +62,30 @@ function App() {
     createNewVault,
     logout: vaultLogout,
     loginToServer,
-    registerOnServer
+    registerOnServer,
+    syncVault,
+    connectionMode
   } = useVault();
 
   const { toasts, removeToast, success, error: showError } = useToast();
+
+  const handleSync = async () => {
+    try {
+      // If local, maybe reload file? For now just server
+      if (connectionMode === 'server') {
+        const vaultData = await syncVault();
+        loadPasswords(vaultData.entries);
+        if (vaultData.settings) {
+          await loadFromVault(vaultData.settings as any);
+        }
+        success("Synced with server");
+      }
+    } catch (err) {
+      console.error("Sync failed:", err);
+      // Don't show error toast on auto-poll usually, but for manual click we should via separate handler if needed.
+      // For now, let's just log.
+    }
+  };
 
   // Wrap saveVaultFile to always include preferences
   const handleSavePasswords = async (entries: any[]) => {
@@ -371,6 +392,9 @@ function App() {
                   onRevealCensorSecondsChange={setRevealCensorSeconds}
                   showNotifications={preferences.showNotifications}
                   onShowNotificationsChange={setShowNotifications}
+                  syncTheme={preferences.syncTheme}
+                  onSyncThemeChange={setSyncTheme}
+                  onSync={handleSync}
                 />
               </motion.div>
             ) : (

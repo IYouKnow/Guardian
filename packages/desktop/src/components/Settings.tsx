@@ -21,6 +21,8 @@ interface SettingsProps {
   onLinkAccount?: () => void;
   showNotifications: boolean;
   onShowNotificationsChange: (show: boolean) => void;
+  syncTheme: boolean;
+  onSyncThemeChange: (sync: boolean) => void;
 }
 
 type SettingsSection = "account" | "appearance" | "security";
@@ -59,7 +61,9 @@ export default function Settings({
   onSync,
   onLinkAccount,
   showNotifications,
-  onShowNotificationsChange
+  onShowNotificationsChange,
+  syncTheme,
+  onSyncThemeChange
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -160,6 +164,8 @@ export default function Settings({
               accentColor={accentColor}
               onThemeChange={onThemeChange}
               onAccentColorChange={onAccentColorChange}
+              syncTheme={syncTheme}
+              onSyncThemeChange={onSyncThemeChange}
             />
 
             <div className={`h-px w-full ${themeClasses.divider} opacity-40`} />

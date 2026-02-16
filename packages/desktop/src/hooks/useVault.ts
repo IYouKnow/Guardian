@@ -23,6 +23,7 @@ interface UseVaultReturn {
   connectionMode: "local" | "server";
   loginToServer: (url: string, username: string, password: string) => Promise<VaultData>;
   registerOnServer: (url: string, data: any) => Promise<void>;
+  syncVault: () => Promise<VaultData>;
 }
 
 interface VaultItem {
@@ -163,6 +164,7 @@ export function useVault(): UseVaultReturn {
 
       const items: VaultItem[] = await itemsResp.json();
       const entries: VaultEntry[] = [];
+      let settings: VaultSettings | undefined;
 
       // 4. Decrypt Items
       for (const item of items) {
@@ -172,19 +174,38 @@ export function useVault(): UseVaultReturn {
         const ciphertext = raw.slice(12);
 
         try {
+          // Decrypt
+          // For now, using same key for everything. Ideally settings might use different key or iv.
+          // But single key is fine for MVP.
           const plaintext = await decrypt(key, nonce, ciphertext);
-          const entryStr = new TextDecoder().decode(plaintext);
-          entries.push(JSON.parse(entryStr));
+          const jsonStr = new TextDecoder().decode(plaintext);
+
+          if (item.id === "settings") {
+            settings = JSON.parse(jsonStr);
+          } else {
+            entries.push(JSON.parse(jsonStr));
+          }
         } catch (e) {
           console.warn(`Failed to decrypt item ${item.id}`, e);
         }
       }
 
+      // 5. Fetch Preferences (Web Sync)
+      let remotePrefs: Partial<VaultSettings> = {};
+      try {
+        const prefResp = await fetch(`${url}/api/preferences`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (prefResp.ok) remotePrefs = await prefResp.json();
+      } catch (e) { console.warn("Failed to fetch preferences", e); }
+
+      const finalSettings = { ...settings, ...remotePrefs };
+
       return {
         entries,
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
-        settings: { theme: 'dark' } // Default settings for server mode for now
+        settings: (Object.keys(finalSettings).length > 0 ? finalSettings : { theme: 'dark' }) as VaultSettings
       };
 
     } catch (err) {
@@ -196,16 +217,16 @@ export function useVault(): UseVaultReturn {
     }
   }, []);
 
-  const saveToServer = async (entries: VaultEntry[], _settings?: VaultSettings) => {
+  const saveToServer = async (entries: VaultEntry[], settings?: VaultSettings) => {
     if (!serverUrl || !authToken || !serverKey) throw new Error("Not connected to server");
 
     const itemsToSync: any[] = [];
 
-    for (const entry of entries) {
-      const json = JSON.stringify(entry);
+    // Encrypt Helper
+    const encryptItem = async (data: any) => {
+      const json = JSON.stringify(data);
       const plaintext = new TextEncoder().encode(json);
       const nonce = generateNonce();
-      // ChaCha20 returns ciphertext + tag
       const encrypted = await encrypt(serverKey, nonce, plaintext);
 
       // Pack: Nonce + Encrypted
@@ -214,16 +235,28 @@ export function useVault(): UseVaultReturn {
       finalObj.set(encrypted, nonce.length);
 
       // To Base64
-      const b64 = btoa(String.fromCharCode(...finalObj));
+      return btoa(String.fromCharCode(...finalObj));
+    }
 
+    // 1. Process standard entries
+    for (const entry of entries) {
+      const b64 = await encryptItem(entry);
       itemsToSync.push({
         id: entry.id,
         encrypted_blob: b64,
-        revision: 1 // Simple revision for now
+        revision: 1
       });
     }
 
-    // TODO: Save Settings separately (maybe special ID 'settings')
+    // 2. Process Settings (Special ID 'settings')
+    if (settings) {
+      const b64 = await encryptItem(settings);
+      itemsToSync.push({
+        id: "settings",
+        encrypted_blob: b64,
+        revision: 1
+      });
+    }
 
     await fetch(`${serverUrl}/vault/items`, {
       method: "PUT",
@@ -233,6 +266,22 @@ export function useVault(): UseVaultReturn {
       },
       body: JSON.stringify(itemsToSync)
     });
+
+    // Save preferences to API (Web Sync)
+    if (settings) {
+      try {
+        await fetch(`${serverUrl}/api/preferences`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ theme: settings.theme, accentColor: settings.accentColor })
+        });
+      } catch (e) {
+        console.warn("Failed to save preferences to API", e);
+      }
+    }
   };
 
   // --- UNIFIED SAVE ---
@@ -264,6 +313,70 @@ export function useVault(): UseVaultReturn {
     [vaultPath, masterPassword, connectionMode, serverUrl, authToken, serverKey]
   );
 
+  // --- SYNC HANDLER ---
+  const syncVault = useCallback(async (): Promise<VaultData> => {
+    if (!serverUrl || !authToken || !serverKey) throw new Error("Not connected to server");
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const itemsResp = await fetch(`${serverUrl}/vault/items`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      });
+
+      if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
+
+      const items: VaultItem[] = await itemsResp.json();
+      const entries: VaultEntry[] = [];
+      let settings: VaultSettings | undefined;
+
+      for (const item of items) {
+        const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
+        const nonce = raw.slice(0, 12);
+        const ciphertext = raw.slice(12);
+
+        try {
+          const plaintext = await decrypt(serverKey, nonce, ciphertext);
+          const jsonStr = new TextDecoder().decode(plaintext);
+
+          if (item.id === "settings") {
+            settings = JSON.parse(jsonStr);
+          } else {
+            entries.push(JSON.parse(jsonStr));
+          }
+        } catch (e) {
+          console.warn(`Failed to decrypt item ${item.id}`, e);
+        }
+      }
+
+      // Fetch Preferences (Web Sync)
+      let remotePrefs: Partial<VaultSettings> = {};
+      try {
+        const prefResp = await fetch(`${serverUrl}/api/preferences`, {
+          headers: { "Authorization": `Bearer ${authToken}` }
+        });
+        if (prefResp.ok) remotePrefs = await prefResp.json();
+      } catch (e) { console.warn("Failed to fetch preferences", e); }
+
+      const finalSettings = { ...settings, ...remotePrefs };
+
+      return {
+        entries,
+        createdAt: new Date().toISOString(),
+        lastModified: new Date().toISOString(),
+        settings: (Object.keys(finalSettings).length > 0 ? finalSettings : { theme: 'dark' }) as VaultSettings
+      };
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Sync failed";
+      setError(msg);
+      throw new Error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [serverUrl, authToken, serverKey]);
+
   const logout = useCallback(() => {
     setVaultPath(null);
     setMasterPassword("");
@@ -286,6 +399,7 @@ export function useVault(): UseVaultReturn {
     saveVaultFile,
     createNewVault,
     logout,
+    syncVault,
 
     // Server Specific
     connectionMode,

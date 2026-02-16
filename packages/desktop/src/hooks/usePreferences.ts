@@ -13,6 +13,7 @@ interface Preferences {
   clipboardClearSeconds: number;
   revealCensorSeconds: number;
   showNotifications: boolean;
+  syncTheme: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -25,6 +26,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   clipboardClearSeconds: 10,
   revealCensorSeconds: 5,
   showNotifications: true,
+  syncTheme: false,
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -42,6 +44,9 @@ export function usePreferences() {
 
   // Track actual system preference
   const [systemTheme, setSystemTheme] = useState<Exclude<Theme, "system">>("dark");
+
+  // Track server settings (even if not applied)
+  const [serverSettings, setServerSettings] = useState<Partial<Preferences> | null>(null);
 
   useEffect(() => {
     // Initial check
@@ -74,6 +79,7 @@ export function usePreferences() {
         const savedClipboardClearSeconds = await store.get<number>("clipboardClearSeconds");
         const savedRevealCensorSeconds = await store.get<number>("revealCensorSeconds");
         const savedShowNotifications = await store.get<boolean>("showNotifications");
+        const savedSyncTheme = await store.get<boolean>("syncTheme");
 
         setPreferences({
           theme: savedTheme ?? DEFAULT_PREFERENCES.theme,
@@ -85,6 +91,7 @@ export function usePreferences() {
           clipboardClearSeconds: savedClipboardClearSeconds ?? DEFAULT_PREFERENCES.clipboardClearSeconds,
           revealCensorSeconds: savedRevealCensorSeconds ?? DEFAULT_PREFERENCES.revealCensorSeconds,
           showNotifications: savedShowNotifications ?? DEFAULT_PREFERENCES.showNotifications,
+          syncTheme: savedSyncTheme ?? DEFAULT_PREFERENCES.syncTheme,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -157,21 +164,52 @@ export function usePreferences() {
     [updatePreference]
   );
 
-  const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
-    setPreferences((prev) => ({
-      ...prev,
-      ...vaultSettings,
-    }));
+  const setSyncTheme = useCallback(
+    (sync: boolean) => updatePreference("syncTheme", sync),
+    [updatePreference]
+  );
 
-    // Also update local store for persistence
+  // Helper to persist settings to local store
+  const persistSettings = useCallback(async (settings: Partial<Preferences>) => {
     try {
       const store = await getStore();
-      for (const [key, value] of Object.entries(vaultSettings)) {
-        await store.set(key, value);
+      for (const [key, value] of Object.entries(settings)) {
+        if (value !== undefined) await store.set(key, value);
       }
-    } catch (error) {
-      console.error("Failed to sync vault settings to local store:", error);
+    } catch (e) { console.error("Failed to save settings", e); }
+  }, []);
+
+  // When syncTheme or serverSettings change, apply server settings if sync is ON
+  useEffect(() => {
+    if (preferences.syncTheme && serverSettings) {
+      const { theme, accentColor } = serverSettings;
+
+      let hasChanges = false;
+      const updates: Partial<Preferences> = {};
+
+      if (theme && theme !== preferences.theme) {
+        updates.theme = theme;
+        hasChanges = true;
+      }
+      if (accentColor && accentColor !== preferences.accentColor) {
+        updates.accentColor = accentColor;
+        hasChanges = true;
+      }
+
+      if (hasChanges) {
+        setPreferences(prev => ({ ...prev, ...updates }));
+        persistSettings(updates);
+      }
     }
+  }, [preferences.syncTheme, preferences.theme, preferences.accentColor, serverSettings, persistSettings]);
+
+  const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
+    // 1. Always update our knowledge of what the server has
+    setServerSettings(vaultSettings);
+
+    // 2. If sync is ALREADY on (e.g. at boot), we want to apply these immediately
+    // The useEffect above will handle this automatically because serverSettings changes!
+    // So we don't need to do anything else here.
   }, []);
 
   return {
@@ -187,6 +225,7 @@ export function usePreferences() {
     setClipboardClearSeconds,
     setRevealCensorSeconds,
     setShowNotifications,
+    setSyncTheme,
     loadFromVault,
   };
 }
