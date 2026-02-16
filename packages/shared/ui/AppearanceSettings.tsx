@@ -8,6 +8,8 @@ interface AppearanceSettingsProps {
     onThemeChange: (theme: Theme) => void;
     onAccentColorChange: (color: AccentColor) => void;
     showTitle?: boolean;
+    syncTheme?: boolean;
+    onSyncThemeChange?: (sync: boolean) => void;
 }
 
 export const AppearanceSettings = ({
@@ -15,7 +17,9 @@ export const AppearanceSettings = ({
     accentColor,
     onThemeChange,
     onAccentColorChange,
-    showTitle = true
+    showTitle = true,
+    syncTheme,
+    onSyncThemeChange
 }: AppearanceSettingsProps) => {
     const themeClasses = getThemeClasses(theme);
     const accentClasses = getAccentColorClasses(accentColor, theme);
@@ -36,6 +40,22 @@ export const AppearanceSettings = ({
                 </header>
             )}
 
+            {/* Sync Theme Option */}
+            {onSyncThemeChange && typeof syncTheme !== 'undefined' && (
+                <div className={`flex items-center justify-between p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border}`}>
+                    <div>
+                        <h3 className={`text-sm font-bold ${themeClasses.text}`}>Sync with Server</h3>
+                        <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>Automatically apply theme from your vault.</p>
+                    </div>
+                    <button
+                        onClick={() => onSyncThemeChange(!syncTheme)}
+                        className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${syncTheme ? accentClasses.bgClass : 'bg-gray-700/50'}`}
+                    >
+                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${syncTheme ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                </div>
+            )}
+
             {/* Theme Selector */}
             <section>
                 <label className={`text-[9px] font-black uppercase tracking-[0.2em] mb-6 md:mb-8 block ${themeClasses.textTertiary}`}>Color Profile</label>
@@ -48,14 +68,15 @@ export const AppearanceSettings = ({
                         return (
                             <button
                                 key={t}
-                                onClick={() => onThemeChange(t)}
-                                className="group flex flex-col items-center gap-3"
+                                disabled={syncTheme}
+                                onClick={() => !syncTheme && onThemeChange(t)}
+                                className={`group flex flex-col items-center gap-3 ${syncTheme ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
                             >
                                 <div className={`
                                     w-full aspect-[4/3] rounded-xl md:rounded-2xl border-2 transition-all duration-500 overflow-hidden relative
                                     ${theme === t
                                         ? `border-transparent ring-2 ${accentClasses.focusRingClass.replace('focus:', '')} shadow-xl scale-105`
-                                        : `${themeClasses.border} opacity-80 hover:opacity-100`
+                                        : `${themeClasses.border} opacity-80 ${syncTheme ? '' : 'hover:opacity-100'}`
                                     }
                                 `}>
                                     {t === 'system' ? (
@@ -98,14 +119,16 @@ export const AppearanceSettings = ({
                         return (
                             <button
                                 key={color}
-                                onClick={() => onAccentColorChange(color)}
+                                disabled={syncTheme}
+                                onClick={() => !syncTheme && onAccentColorChange(color)}
                                 className={`
                                     relative w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl transition-all duration-500 group
                                     ${isActive
                                         ? `ring-2 ring-offset-4 ring-offset-transparent ${colorClasses.focusRingClass.replace('focus:', '')} scale-110 shadow-lg`
-                                        : 'hover:scale-110 opacity-70 hover:opacity-100'
+                                        : `${syncTheme ? '' : 'hover:scale-110 hover:opacity-100'} opacity-70`
                                     }
                                     ${colorClasses.bgClass}
+                                    ${syncTheme ? 'opacity-30 cursor-not-allowed' : ''}
                                 `}
                             >
                                 {isActive && (
