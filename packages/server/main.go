@@ -213,6 +213,10 @@ func main() {
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
 
+	// User Preferences
+	mux.HandleFunc("GET /api/preferences", server.withUserAuth(server.handleGetPreferences))
+	mux.HandleFunc("PUT /api/preferences", server.withUserAuth(server.handleUpdatePreferences))
+
 	// Serve Static Files (Vite Build)
 	staticFileServer := http.FileServer(http.Dir("dist"))
 	mux.Handle("/assets/", staticFileServer)
@@ -314,6 +318,7 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'ACTIVE'")
 	db.Exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'User'")
 	db.Exec("ALTER TABLE users ADD COLUMN last_login DATETIME")
+	db.Exec("ALTER TABLE users ADD COLUMN preferences TEXT DEFAULT '{}'")
 
 	return db, err
 }
