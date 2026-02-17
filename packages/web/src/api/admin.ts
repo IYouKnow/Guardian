@@ -37,6 +37,7 @@ export interface AdminUser {
     created_at: string;
     last_login: string | null;
     used_space?: string;
+    used_space_overhead?: string;
 }
 
 export interface CreateInviteRequest {

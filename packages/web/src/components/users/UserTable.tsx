@@ -119,7 +119,10 @@ export default function UserTable({ users, loading }: UserTableProps) {
                 <TableCell>
                   <div className={`flex items-center gap-2 ${themeClasses.text}`}>
                     <HardDrive className={`w-4 h-4 ${themeClasses.textTertiary}`} />
-                    {user.used_space || '0 B'}
+                    <span>{user.used_space || '0 B'}</span>
+                    {user.used_space_overhead && user.used_space_overhead !== '0 B' && (
+                      <span className={`${themeClasses.textTertiary} text-xs`}>+ {user.used_space_overhead}</span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className={`${themeClasses.textSecondary}`}>

@@ -143,26 +143,40 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
           </nav>
 
           {/* Footer */}
-          <div className={`p-3 border-t ${themeClasses.divider} transition-all duration-300`}>
-            <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border} mb-3 transition-all duration-300`}>
-              <p className={`${themeClasses.textTertiary} text-sm transition-all duration-300`}>Server Status</p>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className={`${themeClasses.text} text-sm font-medium transition-all duration-300`}>Operational</span>
+          {(() => {
+            const storedUser = localStorage.getItem('guardian_user');
+            const user = storedUser ? JSON.parse(storedUser) : null;
+            const username = user?.username || 'User';
+            const role = user?.is_admin ? 'Admin' : 'User';
+            const initial = username.charAt(0).toUpperCase();
+
+            return (
+              <div className={`p-3 border-t ${themeClasses.divider} transition-all duration-300`}>
+                <div className={`p-3 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border} transition-all duration-300`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl ${accentClasses.bgClass} flex items-center justify-center flex-shrink-0`}>
+                      <span className={`text-sm font-bold ${accentClasses.onContrastClass}`}>{initial}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`${themeClasses.text} text-sm font-semibold truncate transition-all duration-300`}>{username}</p>
+                      <p className={`${themeClasses.textTertiary} text-xs transition-all duration-300`}>{role}</p>
+                    </div>
+                    <Link
+                      to={createPageUrl('Login')}
+                      onClick={() => {
+                        localStorage.removeItem('guardian_token');
+                        localStorage.removeItem('guardian_user');
+                      }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg ${themeClasses.textTertiary} hover:text-red-400 hover:bg-red-500/10 transition-all duration-300 flex-shrink-0`}
+                      title="Sign Out"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
               </div>
-            </div>
-            <Link
-              to={createPageUrl('Login')}
-              onClick={() => {
-                localStorage.removeItem('guardian_token');
-                localStorage.removeItem('guardian_user');
-              }}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl ${themeClasses.textSecondary} hover:text-red-400 hover:bg-red-500/5 transition-all duration-300`}
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="font-medium">Sign Out</span>
-            </Link>
-          </div>
+            );
+          })()}
         </div>
       </aside>
 
