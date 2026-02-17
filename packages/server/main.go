@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -154,6 +155,7 @@ type Server struct {
 	systemDB *sql.DB
 	config   Config
 	logger   *log.Logger
+	userDBs  sync.Map // map[string]*sql.DB - cached user DB connections
 }
 
 func main() {
@@ -201,6 +203,7 @@ func main() {
 	// Auth
 	mux.HandleFunc("POST /auth/register", server.handleRegister)
 	mux.HandleFunc("POST /auth/login", server.handleLogin)
+	mux.HandleFunc("POST /auth/validate-invite", server.handleValidateInvite)
 	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus)
 
 	// Admin / Invites
@@ -261,21 +264,37 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Fatalf("Server shutdown failed: %v", err)
 	}
+
+	// Close all cached user DB connections
+	server.userDBs.Range(func(key, value any) bool {
+		if db, ok := value.(*sql.DB); ok {
+			db.Close()
+		}
+		return true
+	})
+
 	logger.Println("Server stopped gracefully")
 }
 
 // --- DB Init ---
 
+// sqliteDSN builds a proper DSN for modernc.org/sqlite with PRAGMAs baked in.
+// This ensures WAL mode and busy_timeout are applied to EVERY connection that
+// Go's database/sql pool opens, not just the first one.
+func sqliteDSN(path string) string {
+	return fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)", path)
+}
+
 func initSystemDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
 		return nil, err
 	}
 
-	// Enable WAL for concurrency
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return nil, fmt.Errorf("failed to support WAL mode: %w", err)
-	}
+	// CRITICAL: SQLite only supports one writer at a time.
+	// Setting MaxOpenConns(1) serializes all access through a single connection,
+	// which eliminates SQLITE_BUSY errors from concurrent writes.
+	db.SetMaxOpenConns(1)
 
 	if err := db.Ping(); err != nil {
 		return nil, err
@@ -324,16 +343,13 @@ func initSystemDB(path string) (*sql.DB, error) {
 }
 
 func initUserDB(path string) error {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	// Enable WAL
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return fmt.Errorf("failed to support WAL mode: %w", err)
-	}
+	db.SetMaxOpenConns(1)
 
 	query := `
 	CREATE TABLE IF NOT EXISTS vault_items (
@@ -446,6 +462,53 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": status})
 }
 
+func (s *Server) handleValidateInvite(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	var userCount int
+	s.systemDB.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
+
+	if userCount == 0 {
+		// Setup Mode
+		setupCode := os.Getenv("ADMIN_INVITE_CODE")
+		if setupCode != "" && req.Token != setupCode {
+			http.Error(w, "Invalid setup code", http.StatusForbidden)
+			return
+		}
+	} else {
+		// Normal Mode
+		var status string
+		var useCount, maxUses int
+		var expiresAt *time.Time
+		err := s.systemDB.QueryRow("SELECT status, use_count, max_uses, expires_at FROM invites WHERE token = ?", req.Token).Scan(&status, &useCount, &maxUses, &expiresAt)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Invalid invite token", http.StatusForbidden)
+			return
+		}
+
+		if status != "ACTIVE" {
+			http.Error(w, "Invite not active", http.StatusForbidden)
+			return
+		}
+		if maxUses > 0 && useCount >= maxUses {
+			http.Error(w, "Invite exhausted", http.StatusForbidden)
+			return
+		}
+		if expiresAt != nil && expiresAt.Before(time.Now()) {
+			http.Error(w, "Invite expired", http.StatusForbidden)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"valid": "true"})
+}
+
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -460,6 +523,16 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	isAdmin := false
 	if userCount == 0 {
 		// First user is Admin
+		// Check for Setup Code in Env
+		setupCode := os.Getenv("ADMIN_INVITE_CODE")
+		if setupCode != "" {
+			if req.InviteToken != setupCode {
+				s.logger.Println("Failed admin setup attempt: Invalid setup code")
+				http.Error(w, "Invalid admin setup code", http.StatusForbidden)
+				return
+			}
+		}
+
 		isAdmin = true
 		s.logger.Println("Registering first user as ADMIN:", req.Username)
 	} else {
@@ -615,6 +688,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 // --- Vault Handlers ---
 
+// getUserDB returns a cached *sql.DB for the user's vault database.
+// Connections are pooled per-user and reused across requests.
+// IMPORTANT: Do NOT call db.Close() on the returned connection.
 func (s *Server) getUserDB(ctx context.Context) (*sql.DB, error) {
 	userID := ctx.Value(userIDKey).(int)
 
@@ -625,12 +701,27 @@ func (s *Server) getUserDB(ctx context.Context) (*sql.DB, error) {
 	}
 
 	fullPath := filepath.Join(s.config.DataDir, dbFilename)
-	db, err := sql.Open("sqlite", fullPath)
+
+	// Check cache first
+	if cached, ok := s.userDBs.Load(fullPath); ok {
+		return cached.(*sql.DB), nil
+	}
+
+	// Open new connection with PRAGMAs baked into DSN
+	db, err := sql.Open("sqlite", sqliteDSN(fullPath))
 	if err != nil {
 		return nil, err
 	}
-	// Need to ensure WAL here too if not persistent
-	db.Exec("PRAGMA journal_mode=WAL;")
+
+	// Single connection for SQLite to avoid SQLITE_BUSY
+	db.SetMaxOpenConns(1)
+
+	// Cache it (if another goroutine raced us, use theirs and close ours)
+	actual, loaded := s.userDBs.LoadOrStore(fullPath, db)
+	if loaded {
+		db.Close() // We lost the race, close our duplicate
+		return actual.(*sql.DB), nil
+	}
 
 	return db, nil
 }
@@ -641,7 +732,6 @@ func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Storage access failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	rows, err := db.Query("SELECT id, encrypted_blob, revision, updated_at FROM vault_items")
 	if err != nil {
@@ -679,7 +769,6 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Storage access failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -920,9 +1009,9 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		// Count vault items
 		itemCount := 0
 		userDBPath := filepath.Join(s.config.DataDir, u.DBPath)
-		if db, err := sql.Open("sqlite", userDBPath); err == nil {
-			db.QueryRow("SELECT COUNT(*) FROM vault_items").Scan(&itemCount)
-			db.Close()
+		if udb, err := sql.Open("sqlite", sqliteDSN(userDBPath)); err == nil {
+			udb.QueryRow("SELECT COUNT(*) FROM vault_items").Scan(&itemCount)
+			udb.Close()
 		}
 
 		users = append(users, AdminUserResponse{
