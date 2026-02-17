@@ -93,15 +93,17 @@ type User struct {
 }
 
 type AdminUserResponse struct {
-	ID           int        `json:"id"`
-	Username     string     `json:"username"`
-	IsAdmin      bool       `json:"is_admin"`
-	FriendlyName string     `json:"friendly_name"`
-	Status       string     `json:"status"`
-	Role         string     `json:"role"`
-	VaultItems   int        `json:"vault_items"`
-	CreatedAt    time.Time  `json:"created_at"`
-	LastLogin    *time.Time `json:"last_login"`
+	ID                int        `json:"id"`
+	Username          string     `json:"username"`
+	IsAdmin           bool       `json:"is_admin"`
+	FriendlyName      string     `json:"friendly_name"`
+	Status            string     `json:"status"`
+	Role              string     `json:"role"`
+	VaultItems        int        `json:"vault_items"`
+	UsedSpace         string     `json:"used_space"`
+	UsedSpaceOverhead string     `json:"used_space_overhead"`
+	CreatedAt         time.Time  `json:"created_at"`
+	LastLogin         *time.Time `json:"last_login"`
 }
 
 type Invite struct {
@@ -253,9 +255,27 @@ func main() {
 		}
 	}()
 
+	// Periodic WAL checkpoint to keep -wal/-shm files small
+	checkpointDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				server.checkpointAllDBs()
+			case <-checkpointDone:
+				return
+			}
+		}
+	}()
+
 	// Wait for interrupt signal
 	<-stop
 	logger.Println("Shutting down server...")
+
+	// Stop the checkpoint ticker
+	close(checkpointDone)
 
 	// Create shutdown context with timeout
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -265,7 +285,8 @@ func main() {
 		logger.Fatalf("Server shutdown failed: %v", err)
 	}
 
-	// Close all cached user DB connections
+	// Final checkpoint and close all cached user DB connections
+	server.checkpointAllDBs()
 	server.userDBs.Range(func(key, value any) bool {
 		if db, ok := value.(*sql.DB); ok {
 			db.Close()
@@ -274,6 +295,23 @@ func main() {
 	})
 
 	logger.Println("Server stopped gracefully")
+}
+
+// checkpointAllDBs runs WAL checkpoint on system DB and all cached user DBs.
+// TRUNCATE mode merges WAL into the main DB and truncates the WAL file to zero bytes.
+func (s *Server) checkpointAllDBs() {
+	// Checkpoint system DB
+	if s.systemDB != nil {
+		s.systemDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	}
+
+	// Checkpoint all cached user DBs
+	s.userDBs.Range(func(key, value any) bool {
+		if db, ok := value.(*sql.DB); ok {
+			db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		}
+		return true
+	})
 }
 
 // --- DB Init ---
@@ -1014,16 +1052,29 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 			udb.Close()
 		}
 
+		// Calculate used space
+		var dbSize, overheadSize int64
+		if info, err := os.Stat(userDBPath); err == nil {
+			dbSize = info.Size()
+		}
+		for _, suffix := range []string{"-wal", "-shm"} {
+			if info, err := os.Stat(userDBPath + suffix); err == nil {
+				overheadSize += info.Size()
+			}
+		}
+
 		users = append(users, AdminUserResponse{
-			ID:           u.ID,
-			Username:     u.Username,
-			IsAdmin:      u.IsAdmin,
-			FriendlyName: u.FriendlyName,
-			Status:       u.Status,
-			Role:         u.Role,
-			VaultItems:   itemCount,
-			CreatedAt:    u.CreatedAt,
-			LastLogin:    u.LastLogin,
+			ID:                u.ID,
+			Username:          u.Username,
+			IsAdmin:           u.IsAdmin,
+			FriendlyName:      u.FriendlyName,
+			Status:            u.Status,
+			Role:              u.Role,
+			VaultItems:        itemCount,
+			UsedSpace:         formatBytes(dbSize),
+			UsedSpaceOverhead: formatBytes(overheadSize),
+			CreatedAt:         u.CreatedAt,
+			LastLogin:         u.LastLogin,
 		})
 	}
 
@@ -1051,4 +1102,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+func formatBytes(b int64) string {
+	switch {
+	case b < 1024:
+		return fmt.Sprintf("%d B", b)
+	case b < 1024*1024:
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	case b < 1024*1024*1024:
+		return fmt.Sprintf("%.1f MB", float64(b)/(1024*1024))
+	default:
+		return fmt.Sprintf("%.2f GB", float64(b)/(1024*1024*1024))
+	}
 }
