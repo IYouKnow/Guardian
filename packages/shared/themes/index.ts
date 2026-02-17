@@ -36,6 +36,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
         hoverBgLightClass: string;
         onContrast: string;
         onContrastClass: string;
+        glowClass: string;
     }> = {
         black: isLight ? {
             base: "zinc-900", hover: "black", light: "zinc-800/20", border: "zinc-800/30",
@@ -46,6 +47,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-zinc-900", hoverBgClass: "hover:bg-zinc-900/10", hoverBorderClass: "hover:border-zinc-900/50",
             hoverBgLightClass: "group-hover:bg-zinc-900/40",
             onContrast: "white", onContrastClass: "text-white",
+            glowClass: "bg-zinc-900",
         } : {
             base: "zinc-100", hover: "white", light: "white/10", border: "white/20",
             baseClass: "border-zinc-100 bg-zinc-100", hoverClass: "hover:bg-white",
@@ -55,6 +57,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-white", hoverBgClass: "hover:bg-white/10", hoverBorderClass: "hover:border-white/50",
             hoverBgLightClass: "group-hover:bg-white/40",
             onContrast: "black", onContrastClass: "text-black",
+            glowClass: "bg-white",
         },
         yellow: {
             base: "yellow-400", hover: "yellow-500", light: "yellow-400/20", border: "yellow-400/30",
@@ -65,6 +68,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-yellow-400", hoverBgClass: "hover:bg-yellow-400/10", hoverBorderClass: "hover:border-yellow-400/50",
             hoverBgLightClass: "group-hover:bg-yellow-400/40",
             onContrast: "black", onContrastClass: "text-black",
+            glowClass: "bg-yellow-400",
         },
         blue: {
             base: "blue-500", hover: "blue-600", light: "blue-500/20", border: "blue-500/30",
@@ -75,6 +79,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-blue-500", hoverBgClass: "hover:bg-blue-500/10", hoverBorderClass: "hover:border-blue-500/50",
             hoverBgLightClass: "group-hover:bg-blue-500/40",
             onContrast: "white", onContrastClass: "text-white",
+            glowClass: "bg-blue-500",
         },
         green: {
             base: "green-400", hover: "green-500", light: "green-400/20", border: "green-400/30",
@@ -85,6 +90,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-green-400", hoverBgClass: "hover:bg-green-400/10", hoverBorderClass: "hover:border-green-400/50",
             hoverBgLightClass: "group-hover:bg-green-400/40",
             onContrast: "black", onContrastClass: "text-black",
+            glowClass: "bg-green-400",
         },
         purple: {
             base: "purple-400", hover: "purple-500", light: "purple-400/20", border: "purple-400/30",
@@ -95,6 +101,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-purple-400", hoverBgClass: "hover:bg-purple-400/10", hoverBorderClass: "hover:border-purple-400/50",
             hoverBgLightClass: "group-hover:bg-purple-400/40",
             onContrast: "white", onContrastClass: "text-white",
+            glowClass: "bg-purple-400",
         },
         pink: {
             base: "pink-400", hover: "pink-500", light: "pink-400/20", border: "pink-400/30",
@@ -105,6 +112,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-pink-400", hoverBgClass: "hover:bg-pink-400/10", hoverBorderClass: "hover:border-pink-400/50",
             hoverBgLightClass: "group-hover:bg-pink-400/40",
             onContrast: "white", onContrastClass: "text-white",
+            glowClass: "bg-pink-400",
         },
         orange: {
             base: "orange-400", hover: "orange-500", light: "orange-400/20", border: "orange-400/30",
@@ -115,6 +123,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-orange-400", hoverBgClass: "hover:bg-orange-400/10", hoverBorderClass: "hover:border-orange-400/50",
             hoverBgLightClass: "group-hover:bg-orange-400/40",
             onContrast: "black", onContrastClass: "text-black",
+            glowClass: "bg-orange-400",
         },
         cyan: {
             base: "cyan-400", hover: "cyan-500", light: "cyan-400/20", border: "cyan-400/30",
@@ -125,6 +134,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-cyan-400", hoverBgClass: "hover:bg-cyan-400/10", hoverBorderClass: "hover:border-cyan-400/50",
             hoverBgLightClass: "group-hover:bg-cyan-400/40",
             onContrast: "black", onContrastClass: "text-black",
+            glowClass: "bg-cyan-400",
         },
         red: {
             base: "red-500", hover: "red-600", light: "red-500/20", border: "red-500/30",
@@ -135,6 +145,7 @@ export const getAccentColorClasses = (color: AccentColor, theme: Theme = "dark")
             hoverTextClass: "hover:text-red-500", hoverBgClass: "hover:bg-red-500/10", hoverBorderClass: "hover:border-red-500/50",
             hoverBgLightClass: "group-hover:bg-red-500/40",
             onContrast: "white", onContrastClass: "text-white",
+            glowClass: "bg-red-500",
         },
     };
     return colorMap[color];
