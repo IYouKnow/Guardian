@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import type { Theme, AccentColor } from '../types';
 import { getThemeClasses, getAccentColorClasses } from '../utils/theme';
 import { authApi } from '../api/auth';
@@ -22,14 +22,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         return (localStorage.getItem('guardian_accent') as AccentColor) || 'yellow';
     });
 
-    const saveToServer = async (prefs: any) => {
+    // Track whether initial fetch has completed to avoid saving stale defaults
+    const initialFetchDone = useRef(false);
+
+    // Use refs to always access current values in the save function
+    const themeRef = useRef(theme);
+    const accentColorRef = useRef(accentColor);
+    useEffect(() => { themeRef.current = theme; }, [theme]);
+    useEffect(() => { accentColorRef.current = accentColor; }, [accentColor]);
+
+    // Stable save function that always reads current values from refs
+    const saveToServer = useCallback(async () => {
         const token = authApi.getToken();
         if (!token) return;
 
-        try {
-            // Need to merge current state with new prefs
-            const payload = { theme, accentColor, ...prefs };
+        const payload = {
+            theme: themeRef.current,
+            accentColor: accentColorRef.current
+        };
 
+        try {
             await fetch('http://localhost:8080/api/preferences', {
                 method: 'PUT',
                 headers: {
@@ -41,19 +53,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {
             console.error("Failed to save preferences", e);
         }
-    };
-
+    }, []);
 
     // Initial Fetch from Server
     useEffect(() => {
         const fetchPreferences = async () => {
             const token = authApi.getToken();
-            if (!token) return;
+            if (!token) {
+                initialFetchDone.current = true;
+                return;
+            }
 
             try {
-                // Using relative path assuming proxy or same origin
-                // Note: User might be running dev server (port 5173) and backend (8080).
-                // They likely have a proxy set up or CORS.
                 const res = await fetch('http://localhost:8080/api/preferences', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -64,23 +75,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
                 }
             } catch (e) {
                 console.error("Failed to fetch preferences", e);
+            } finally {
+                initialFetchDone.current = true;
             }
         };
         fetchPreferences();
     }, []);
 
-    // Sync to LocalStorage & Server
+    // Debounced sync to LocalStorage & Server whenever theme or accent changes
     useEffect(() => {
         localStorage.setItem('guardian_theme', theme);
-        saveToServer({ theme });
-    }, [theme]);
-
-    useEffect(() => {
         localStorage.setItem('guardian_accent', accentColor);
-        saveToServer({ accentColor });
-    }, [accentColor]);
 
+        // Don't save back to server during initial fetch (avoids overwriting with defaults)
+        if (!initialFetchDone.current) return;
 
+        const handler = setTimeout(() => {
+            saveToServer();
+        }, 300);
+
+        return () => clearTimeout(handler);
+    }, [theme, accentColor, saveToServer]);
 
     const themeClasses = getThemeClasses(theme);
     const accentClasses = getAccentColorClasses(accentColor, theme);
