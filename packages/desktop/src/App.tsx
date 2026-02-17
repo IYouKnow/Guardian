@@ -82,8 +82,23 @@ function App() {
       }
     } catch (err) {
       console.error("Sync failed:", err);
-      // Don't show error toast on auto-poll usually, but for manual click we should via separate handler if needed.
-      // For now, let's just log.
+    }
+  };
+
+  // When toggling Sync Theme ON, immediately fetch server preferences
+  const handleSyncThemeChange = async (sync: boolean) => {
+    setSyncTheme(sync);
+    if (sync && connectionMode === 'server') {
+      try {
+        const vaultData = await syncVault();
+        if (vaultData.settings) {
+          await loadFromVault(vaultData.settings as any);
+        }
+        success("Theme synced with server");
+      } catch (err) {
+        console.error("Failed to sync theme:", err);
+        showError("Failed to sync theme from server");
+      }
     }
   };
 
@@ -393,7 +408,7 @@ function App() {
                   showNotifications={preferences.showNotifications}
                   onShowNotificationsChange={setShowNotifications}
                   syncTheme={preferences.syncTheme}
-                  onSyncThemeChange={setSyncTheme}
+                  onSyncThemeChange={handleSyncThemeChange}
                   onSync={handleSync}
                 />
               </motion.div>

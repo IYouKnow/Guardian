@@ -138,10 +138,28 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
           const ok = await checkServerStatus();
           return ok;
         case 2: // Identity
-          if (serverStatus === "READY" && !inviteToken) { setError("Invite Token is required."); return false; }
+          if (!inviteToken) { setError(serverStatus === "SETUP" ? "Setup Code is required." : "Invite Token is required."); return false; }
           if (!username) { setError("Username required."); return false; }
           if (masterPassword.length < 8) { setError("Password must be at least 8 characters."); return false; }
           if (masterPassword !== confirmPassword) { setError("Passwords do not match."); return false; }
+
+          // Validate Token with Server
+          try {
+            const res = await fetch(`${serverUrl}/auth/validate-invite`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: inviteToken })
+            });
+            if (!res.ok) {
+              const txt = await res.text();
+              setError(txt || "Invalid invite/setup code");
+              return false;
+            }
+          } catch (e) {
+            setError("Failed to validate code");
+            return false;
+          }
+
           return true;
         case 3: // DB Name
           // Optional, defaults to username
@@ -305,9 +323,12 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
                           {currentStep === 2 && (
                             <div className="space-y-4">
                               {serverStatus === "SETUP" && (
-                                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-200 mb-2">
-                                  <strong>First Run Detected:</strong> You will be registered as the Server Administrator. No invite needed.
-                                </div>
+                                <>
+                                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-200 mb-2">
+                                    <strong>First Run Detected:</strong> Please enter the server setup code to claim the Admin account.
+                                  </div>
+                                  <InputField label="Setup Code" placeholder="Check your server env: ADMIN_INVITE_CODE" value={inviteToken} onChange={(v: string) => { setInviteToken(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus />
+                                </>
                               )}
                               {serverStatus === "READY" && (
                                 <InputField label="Invite Token" placeholder="Paste your invite code" value={inviteToken} onChange={(v: string) => { setInviteToken(v); setError(""); }} theme={themeClasses} accent={accentClasses} autoFocus />
