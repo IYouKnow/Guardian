@@ -285,6 +285,7 @@ function App() {
       showError(
         err instanceof Error ? err.message : "Failed to unlock vault."
       );
+      throw err;
     }
   };
 
@@ -305,7 +306,13 @@ function App() {
   if (showRegister) {
     return (
       <>
-        <Register mode={registerMode} onRegister={handleRegister} onBackToLogin={() => setShowRegister(false)} />
+        <Register
+          mode={registerMode}
+          onRegister={handleRegister}
+          onBackToLogin={() => setShowRegister(false)}
+          theme={activeTheme}
+          accentColor={preferences.accentColor}
+        />
         <ToastContainer toasts={preferences.showNotifications ? toasts : []} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>
     );

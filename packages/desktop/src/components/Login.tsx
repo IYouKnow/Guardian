@@ -23,7 +23,7 @@ export default function Login({
   const [mode, setMode] = useState<"local" | "server">("local");
   const [masterPassword, setMasterPassword] = useState("");
   const [vaultPath, setVaultPath] = useState<string>(lastVaultPath || "");
-  const [serverUrl, setServerUrl] = useState("http://localhost:8080");
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem("lastServerUrl") || "");
   const [username, setUsername] = useState("");
 
   const [showMasterPassword, setShowMasterPassword] = useState(false);
@@ -85,6 +85,7 @@ export default function Login({
       if (mode === "local") {
         await onLogin("local", { path: vaultPath, password: masterPassword });
       } else {
+        localStorage.setItem("lastServerUrl", serverUrl);
         await onLogin("server", { url: serverUrl, username, password: masterPassword });
       }
       setMasterPassword("");

@@ -9,6 +9,8 @@ interface RegisterWizardProps {
   mode: "local" | "server";
   onRegister: (data: any) => Promise<void>;
   onBackToLogin: () => void;
+  initialTheme: Theme;
+  initialAccentColor: AccentColor;
 }
 
 const LOCAL_STEPS = [
@@ -25,7 +27,7 @@ const SERVER_STEPS = [
   { id: 3, title: "Cloud Storage", description: "Name your database on the server." },
 ];
 
-export default function RegisterWizard({ mode, onRegister, onBackToLogin }: RegisterWizardProps) {
+export default function RegisterWizard({ mode, onRegister, onBackToLogin, initialTheme = "dark", initialAccentColor = "yellow" }: RegisterWizardProps) {
   const steps = mode === "local" ? LOCAL_STEPS : SERVER_STEPS;
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -36,7 +38,7 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
   const [vaultPath, setVaultPath] = useState<string>("");
 
   // Server Fields
-  const [serverUrl, setServerUrl] = useState("http://localhost:8080");
+  const [serverUrl, setServerUrl] = useState(localStorage.getItem("lastServerUrl") || "");
   const [serverStatus, setServerStatus] = useState<"CHECKING" | "SETUP" | "READY" | "ERROR">("CHECKING");
   const [inviteToken, setInviteToken] = useState("");
   const [dbName, setDbName] = useState("");
@@ -45,8 +47,8 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
   // Shared Fields
   const [masterPassword, setMasterPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [selectedTheme, setSelectedTheme] = useState<Theme>("dark");
-  const [selectedAccentColor, setSelectedAccentColor] = useState<AccentColor>("yellow");
+  const [selectedTheme, setSelectedTheme] = useState<Theme>(initialTheme);
+  const [selectedAccentColor, setSelectedAccentColor] = useState<AccentColor>(initialAccentColor);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -136,6 +138,9 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin }: Regi
         case 1: // Connect
           if (!serverUrl) { setError("URL Required"); return false; }
           const ok = await checkServerStatus();
+          if (ok) {
+            localStorage.setItem("lastServerUrl", serverUrl);
+          }
           return ok;
         case 2: // Identity
           if (!inviteToken) { setError(serverStatus === "SETUP" ? "Setup Code is required." : "Invite Token is required."); return false; }

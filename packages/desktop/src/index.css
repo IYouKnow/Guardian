@@ -6,6 +6,11 @@
     body {
         @apply antialiased text-white bg-black selection:bg-yellow-500/30;
     }
+
+    input::-ms-reveal,
+    input::-ms-clear {
+        display: none;
+    }
 }
 
 /* Custom Scrollbar for Webkit */
