@@ -56,3 +56,13 @@ func (s *Server) handleUpdatePreferences(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(prefsBytes)
 }
+
+func (s *Server) handlePreferences(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.withUserAuth(s.handleGetPreferences)(w, r)
+	} else if r.Method == http.MethodPut {
+		s.withUserAuth(s.handleUpdatePreferences)(w, r)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}

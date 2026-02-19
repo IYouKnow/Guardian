@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -226,15 +227,9 @@ func main() {
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
 
 	// User Preferences
-	mux.HandleFunc("/api/preferences", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			server.withUserAuth(server.handleGetPreferences)(w, r)
-		} else if r.Method == http.MethodPut {
-			server.withUserAuth(server.handleUpdatePreferences)(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	// Register both exact and trailing slash to accommodate various clients/proxies
+	mux.HandleFunc("/api/preferences", server.handlePreferences)
+	mux.HandleFunc("/api/preferences/", server.handlePreferences)
 
 	// Serve Static Files (Vite Build)
 	// Serve Static Files (Vite Build - Embedded)
@@ -248,7 +243,8 @@ func main() {
 	// Catch-all for SPA: Serve index.html for any route not matched above
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Clean the path to prevent directory traversal
-		cleanPath := strings.TrimPrefix(filepath.Clean(r.URL.Path), "/")
+		// Use path.Clean (not filepath.Clean) because fs.FS expects forward slashes
+		cleanPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if cleanPath == "" || cleanPath == "." {
 			cleanPath = "index.html"
 		}

@@ -42,7 +42,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         };
 
         try {
-            await fetch('http://localhost:8080/api/preferences', {
+            // Use apiClient or relative path. apiClient handles baseURL and headers.
+            // But context requires cyclical dep if we import apiClient? 
+            // ThemeContext -> api/auth -> api/client. No cycle.
+            // Using fetch with relative path is safer if we want to avoid extra deps here, 
+            // but let's be consistent. Actually, let's use relative fetch to avoid importing apiClient if not needed,
+            // OR use apiClient which is cleaner. Let's use fetch with relative path to be safe and simple.
+            // The go server serves the app, so /api/preferences is correct.
+
+            // Note: In Vite dev mode, we need proxy. In prod, relative is fine.
+            // Vite proxy handles /api -> localhost:8080. 
+            // So '/api/preferences' works in BOTH dev and prod.
+
+            await fetch('/api/preferences', {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -65,7 +77,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             }
 
             try {
-                const res = await fetch('http://localhost:8080/api/preferences', {
+                const res = await fetch('/api/preferences', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
