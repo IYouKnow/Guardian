@@ -23,6 +23,7 @@ interface SettingsProps {
   onShowNotificationsChange: (show: boolean) => void;
   syncTheme: boolean;
   onSyncThemeChange: (sync: boolean) => void;
+  connectionMode: "local" | "server";
 }
 
 type SettingsSection = "account" | "appearance" | "security";
@@ -63,7 +64,8 @@ export default function Settings({
   showNotifications,
   onShowNotificationsChange,
   syncTheme,
-  onSyncThemeChange
+  onSyncThemeChange,
+  connectionMode
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -108,24 +110,33 @@ export default function Settings({
                 </div>
 
                 <div className="flex gap-4">
-                  <button
-                    onClick={onSync}
-                    className={`flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${themeClasses.activeBg} ${themeClasses.activeText} hover:opacity-90 flex items-center justify-center gap-2`}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Sync Vault
-                  </button>
-                  <button
-                    onClick={onLinkAccount}
-                    className={`flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${themeClasses.input} ${themeClasses.text} hover:bg-white/10 flex items-center justify-center gap-2`}
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    Link Account
-                  </button>
+                  {connectionMode === "server" && (
+                    <button
+                      onClick={onSync}
+                      className={`flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${themeClasses.activeBg} ${themeClasses.activeText} hover:opacity-90 flex items-center justify-center gap-2`}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Sync Vault
+                    </button>
+                  )}
+                  {connectionMode === "server" && (
+                    <button
+                      onClick={onLinkAccount}
+                      className={`flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${themeClasses.input} ${themeClasses.text} hover:bg-white/10 flex items-center justify-center gap-2`}
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                      Link Account
+                    </button>
+                  )}
+                  {connectionMode === "local" && (
+                    <div className="flex-1 text-center text-sm opacity-50 italic">
+                      Local vaults are managed directly from your device.
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -164,8 +175,8 @@ export default function Settings({
               accentColor={accentColor}
               onThemeChange={onThemeChange}
               onAccentColorChange={onAccentColorChange}
-              syncTheme={syncTheme}
-              onSyncThemeChange={onSyncThemeChange}
+              syncTheme={connectionMode === "server" ? syncTheme : undefined}
+              onSyncThemeChange={connectionMode === "server" ? onSyncThemeChange : undefined}
             />
 
             <div className={`h-px w-full ${themeClasses.divider} opacity-40`} />

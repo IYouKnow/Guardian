@@ -219,8 +219,15 @@ func main() {
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
 
 	// User Preferences
-	mux.HandleFunc("GET /api/preferences", server.withUserAuth(server.handleGetPreferences))
-	mux.HandleFunc("PUT /api/preferences", server.withUserAuth(server.handleUpdatePreferences))
+	mux.HandleFunc("/api/preferences", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			server.withUserAuth(server.handleGetPreferences)(w, r)
+		} else if r.Method == http.MethodPut {
+			server.withUserAuth(server.handleUpdatePreferences)(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Serve Static Files (Vite Build)
 	staticFileServer := http.FileServer(http.Dir("dist"))

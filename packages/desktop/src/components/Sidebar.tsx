@@ -14,6 +14,8 @@ interface SidebarProps {
   accentColor: AccentColor;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  connectionMode: "local" | "server";
+  vaultName: string;
 }
 
 export default function Sidebar({
@@ -28,6 +30,8 @@ export default function Sidebar({
   accentColor,
   searchQuery,
   onSearchChange,
+  connectionMode,
+  vaultName,
 }: SidebarProps) {
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
@@ -135,7 +139,20 @@ export default function Sidebar({
       </nav>
 
       {/* Footer Action */}
-      <div className={`p-6 border-t ${themeClasses.border}`}>
+      <div className={`p-6 border-t ${themeClasses.border} space-y-4`}>
+        {/* Status Info */}
+        <div className={`p-3 rounded-xl bg-white/5 border ${themeClasses.border} flex items-center gap-3`}>
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connectionMode === "server" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"}`} />
+          <div className="flex flex-col min-w-0">
+            <span className={`text-[0.6rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+              {connectionMode === "server" ? "Connected to" : "Local Vault"}
+            </span>
+            <span className={`text-xs font-semibold truncate ${themeClasses.text} break-all`} title={vaultName}>
+              {vaultName}
+            </span>
+          </div>
+        </div>
+
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={onAddPassword}

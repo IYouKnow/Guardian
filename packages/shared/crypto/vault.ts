@@ -66,6 +66,7 @@ export interface VaultSettings {
   itemSize?: "small" | "medium" | "large";
   clipboardClearSeconds?: number;
   revealCensorSeconds?: number;
+  syncTheme?: boolean;
 }
 
 export interface VaultEntry {

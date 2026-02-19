@@ -21,6 +21,7 @@ interface UseVaultReturn {
 
   // Server Mode
   connectionMode: "local" | "server";
+  serverUrl: string | null;
   loginToServer: (url: string, username: string, password: string) => Promise<VaultData>;
   registerOnServer: (url: string, data: any) => Promise<void>;
   syncVault: () => Promise<VaultData>;
@@ -119,6 +120,8 @@ export function useVault(): UseVaultReturn {
   const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<VaultData> => {
     setIsLoading(true);
     setError(null);
+    // Ensure no trailing slash
+    url = url.endsWith("/") ? url.slice(0, -1) : url;
     setConnectionMode("server");
 
     try {
@@ -196,7 +199,15 @@ export function useVault(): UseVaultReturn {
         const prefResp = await fetch(`${url}/api/preferences`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
-        if (prefResp.ok) remotePrefs = await prefResp.json();
+        if (prefResp.ok) {
+          try {
+            remotePrefs = await prefResp.json();
+          } catch (jsonErr) {
+            console.warn("Failed to parse preferences JSON, server might be returning HTML (404/500) or empty body");
+            // Optional: read text to debug
+            // const text = await prefResp.text(); console.warn("Response:", text);
+          }
+        }
       } catch (e) { console.warn("Failed to fetch preferences", e); }
 
       const finalSettings = { ...settings, ...remotePrefs };
@@ -356,7 +367,13 @@ export function useVault(): UseVaultReturn {
         const prefResp = await fetch(`${serverUrl}/api/preferences`, {
           headers: { "Authorization": `Bearer ${authToken}` }
         });
-        if (prefResp.ok) remotePrefs = await prefResp.json();
+        if (prefResp.ok) {
+          try {
+            remotePrefs = await prefResp.json();
+          } catch {
+            console.warn("Failed to parse preferences JSON during sync");
+          }
+        }
       } catch (e) { console.warn("Failed to fetch preferences", e); }
 
       const finalSettings = { ...settings, ...remotePrefs };
@@ -403,6 +420,7 @@ export function useVault(): UseVaultReturn {
 
     // Server Specific
     connectionMode,
+    serverUrl,
     loginToServer,
     registerOnServer: async (url: string, data: any) => {
       const resp = await fetch(`${url}/auth/register`, {

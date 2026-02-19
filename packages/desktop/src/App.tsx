@@ -64,7 +64,8 @@ function App() {
     loginToServer,
     registerOnServer,
     syncVault,
-    connectionMode
+    connectionMode,
+    serverUrl,
   } = useVault();
 
   const { toasts, removeToast, success, error: showError } = useToast();
@@ -379,6 +380,12 @@ function App() {
             accentColor={preferences.accentColor}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            connectionMode={connectionMode}
+            vaultName={
+              connectionMode === "server"
+                ? (serverUrl || "Server").replace(/^https?:\/\//, "")
+                : (preferences.lastVaultPath || "Local Vault").split(/[\\/]/).pop() || "Local Vault"
+            }
           />
 
           {/* Resize handle */}
@@ -417,6 +424,7 @@ function App() {
                   syncTheme={preferences.syncTheme}
                   onSyncThemeChange={handleSyncThemeChange}
                   onSync={handleSync}
+                  connectionMode={connectionMode}
                 />
               </motion.div>
             ) : (
