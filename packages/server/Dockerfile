@@ -42,11 +42,11 @@ COPY packages/server/go.sum ./
 RUN go mod download
 
 # Copy the rest of the source
-COPY packages/server/*.go ./
+COPY packages/server/ ./
 
 # Build the binary
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X 'main.Version=${VERSION}'" -o server .
+RUN ls -la && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X 'main.Version=${VERSION}'" -o server .
 
 # ==========================================
 # STAGE 3: Final Server Image
