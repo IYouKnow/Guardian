@@ -42,7 +42,7 @@ COPY packages/server/go.sum ./
 RUN go mod download
 
 # Copy the rest of the source
-COPY packages/server/main.go ./
+COPY packages/server/*.go ./
 
 # Build the binary
 ARG VERSION=dev
