@@ -2,11 +2,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -23,6 +27,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )
+
+//go:embed dist
+var content embed.FS
 
 // contextKey is a custom type for context keys to avoid collisions
 type contextKey string
@@ -230,18 +237,61 @@ func main() {
 	})
 
 	// Serve Static Files (Vite Build)
-	staticFileServer := http.FileServer(http.Dir("dist"))
-	mux.Handle("/assets/", staticFileServer)
+	// Serve Static Files (Vite Build - Embedded)
+	distFS, err := fs.Sub(content, "dist")
+	if err != nil {
+		logger.Fatalf("Failed to load embedded assets: %v", err)
+	}
+
+	staticFileServer := http.FileServer(http.FS(distFS))
 
 	// Catch-all for SPA: Serve index.html for any route not matched above
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// If it's a request for a file that doesn't exist, serve index.html
-		path := filepath.Join("dist", r.URL.Path)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			http.ServeFile(w, r, filepath.Join("dist", "index.html"))
+		// Clean the path to prevent directory traversal
+		cleanPath := strings.TrimPrefix(filepath.Clean(r.URL.Path), "/")
+		if cleanPath == "" || cleanPath == "." {
+			cleanPath = "index.html"
+		}
+
+		// Check if file exists in the FS
+		f, err := distFS.Open(cleanPath)
+		if err == nil {
+			defer f.Close()
+			// If it's a directory, we might want to let FileServer handle it or serve index if it's root
+			// But for SPA usually specific files are requested or we fallback.
+			// FileServer handles directories by showing index.html if present or listing.
+			// Just use FileServer for existing paths.
+			staticFileServer.ServeHTTP(w, r)
 			return
 		}
-		staticFileServer.ServeHTTP(w, r)
+
+		// Should we check if it is a directory?
+		// Actually, standard SPA logic: if API or asset -> 404. If route -> index.html.
+		// Since API routes are handled above, we only care about assets vs routes.
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			// If asset missing, 404
+			http.NotFound(w, r)
+			return
+		}
+
+		// Fallback to index.html for SPA routing
+		index, err := distFS.Open("index.html")
+		if err != nil {
+			http.Error(w, "Index not found", http.StatusNotFound)
+			return
+		}
+		defer index.Close()
+
+		stat, _ := index.Stat()
+
+		// Read content to support Seek (required by ServeContent)
+		data, err := io.ReadAll(index)
+		if err != nil {
+			http.Error(w, "Failed to read index", http.StatusInternalServerError)
+			return
+		}
+
+		http.ServeContent(w, r, "index.html", stat.ModTime(), bytes.NewReader(data))
 	})
 
 	// 7. Setup HTTP Server with graceful shutdown

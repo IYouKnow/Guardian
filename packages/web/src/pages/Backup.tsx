@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Cloud, HardDrive, RefreshCw, UploadCloud, Database, Shield, Lock,
+    Cloud, HardDrive, RefreshCw, UploadCloud, Shield, Lock,
     Clock, CheckCircle2, XCircle, Calendar, ChevronRight, Plus,
-    Download, Eye, EyeOff, Copy, RotateCcw, History, Zap, Server, AlertTriangle
+    Download, Eye, EyeOff, Copy, RotateCcw, History, Zap, Server, TriangleAlert
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from "@/components/ui/button";
@@ -221,7 +221,7 @@ export default function Backup() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
             >
-                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <TriangleAlert className="w-5 h-5 flex-shrink-0" />
                 <span className="font-medium text-sm">Notice: Backup metrics are simulated. Real-time backup status is not yet connected.</span>
             </motion.div>
 
@@ -235,7 +235,7 @@ export default function Backup() {
                 {[
                     { label: 'Providers', value: `${connectedCount}/${destinations.length}`, sublabel: 'Connected', icon: Server, color: 'text-blue-400', bg: 'bg-blue-500/10' },
                     { label: 'Success Rate', value: `${successRate}%`, sublabel: 'Last 30 days', icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                    { label: 'Total Size', value: totalSize, sublabel: 'Across all providers', icon: Database, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+                    { label: 'Total Size', value: totalSize, sublabel: 'Across all providers', icon: HardDrive, color: 'text-purple-400', bg: 'bg-purple-500/10' },
                     { label: 'Last Backup', value: '2 min', sublabel: 'ago', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10' },
                 ].map((stat, index) => {
                     const Icon = stat.icon;
@@ -626,7 +626,7 @@ export default function Backup() {
 
                     {/* Warning */}
                     <div className="flex items-start gap-2.5 mt-4 p-3 rounded-xl bg-orange-500/5 border border-orange-500/10">
-                        <AlertTriangle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+                        <TriangleAlert className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                         <p className="text-orange-400/80 text-xs leading-relaxed">
                             Store this key safely. If lost, backups stored on external providers cannot be recovered. Rotating the key will not affect existing backups, but new backups will use the new key.
                         </p>

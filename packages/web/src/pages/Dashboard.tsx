@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Users, Key, Database, Zap, Server, AlertTriangle } from 'lucide-react';
+import { Users, Key, HardDrive, Zap, Server, TriangleAlert } from 'lucide-react';
 import StatsCard, { type StatsCardProps } from '@/components/dashboard/StatsCard';
 import ActivityChart from '@/components/dashboard/ActivityChart';
 import RecentActivity from '@/components/dashboard/RecentActivity';
@@ -11,7 +11,7 @@ export default function Dashboard() {
   const stats: StatsCardProps[] = [
     { title: 'Total Users', value: '2,847', change: '+12.5%', changeType: 'positive', icon: Users },
     { title: 'Vault Items', value: '48,392', change: '+8.2%', changeType: 'positive', icon: Key },
-    { title: 'Storage Used', value: '2.4 TB', change: '+3.1%', changeType: 'positive', icon: Database },
+    { title: 'Storage Used', value: '2.4 TB', change: '+3.1%', changeType: 'positive', icon: HardDrive },
     { title: 'Active Sessions', value: '186', change: '-2.4%', changeType: 'negative', icon: Zap },
   ];
 
@@ -41,7 +41,7 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
       >
-        <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+        <TriangleAlert className="w-5 h-5 flex-shrink-0" />
         <span className="font-medium">Notice: This dashboard is currently using mock data. Real-time statistics are not yet connected.</span>
       </motion.div>
 

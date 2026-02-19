@@ -181,6 +181,7 @@ export function usePreferences() {
 
   // When syncTheme or serverSettings change, apply server settings if sync is ON
   useEffect(() => {
+    console.log("[usePreferences] Sync check. Enabled:", preferences.syncTheme, "ServerSettings:", serverSettings);
     if (preferences.syncTheme && serverSettings) {
       const { theme, accentColor } = serverSettings;
 
@@ -188,15 +189,18 @@ export function usePreferences() {
       const updates: Partial<Preferences> = {};
 
       if (theme && theme !== preferences.theme) {
+        console.log("[usePreferences] Theme mismatch. Local:", preferences.theme, "Server:", theme);
         updates.theme = theme;
         hasChanges = true;
       }
       if (accentColor && accentColor !== preferences.accentColor) {
+        console.log("[usePreferences] Accent mismatch. Local:", preferences.accentColor, "Server:", accentColor);
         updates.accentColor = accentColor;
         hasChanges = true;
       }
 
       if (hasChanges) {
+        console.log("[usePreferences] Applying updates:", updates);
         setPreferences(prev => ({ ...prev, ...updates }));
         persistSettings(updates);
       }
@@ -204,6 +208,7 @@ export function usePreferences() {
   }, [preferences.syncTheme, preferences.theme, preferences.accentColor, serverSettings, persistSettings]);
 
   const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
+    console.log("[usePreferences] loadFromVault called with:", vaultSettings);
     // 1. Always update our knowledge of what the server has
     setServerSettings(vaultSettings);
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Clock, UserPlus, Key, Shield, AlertTriangle, LogIn, type LucideIcon } from 'lucide-react';
+import { Clock, UserPlus, Key, Shield, TriangleAlert, LogIn, type LucideIcon } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 type ActivityType = 'login' | 'create' | 'access' | 'security' | 'warning';
@@ -18,7 +18,7 @@ const activities: Activity[] = [
   { id: 2, type: 'create', user: 'admin@vault.com', action: 'Created new user account', time: '15 min ago', icon: UserPlus },
   { id: 3, type: 'access', user: 'sarah.smith@email.com', action: 'Accessed vault item', time: '32 min ago', icon: Key },
   { id: 4, type: 'security', user: 'system', action: 'Security scan completed', time: '1 hour ago', icon: Shield },
-  { id: 5, type: 'warning', user: 'mike.wilson@email.com', action: 'Failed login attempt', time: '2 hours ago', icon: AlertTriangle },
+  { id: 5, type: 'warning', user: 'mike.wilson@email.com', action: 'Failed login attempt', time: '2 hours ago', icon: TriangleAlert },
 ];
 
 const typeColors: Record<ActivityType, string> = {

@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:web": "pnpm --filter guardian-web build",
+    "build:server": "pnpm build:web && cd packages/server && go build -o server_local.exe ."
   },
   "keywords": [],
   "author": "",

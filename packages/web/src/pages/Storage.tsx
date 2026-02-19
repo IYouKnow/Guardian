@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Database, HardDrive, AlertTriangle, Users, FileText, Image, Film,
+    HardDrive, TriangleAlert, Users, FileText, Image,
     Archive, ChevronRight, TrendingUp, Server, Settings, Shield,
-    ArrowUpRight, ArrowDownRight, Gauge, Layers, PieChart, BarChart3
+    ArrowUpRight, ArrowDownRight, Gauge, Layers, ChartPie, ChartBar
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from "@/components/ui/button";
@@ -71,9 +71,9 @@ export default function Storage() {
     const getUserPercentage = (user: UserQuota) => Math.round((user.usedBytes / user.quotaBytes) * 100);
 
     const tabs = [
-        { id: 'overview' as const, label: 'Overview', icon: PieChart },
+        { id: 'overview' as const, label: 'Overview', icon: ChartPie },
         { id: 'users' as const, label: 'User Quotas', icon: Users },
-        { id: 'breakdown' as const, label: 'Breakdown', icon: BarChart3 },
+        { id: 'breakdown' as const, label: 'Breakdown', icon: ChartBar },
     ];
 
     // Ring progress component
@@ -145,7 +145,7 @@ export default function Storage() {
                     <Button
                         className={`${accentClasses.bgClass} ${accentClasses.onContrastClass} hover:opacity-90 transition-all duration-300 rounded-xl shadow-lg ${accentClasses.shadowClass}`}
                     >
-                        <Database className="w-4 h-4 mr-2" />
+                        <Server className="w-4 h-4 mr-2" />
                         Manage Quotas
                     </Button>
                 </div>
@@ -157,7 +157,7 @@ export default function Storage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
             >
-                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <TriangleAlert className="w-5 h-5 flex-shrink-0" />
                 <span className="font-medium text-sm">Notice: Storage metrics are simulated. Real-time disk usage is not yet connected.</span>
             </motion.div>
 
@@ -222,7 +222,7 @@ export default function Storage() {
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 {[
                                     { label: 'Available', value: formatStorage(totalStorageGB - usedStorageGB), icon: HardDrive, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                                    { label: 'Total Capacity', value: formatStorage(totalStorageGB), icon: Database, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                                    { label: 'Total Capacity', value: formatStorage(totalStorageGB), icon: HardDrive, color: 'text-blue-400', bg: 'bg-blue-500/10' },
                                     { label: 'Total Users', value: userQuotas.length.toString(), icon: Users, color: 'text-purple-400', bg: 'bg-purple-500/10' },
                                     { label: 'Vault Items', value: '48,392', icon: Shield, color: 'text-amber-400', bg: 'bg-amber-500/10' },
                                 ].map(stat => {
@@ -259,8 +259,8 @@ export default function Storage() {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === tab.id
-                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-md ${accentClasses.shadowClass}`
-                                    : `${themeClasses.textSecondary} hover:${themeClasses.text}`
+                                ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-md ${accentClasses.shadowClass}`
+                                : `${themeClasses.textSecondary} hover:${themeClasses.text}`
                                 }`}
                         >
                             <Icon className="w-4 h-4" />
@@ -315,8 +315,8 @@ export default function Storage() {
                                             animate={{ height: `${bar.value}%` }}
                                             transition={{ duration: 0.8, delay: 0.1 * i, ease: "easeOut" }}
                                             className={`w-full rounded-lg ${i === 5
-                                                    ? `bg-gradient-to-t ${isWarning ? 'from-amber-500 to-amber-400' : 'from-blue-600 to-blue-400'}`
-                                                    : `${themeClasses.sectionBg} border ${themeClasses.border}`
+                                                ? `bg-gradient-to-t ${isWarning ? 'from-amber-500 to-amber-400' : 'from-blue-600 to-blue-400'}`
+                                                : `${themeClasses.sectionBg} border ${themeClasses.border}`
                                                 }`}
                                         />
                                         <span className={`text-[10px] ${i === 5 ? themeClasses.text : themeClasses.textTertiary} font-medium`}>{bar.month}</span>
@@ -503,10 +503,10 @@ export default function Storage() {
                                         animate={{ width: `${item.percentage}%` }}
                                         transition={{ duration: 0.8, delay: 0.1 * i, ease: "easeOut" }}
                                         className={`h-full ${i === 0 ? 'bg-blue-500' :
-                                                i === 1 ? 'bg-emerald-500' :
-                                                    i === 2 ? 'bg-purple-500' :
-                                                        i === 3 ? 'bg-amber-500' :
-                                                            'bg-zinc-600'
+                                            i === 1 ? 'bg-emerald-500' :
+                                                i === 2 ? 'bg-purple-500' :
+                                                    i === 3 ? 'bg-amber-500' :
+                                                        'bg-zinc-600'
                                             } ${i === 0 ? 'rounded-l-full' : ''} ${i === fileBreakdown.length - 1 ? 'rounded-r-full' : ''}`}
                                         style={{ opacity: 0.8 }}
                                     />
@@ -539,10 +539,10 @@ export default function Storage() {
                                                         animate={{ width: `${item.percentage}%` }}
                                                         transition={{ duration: 0.8, delay: 0.15 * index, ease: "easeOut" }}
                                                         className={`h-full rounded-full ${index === 0 ? 'bg-blue-500' :
-                                                                index === 1 ? 'bg-emerald-500' :
-                                                                    index === 2 ? 'bg-purple-500' :
-                                                                        index === 3 ? 'bg-amber-500' :
-                                                                            'bg-zinc-600'
+                                                            index === 1 ? 'bg-emerald-500' :
+                                                                index === 2 ? 'bg-purple-500' :
+                                                                    index === 3 ? 'bg-amber-500' :
+                                                                        'bg-zinc-600'
                                                             }`}
                                                     />
                                                 </div>
@@ -594,7 +594,7 @@ export default function Storage() {
                                 <div className="space-y-2">
                                     {[
                                         { label: 'Run Cleanup', desc: 'Remove expired items', icon: Archive },
-                                        { label: 'Analyze Usage', desc: 'Detailed report', icon: BarChart3 },
+                                        { label: 'Analyze Usage', desc: 'Detailed report', icon: ChartBar },
                                         { label: 'Export Data', desc: 'Download report', icon: ArrowDownRight },
                                     ].map(action => {
                                         const Icon = action.icon;

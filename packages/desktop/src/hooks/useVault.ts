@@ -364,15 +364,19 @@ export function useVault(): UseVaultReturn {
       // Fetch Preferences (Web Sync)
       let remotePrefs: Partial<VaultSettings> = {};
       try {
+        console.log("[useVault] Fetching preferences from:", `${serverUrl}/api/preferences`);
         const prefResp = await fetch(`${serverUrl}/api/preferences`, {
           headers: { "Authorization": `Bearer ${authToken}` }
         });
         if (prefResp.ok) {
           try {
             remotePrefs = await prefResp.json();
+            console.log("[useVault] Received preferences:", remotePrefs);
           } catch {
             console.warn("Failed to parse preferences JSON during sync");
           }
+        } else {
+          console.warn("[useVault] Preferences fetch failed:", prefResp.status);
         }
       } catch (e) { console.warn("Failed to fetch preferences", e); }
 

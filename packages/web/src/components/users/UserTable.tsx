@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Edit, Trash2, Key, Shield, UserX, Loader2, HardDrive } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Key, Shield, UserX, Loader2, HardDrive } from 'lucide-react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { AdminUser } from '@/api/admin';
 import { useTheme } from '../../context/ThemeContext';
@@ -137,7 +137,7 @@ export default function UserTable({ users, loading }: UserTableProps) {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className={`${themeClasses.sectionBg} border ${themeClasses.border} ${themeClasses.text} backdrop-blur-xl`}>
                       <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer`}>
-                        <Edit className="w-4 h-4 mr-2" /> Edit User
+                        <Pencil className="w-4 h-4 mr-2" /> Edit User
                       </DropdownMenuItem>
                       <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer`}>
                         <Key className="w-4 h-4 mr-2" /> Reset Password
