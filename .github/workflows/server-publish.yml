@@ -1,0 +1,151 @@
+name: Build and Publish Server
+
+on:
+  push:
+    tags:
+      - "server-v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/guardian-server
+
+jobs:
+  docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository owner
+        id: repo_owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ steps.repo_owner.outputs.owner }}/guardian-server
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=match,pattern=server-v(.*),group=1
+            type=match,pattern=server-v(\d+)\.\d+\.\d+,group=1
+            type=match,pattern=server-v(\d+\.\d+)\.\d+,group=1
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./packages/server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  binaries:
+    name: Build and Release Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Setup Node/PNPM for Web Build
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 2. Build Web Panel -> packages/server/dist
+      - name: Build Web Panel
+        run: pnpm --filter guardian-web build
+
+      # 3. Setup Go
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: packages/server/go.sum
+
+      # 4. Build Server Binary (with embedded web)
+      - name: Build Binary
+        working-directory: packages/server
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          BINARY_NAME=guardian-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          
+          # Extract version from tag (e.g., server-v1.0.0 -> 1.0.0)
+          VERSION=${GITHUB_REF#refs/tags/server-v}
+          
+          go build -ldflags="-s -w -X 'main.Version=${VERSION}'" -o "release/${BINARY_NAME}" .
+
+      # 5. Generate Release Notes
+      - name: Generate Release Body
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/server-v}
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME="ghcr.io/$REPO_OWNER/guardian-server"
+          
+          # Start with the static release notes template
+          cat .github/SERVER_RELEASE_NOTES.md > RELEASE_BODY.md
+          
+          # Replace placeholder <USERNAME> with actual repo owner
+          sed -i "s/<USERNAME>/$REPO_OWNER/g" RELEASE_BODY.md
+          
+          # Inject Docker commands
+          DOCKER_CMD=" \`\`\`bash\n docker pull $IMAGE_NAME:latest\n docker pull $IMAGE_NAME:server-v$VERSION\n \`\`\`"
+          sed -i "/Pull the latest image from the GitHub Container Registry:/a $DOCKER_CMD" RELEASE_BODY.md
+          
+      # 6. Upload Release Assets
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: packages/server/release/guardian-server-*
+          body_path: RELEASE_BODY.md
+          generate_release_notes: false
+          draft: false
+          prerelease: false
+          name: "Guardian Server v${{ github.ref_name }}"

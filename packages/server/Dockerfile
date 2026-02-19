@@ -42,7 +42,11 @@ COPY packages/server/go.sum ./
 RUN go mod download
 
 # Copy the rest of the source
+# Copy the rest of the source
 COPY packages/server/ ./
+
+# Copy built web assets for embedding
+COPY --from=web-builder /app/packages/server/dist ./dist
 
 # Build the binary
 ARG VERSION=dev
@@ -56,13 +60,12 @@ RUN apk add --no-cache ca-certificates tzdata wget
 RUN addgroup -S guardian && adduser -S guardian -G guardian
 
 WORKDIR /app
-RUN mkdir -p /app/data /app/dist && chown -R guardian:guardian /app
+RUN mkdir -p /app/data && chown -R guardian:guardian /app
 
 # Copy binary from Stage 2
 COPY --from=server-builder /build/server /app/guardian-server
 
-# Copy pre-built dist from Stage 1 (Vite built into packages/server/dist)
-COPY --from=web-builder --chown=guardian:guardian /app/packages/server/dist /app/dist/
+# (Optional) We no longer need to copy /app/dist separately because it is embedded in the binary
 
 USER guardian
 ENV PORT=8080
