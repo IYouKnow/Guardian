@@ -166,6 +166,7 @@ type Server struct {
 	config   Config
 	logger   *log.Logger
 	userDBs  sync.Map // map[string]*sql.DB - cached user DB connections
+	sseHub   *SSEHub
 }
 
 func main() {
@@ -203,6 +204,7 @@ func main() {
 		systemDB: sysDB,
 		config:   config,
 		logger:   logger,
+		sseHub:   NewSSEHub(),
 	}
 
 	mux := http.NewServeMux()
@@ -225,6 +227,9 @@ func main() {
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
+
+	// SSE Events
+	mux.HandleFunc("GET /api/events", server.handleEvents)
 
 	// User Preferences
 	// Register both exact and trailing slash to accommodate various clients/proxies
@@ -848,6 +853,7 @@ func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// handleUpsertItems adds or updates one or more vault items for the user
 func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 	var items []VaultItem
 	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
@@ -894,6 +900,12 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "Commit failed", http.StatusInternalServerError)
 		return
+	}
+
+	// Retrieve user ID from context safely (to use for broadcasting event)
+	userID, ok := r.Context().Value(userIDKey).(int)
+	if ok {
+		s.sseHub.BroadcastToUser(userID, "vault_updated")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Items synced"})

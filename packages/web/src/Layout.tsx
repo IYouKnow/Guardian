@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +18,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { useTheme } from './context/ThemeContext';
+import { useSSE } from './hooks/useSSE';
+import { SyncIndicator } from './components/SyncIndicator';
 
 const navItems = [
   { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard' },
@@ -35,7 +37,18 @@ interface LayoutProps {
 
 export default function Layout({ children, currentPageName }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { theme, themeClasses, accentClasses } = useTheme();
+  const { theme, themeClasses, accentClasses, refetchPreferences } = useTheme();
+  const { isSyncing, lastEvent } = useSSE();
+
+  // Listen for specific SSE events and trigger refetches
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    if (lastEvent.type === 'prefs_updated') {
+      console.log('[SSE] Preferences updated. Refetching...');
+      refetchPreferences?.();
+    }
+  }, [lastEvent, refetchPreferences]);
 
   // Don't show layout on Login page
   if (currentPageName === 'Login') {
@@ -50,6 +63,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   return (
     <div className={`h-screen overflow-hidden ${themeClasses.bg} transition-all duration-300`}>
       <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
+      <SyncIndicator isSyncing={isSyncing} lastEventTimestamp={lastEvent?.timestamp} />
 
       {/* Mobile Header */}
       <div className={`lg:hidden fixed top-0 left-0 right-0 z-50 ${themeClasses.bg}/95 backdrop-blur-xl border-b ${themeClasses.divider} transition-colors duration-300`}>

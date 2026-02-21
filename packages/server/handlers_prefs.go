@@ -53,6 +53,9 @@ func (s *Server) handleUpdatePreferences(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Broadcast SSE Event for preferences update
+	s.sseHub.BroadcastToUser(userID, "prefs_updated")
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(prefsBytes)
 }

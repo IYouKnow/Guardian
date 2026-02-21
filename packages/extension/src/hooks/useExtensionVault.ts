@@ -1,5 +1,10 @@
 import { useState, useCallback } from "react";
-import { VaultEntry, VaultData } from "../../../shared/crypto/vault";
+import type { VaultEntry, VaultData } from "../../../shared/crypto/vault";
+export interface ExtensionVaultData extends VaultData {
+    authToken?: string;
+    serverUrl?: string;
+    serverKey?: number[];
+}
 import { deriveKey } from "../../../shared/crypto/argon2";
 import { decrypt } from "../../../shared/crypto/chacha20";
 
@@ -8,7 +13,8 @@ interface UseExtensionVaultReturn {
     error: string | null;
     serverUrl: string | null;
 
-    loginToServer: (url: string, username: string, password: string) => Promise<VaultData>;
+    loginToServer: (url: string, username: string, password: string) => Promise<ExtensionVaultData>;
+    syncVault: (url: string, token: string, keyArray: number[]) => Promise<ExtensionVaultData>;
     registerOnServer: (url: string, data: any) => Promise<void>;
 }
 
@@ -32,7 +38,7 @@ export function useExtensionVault(): UseExtensionVaultReturn {
         return deriveKey(password, salt);
     };
 
-    const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<VaultData> => {
+    const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<ExtensionVaultData> => {
         setIsLoading(true);
         setError(null);
 
@@ -88,11 +94,64 @@ export function useExtensionVault(): UseExtensionVaultReturn {
                 entries,
                 createdAt: new Date().toISOString(),
                 lastModified: new Date().toISOString(),
-                settings: { theme: 'dark' }
+                settings: { theme: 'dark' },
+                authToken: token,
+                serverUrl: cleanUrl,
+                serverKey: Array.from(key)
             };
 
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Server login failed";
+            setError(msg);
+            throw new Error(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const syncVault = useCallback(async (url: string, token: string, keyArray: number[]): Promise<ExtensionVaultData> => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const cleanUrl = url.replace(/\/$/, "");
+            const key = new Uint8Array(keyArray);
+
+            const itemsResp = await fetch(`${cleanUrl}/vault/items`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+
+            if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
+
+            const items: VaultItem[] = await itemsResp.json();
+            const entries: VaultEntry[] = [];
+
+            for (const item of items) {
+                const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
+                const nonce = raw.slice(0, 12);
+                const ciphertext = raw.slice(12);
+
+                try {
+                    const plaintext = await decrypt(key, nonce, ciphertext);
+                    const entryStr = new TextDecoder().decode(plaintext);
+                    entries.push(JSON.parse(entryStr));
+                } catch (e) {
+                    console.warn(`Failed to decrypt item ${item.id}`, e);
+                }
+            }
+
+            return {
+                entries,
+                createdAt: new Date().toISOString(),
+                lastModified: new Date().toISOString(),
+                settings: { theme: 'dark' },
+                authToken: token,
+                serverUrl: cleanUrl,
+                serverKey: keyArray
+            };
+
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Sync failed";
             setError(msg);
             throw new Error(msg);
         } finally {
@@ -128,6 +187,7 @@ export function useExtensionVault(): UseExtensionVaultReturn {
         error,
         serverUrl,
         loginToServer,
+        syncVault,
         registerOnServer
     };
 }

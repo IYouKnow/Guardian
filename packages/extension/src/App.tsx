@@ -8,8 +8,12 @@ import Login from "./components/Login";
 import PasswordGrid from "./components/PasswordGrid";
 import PasswordDetail from "./components/PasswordDetail";
 import Settings from "./components/Settings";
-import { openVault, type VaultEntry } from "../../shared/crypto";
-import { loadSettings, saveSettings, clearSession, saveVault } from "./utils/storage";
+import { SyncIndicator } from "./components/SyncIndicator";
+import { useSSE } from "./hooks/useSSE";
+import { openVault, type VaultEntry } from "../../shared/crypto/vault";
+import { deriveHKDF } from "../../shared/crypto/hkdf";
+import { deriveKey } from "../../shared/crypto/argon2";
+import { loadSettings, saveSettings, clearSession, saveVault, deleteVault, loadVaultFromStorage, getExtensionMasterSalt } from "./utils/storage";
 import {
   getFileMetadata,
   saveFileHandle,
@@ -54,7 +58,14 @@ function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Server Hook
-  const { loginToServer } = useExtensionVault();
+  const { loginToServer, syncVault } = useExtensionVault();
+
+  // SSE Sync
+  const [serverUrl, setServerUrl] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [localAppKey, setLocalAppKey] = useState<number[] | null>(null);
+  const [derivedServerKey, setDerivedServerKey] = useState<number[] | null>(null);
+  const { isSyncing, lastEvent } = useSSE(serverUrl, authToken);
 
   // Initialize settings & session
   useEffect(() => {
@@ -67,9 +78,9 @@ function App() {
         if (settings.revealCensorSeconds) setRevealCensorSeconds(settings.revealCensorSeconds);
 
         // 1. Get stored session from service worker
-        const session = await new Promise<{ isLoggedIn: boolean; passwords: PasswordEntry[]; lastModified: number, mode?: 'local' | 'server' }>((resolve) => {
+        const session = await new Promise<{ isLoggedIn: boolean; lastModified: number, mode?: 'local' | 'server', serverUrl?: string, authToken?: string, serverKey?: number[], derivedServerKey?: number[], localKey?: number[] }>((resolve) => {
           chrome.runtime.sendMessage({ action: 'getSession' }, (res) => {
-            resolve(res || { isLoggedIn: false, passwords: [], lastModified: 0, mode: 'local' });
+            resolve(res || { isLoggedIn: false, lastModified: 0, mode: 'local' });
           });
         });
 
@@ -82,22 +93,24 @@ function App() {
         }
 
         // 3. Auto-login check
-        if (session.isLoggedIn && session.passwords.length > 0) {
-          // If we have a file handle, verify modification time if possible, otherwise rely on session
-          let match = true;
-          // Logic for verifying file freshness is skipped for brevity/complexity in mixed mode,
-          // assuming session is truth unless we explicitly detect change.
+        if (session.isLoggedIn) {
+          const storedKey = session.localKey;
+          if (storedKey) {
+            try {
+              const localAppKey = new Uint8Array(storedKey);
+              const decryptedEntries = await loadVaultFromStorage(localAppKey);
+              setPasswords(decryptedEntries.map(vaultEntryToPasswordEntry));
+              setIsLoggedIn(true);
 
-          if (match) {
-            setPasswords(session.passwords);
-            setIsLoggedIn(true);
-            if (session.mode === 'local') {
-              // Ensure we check handles only if implied local
-            }
-            if (session.mode) {
-              // We can set an internal state here if we want to track mode for UI
-              // Let's us a ref or state for 'loginMode'
-              setLoginMode(session.mode);
+              if (session.mode) {
+                setLoginMode(session.mode);
+              }
+              if (session.serverUrl) setServerUrl(session.serverUrl);
+              if (session.authToken) setAuthToken(session.authToken);
+              if (session.localKey) setLocalAppKey(session.localKey);
+              if (session.derivedServerKey) setDerivedServerKey(session.derivedServerKey);
+            } catch (err) {
+              console.warn("Auto-login decryption failed:", err);
             }
           }
         }
@@ -143,6 +156,10 @@ function App() {
     try {
       let loadedPasswords: PasswordEntry[] = [];
       let lastModified = Date.now();
+      let derivedKeyToStore: number[] | undefined;
+      let urlToStore: string | undefined;
+      let tokenToStore: string | undefined;
+      let localAppKey: Uint8Array;
 
       if (mode === 'local') {
         const { file, password, handle } = credentials;
@@ -161,8 +178,13 @@ function App() {
 
         lastModified = file.lastModified;
 
-        // Save session locally for persistence
-        await saveVault(password, decryptedVault.entries);
+        // Derive the secure localAppKey using the stable Master Salt instead of the fluctuating file salt
+        const masterSalt = await getExtensionMasterSalt();
+        const argon2Key = await deriveKey(password, masterSalt);
+        localAppKey = await deriveHKDF(argon2Key, "guardian-extension-local-cache");
+
+        // Save session locally for persistence using the derived App Key
+        await saveVault(localAppKey, decryptedVault.entries);
 
         if (handle) {
           startFilePolling(handle, password, file.lastModified);
@@ -174,19 +196,37 @@ function App() {
         setLoginMode("server");
         const vaultData = await loginToServer(url, username, password);
         loadedPasswords = vaultData.entries.map(vaultEntryToPasswordEntry);
-        // We don't verify file modified for server mode in this simple version
+
+        urlToStore = vaultData.serverUrl;
+        if (urlToStore) setServerUrl(urlToStore);
+        tokenToStore = vaultData.authToken;
+        if (tokenToStore) setAuthToken(tokenToStore);
+        derivedKeyToStore = vaultData.serverKey;
+        if (derivedKeyToStore) setDerivedServerKey(derivedKeyToStore);
+
+        // Derive the secure localAppKey using the already stretched Server Argon2 Key as the HKDF IKM
+        if (!derivedKeyToStore) throw new Error("Server key missing");
+        localAppKey = await deriveHKDF(new Uint8Array(derivedKeyToStore), "guardian-extension-local-cache");
+
+        // Persist the server entries to local storage using the derived App Key
+        await saveVault(localAppKey, vaultData.entries);
       }
 
+      setLocalAppKey(Array.from(localAppKey));
       setPasswords(loadedPasswords);
       setIsLoggedIn(true);
 
-      // Persist session to Service Worker
+      // Persist session to Service Worker (no passwords array anymore!)
       await chrome.runtime.sendMessage({
         action: 'updatePasswords',
-        passwords: loadedPasswords,
         isLoggedIn: true,
         lastModified: lastModified,
-        mode: mode
+        mode: mode,
+        serverUrl: urlToStore,
+        authToken: tokenToStore,
+        serverKey: undefined, // Fully removed raw password byte transmission!
+        derivedServerKey: derivedKeyToStore,
+        localKey: Array.from(localAppKey),
       });
 
     } catch (err) {
@@ -197,7 +237,7 @@ function App() {
 
   const startFilePolling = (
     handle: FileSystemFileHandle,
-    password: string,
+    _password: string,
     initialLastModified: number
   ) => {
     if (filePollIntervalRef.current) clearInterval(filePollIntervalRef.current);
@@ -222,9 +262,14 @@ function App() {
     setIsLoggedIn(false);
     setSelectedPassword(null);
     setPasswords([]);
+    setServerUrl(null);
+    setAuthToken(null);
+    setLocalAppKey(null);
+    setDerivedServerKey(null);
     setShowSettings(false);
     await clearSession();
     await clearFileHandle();
+    await deleteVault(); // Clean up locally persisted JIT encrypted vault.
     await chrome.runtime.sendMessage({ action: 'clearPasswords' });
   };
 
@@ -236,8 +281,46 @@ function App() {
     setIsRefreshing(false);
   };
 
+  useEffect(() => {
+    if (!lastEvent) return;
+    if (lastEvent.type === 'vault_updated') {
+      console.log("[SSE] Vault updated! Refreshing...");
+      if (loginMode === 'server' && serverUrl && authToken && localAppKey && derivedServerKey) {
+        setIsRefreshing(true);
+        syncVault(serverUrl, authToken, derivedServerKey)
+          .then(async (vaultData) => {
+            const loadedPasswords = vaultData.entries.map(vaultEntryToPasswordEntry);
+            setPasswords(loadedPasswords);
+
+            // Re-saving the JIT cache uses our derived App Key without needing the Master Password!
+            const appKeyArray = new Uint8Array(localAppKey);
+            await saveVault(appKeyArray, vaultData.entries);
+
+            await chrome.runtime.sendMessage({
+              action: 'updatePasswords',
+              isLoggedIn: true,
+              lastModified: Date.now(),
+              mode: 'server',
+              serverUrl,
+              authToken,
+              serverKey: undefined,
+              derivedServerKey,
+              localKey: localAppKey
+            });
+            setIsRefreshing(false);
+          })
+          .catch((err) => {
+            console.error("Headless sync failed", err);
+            setIsRefreshing(false);
+          });
+      } else {
+        handleLogout();
+      }
+    }
+  }, [lastEvent, loginMode, serverUrl, authToken, localAppKey, syncVault]);
+
   const filteredPasswords = passwords.filter((p) =>
-    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.title && p.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (p.username && p.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
     (p.website && p.website.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -414,7 +497,8 @@ function App() {
   };
 
   return (
-    <div className={`w-full h-full ${themeClasses.bg} selection:bg-${accentColor}-400/30 overflow-hidden transition-colors duration-300`}>
+    <div className={`w-full h-full ${themeClasses.bg} selection:bg-${accentColor}-400/30 overflow-hidden transition-colors duration-300 relative`}>
+      <SyncIndicator isSyncing={isSyncing} lastEventTimestamp={lastEvent?.timestamp} />
       {renderContent()}
     </div>
   );

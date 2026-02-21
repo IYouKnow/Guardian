@@ -3,13 +3,9 @@
  * Handles password matching and autofill coordination
  */
 
-interface PasswordEntry {
-  id: string;
-  title: string;
-  username: string;
-  password: string;
-  website: string;
-}
+import { openVaultWithKey } from "../../shared/crypto/vault";
+
+
 
 interface AutofillMatch {
   id: string;
@@ -20,15 +16,25 @@ interface AutofillMatch {
 }
 
 interface SessionData {
-  passwords: PasswordEntry[];
   isLoggedIn: boolean;
   lastModified: number;
+  mode?: 'local' | 'server';
+  authToken?: string;
+  serverUrl?: string;
+  serverKey?: number[];
+  derivedServerKey?: number[];
+  localKey?: number[]; // For local mode
 }
 
-// Store decrypted passwords in memory and chrome.storage.session (persists across popup opens, clears on browser close)
-let cachedPasswords: PasswordEntry[] = [];
+// Session states
 let isLoggedIn = false;
 let sessionLastModified = 0;
+let cachedMode: 'local' | 'server' | undefined;
+let cachedAuthToken: string | undefined;
+let cachedServerUrl: string | undefined;
+let cachedServerKey: number[] | undefined;
+let cachedDerivedServerKey: number[] | undefined;
+let cachedLocalKey: number[] | undefined;
 
 const SESSION_STORAGE_KEY = 'guardian_active_session';
 
@@ -40,9 +46,14 @@ async function loadSessionFromStorage() {
     const result = await storage.session.get([SESSION_STORAGE_KEY]);
     if (result[SESSION_STORAGE_KEY]) {
       const session = result[SESSION_STORAGE_KEY] as SessionData;
-      cachedPasswords = session.passwords || [];
       isLoggedIn = session.isLoggedIn || false;
       sessionLastModified = session.lastModified || 0;
+      cachedMode = session.mode;
+      cachedAuthToken = session.authToken;
+      cachedServerUrl = session.serverUrl;
+      cachedServerKey = session.serverKey;
+      cachedDerivedServerKey = session.derivedServerKey;
+      cachedLocalKey = session.localKey;
     }
   } catch (error) {
     console.error('Failed to load session from storage:', error);
@@ -56,9 +67,14 @@ async function saveSessionToStorage() {
     if (!storage.session) return;
     await storage.session.set({
       [SESSION_STORAGE_KEY]: {
-        passwords: cachedPasswords,
         isLoggedIn,
         lastModified: sessionLastModified,
+        mode: cachedMode,
+        authToken: cachedAuthToken,
+        serverUrl: cachedServerUrl,
+        serverKey: cachedServerKey,
+        derivedServerKey: cachedDerivedServerKey,
+        localKey: cachedLocalKey,
       },
     });
   } catch (error) {
@@ -109,21 +125,49 @@ function urlMatches(entryWebsite: string, currentUrl: string): boolean {
 }
 
 // Find matching passwords for a URL
-function findMatches(url: string): AutofillMatch[] {
-  if (!isLoggedIn || cachedPasswords.length === 0) {
+async function findMatches(url: string): Promise<AutofillMatch[]> {
+  if (!isLoggedIn) {
+    return [];
+  }
+
+  // Ensure session is loaded
+  await loadSessionFromStorage();
+
+  const keyToUse = cachedLocalKey;
+  if (!keyToUse) return [];
+
+  let decryptedVault;
+
+  try {
+    // Dynamically retrieve the encrypted vault from local storage and decrypt it
+    const storage = chrome.storage as any;
+    const result = await storage.local.get("guardian_vault");
+    const base64Vault = result["guardian_vault"];
+
+    if (!base64Vault) return [];
+
+    const binaryString = atob(base64Vault);
+    const vaultBytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      vaultBytes[i] = binaryString.charCodeAt(i);
+    }
+
+    decryptedVault = await openVaultWithKey(new Uint8Array(keyToUse), vaultBytes);
+  } catch (e) {
+    console.warn("Failed to decrypt vault in service worker", e);
     return [];
   }
 
   const matches: AutofillMatch[] = [];
 
-  for (const entry of cachedPasswords) {
-    if (urlMatches(entry.website, url)) {
+  for (const entry of decryptedVault.entries) {
+    if (urlMatches(entry.url || "", url)) {
       matches.push({
         id: entry.id,
-        username: entry.username,
+        username: entry.username || "",
         password: entry.password,
-        title: entry.title,
-        website: entry.website,
+        title: entry.name,
+        website: entry.url || "",
       });
     }
   }
@@ -143,13 +187,13 @@ function findMatches(url: string): AutofillMatch[] {
     // Always reload from storage first (service worker might have been suspended)
     loadSessionFromStorage().then(() => {
       sendResponse({
-        canAutoUnlock: isLoggedIn && cachedPasswords.length > 0,
-        passwordCount: cachedPasswords.length
+        canAutoUnlock: isLoggedIn,
+        passwordCount: 0 // Will figure out later if we need to decrypt just to get count
       });
     }).catch(() => {
       sendResponse({
-        canAutoUnlock: isLoggedIn && cachedPasswords.length > 0,
-        passwordCount: cachedPasswords.length
+        canAutoUnlock: isLoggedIn,
+        passwordCount: 0
       });
     });
     return true;
@@ -159,28 +203,21 @@ function findMatches(url: string): AutofillMatch[] {
     loadSessionFromStorage().then(() => {
       sendResponse({
         isLoggedIn,
-        passwords: cachedPasswords,
-        lastModified: sessionLastModified
+        lastModified: sessionLastModified,
+        mode: cachedMode,
+        authToken: cachedAuthToken,
+        serverUrl: cachedServerUrl,
+        serverKey: cachedServerKey,
+        derivedServerKey: cachedDerivedServerKey,
+        localKey: cachedLocalKey,
       });
     });
     return true;
   }
 
   if (message.action === 'getCachedPasswords') {
-    // Always reload from storage first
-    loadSessionFromStorage().then(() => {
-      if (isLoggedIn) {
-        sendResponse({ passwords: cachedPasswords, success: true });
-      } else {
-        sendResponse({ passwords: [], success: false });
-      }
-    }).catch(() => {
-      if (isLoggedIn) {
-        sendResponse({ passwords: cachedPasswords, success: true });
-      } else {
-        sendResponse({ passwords: [], success: false });
-      }
-    });
+    // UI components now need to fetch the vault independently or use simple flags
+    sendResponse({ passwords: [], success: isLoggedIn });
     return true;
   }
 
@@ -190,9 +227,15 @@ function findMatches(url: string): AutofillMatch[] {
   }
 
   if (message.action === 'updatePasswords') {
-    cachedPasswords = message.passwords || [];
     isLoggedIn = message.isLoggedIn || false;
     sessionLastModified = message.lastModified || 0;
+    cachedMode = message.mode;
+    cachedAuthToken = message.authToken;
+    cachedServerUrl = message.serverUrl;
+    cachedServerKey = message.serverKey;
+    cachedDerivedServerKey = message.derivedServerKey;
+    cachedLocalKey = message.localKey;
+
     // Persist to session storage
     saveSessionToStorage().then(() => {
       sendResponse({ success: true });
@@ -203,9 +246,14 @@ function findMatches(url: string): AutofillMatch[] {
   }
 
   if (message.action === 'clearPasswords') {
-    cachedPasswords = [];
     isLoggedIn = false;
     sessionLastModified = 0;
+    cachedMode = undefined;
+    cachedAuthToken = undefined;
+    cachedServerUrl = undefined;
+    cachedServerKey = undefined;
+    cachedDerivedServerKey = undefined;
+    cachedLocalKey = undefined;
     // Clear from session storage
     clearSessionFromStorage().then(() => {
       sendResponse({ success: true });
@@ -225,8 +273,13 @@ function findMatches(url: string): AutofillMatch[] {
 
 // On install/update, clear session for security
 (chrome.runtime.onInstalled as any).addListener(() => {
-  cachedPasswords = [];
   isLoggedIn = false;
   sessionLastModified = 0;
+  cachedMode = undefined;
+  cachedAuthToken = undefined;
+  cachedServerUrl = undefined;
+  cachedServerKey = undefined;
+  cachedDerivedServerKey = undefined;
+  cachedLocalKey = undefined;
   clearSessionFromStorage();
 });

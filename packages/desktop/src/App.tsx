@@ -17,6 +17,8 @@ import { usePreferences } from "./hooks/usePreferences";
 import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
 import { useToast } from "./hooks/useToast";
+import { useSSE } from "./hooks/useSSE";
+import { SyncIndicator } from "./components/SyncIndicator";
 import { motion, AnimatePresence } from "framer-motion";
 
 function App() {
@@ -66,7 +68,10 @@ function App() {
     syncVault,
     connectionMode,
     serverUrl,
+    authToken,
   } = useVault();
+
+  const { isSyncing, lastEvent } = useSSE(serverUrl, authToken);
 
   const { toasts, removeToast, success, error: showError } = useToast();
 
@@ -107,6 +112,16 @@ function App() {
   const handleSavePasswords = async (entries: any[]) => {
     return saveVaultFile(entries, preferences);
   };
+
+  // Listen for SSE events to trigger a background sync
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    if (lastEvent.type === 'vault_updated' || lastEvent.type === 'prefs_updated') {
+      console.log(`[SSE] Received ${lastEvent.type}. Triggering sync...`);
+      handleSync();
+    }
+  }, [lastEvent]);
 
   const {
     passwords,
@@ -337,6 +352,7 @@ function App() {
   return (
     <div className={`relative flex flex-col h-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
       <TitleBar theme={activeTheme} accentColor={preferences.accentColor} />
+      <SyncIndicator isSyncing={isSyncing} lastEventTimestamp={lastEvent?.timestamp} />
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Modern Background Layers */}

@@ -10,6 +10,7 @@ interface ThemeContextType {
     setAccentColor: (color: AccentColor) => void;
     themeClasses: ReturnType<typeof getThemeClasses>;
     accentClasses: ReturnType<typeof getAccentColorClasses>;
+    refetchPreferences?: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -68,31 +69,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     // Initial Fetch from Server
-    useEffect(() => {
-        const fetchPreferences = async () => {
-            const token = authApi.getToken();
-            if (!token) {
-                initialFetchDone.current = true;
-                return;
-            }
+    const fetchPreferences = useCallback(async () => {
+        const token = authApi.getToken();
+        if (!token) {
+            initialFetchDone.current = true;
+            return;
+        }
 
-            try {
-                const res = await fetch('/api/preferences', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.theme) setTheme(data.theme);
-                    if (data.accentColor) setAccentColor(data.accentColor);
-                }
-            } catch (e) {
-                console.error("Failed to fetch preferences", e);
-            } finally {
-                initialFetchDone.current = true;
+        try {
+            const res = await fetch('/api/preferences', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.theme) setTheme(data.theme);
+                if (data.accentColor) setAccentColor(data.accentColor);
             }
-        };
-        fetchPreferences();
+        } catch (e) {
+            console.error("Failed to fetch preferences", e);
+        } finally {
+            initialFetchDone.current = true;
+        }
     }, []);
+
+    useEffect(() => {
+        fetchPreferences();
+    }, [fetchPreferences]);
 
     // Debounced sync to LocalStorage & Server whenever theme or accent changes
     useEffect(() => {
@@ -113,7 +115,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const accentClasses = getAccentColorClasses(accentColor, theme);
 
     return (
-        <ThemeContext.Provider value={{ theme, setTheme, accentColor, setAccentColor, themeClasses, accentClasses }}>
+        <ThemeContext.Provider value={{ theme, setTheme, accentColor, setAccentColor, themeClasses, accentClasses, refetchPreferences: fetchPreferences }}>
             {children}
         </ThemeContext.Provider>
     );

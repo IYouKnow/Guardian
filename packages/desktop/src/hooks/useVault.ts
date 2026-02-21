@@ -22,6 +22,7 @@ interface UseVaultReturn {
   // Server Mode
   connectionMode: "local" | "server";
   serverUrl: string | null;
+  authToken: string | null;
   loginToServer: (url: string, username: string, password: string) => Promise<VaultData>;
   registerOnServer: (url: string, data: any) => Promise<void>;
   syncVault: () => Promise<VaultData>;
@@ -425,6 +426,7 @@ export function useVault(): UseVaultReturn {
     // Server Specific
     connectionMode,
     serverUrl,
+    authToken,
     loginToServer,
     registerOnServer: async (url: string, data: any) => {
       const resp = await fetch(`${url}/auth/register`, {

@@ -152,6 +152,65 @@ export async function createVault(
 }
 
 /**
+ * Creates an encrypted vault in binary .guardian format using a pre-derived symmetric key
+ * 
+ * @param key - 32-byte symmetric key for ChaCha20 encryption
+ * @param entries - Array of vault entries
+ * @returns Encrypted vault as Uint8Array
+ */
+export async function createVaultWithKey(
+  key: Uint8Array,
+  entries: VaultEntry[],
+  settings?: VaultSettings
+): Promise<Uint8Array> {
+  // Generates random salt and nonce
+  const salt = generateSalt();
+  const nonce = generateNonce();
+
+  // Prepares data for encryption
+  const data: VaultData = {
+    entries: entries,
+    createdAt: new Date().toISOString(),
+    lastModified: new Date().toISOString(),
+    settings,
+  };
+
+  const jsonData = JSON.stringify(data);
+  const plaintext = new TextEncoder().encode(jsonData);
+
+  // Encrypts data using ChaCha20-Poly1305
+  const ciphertextWithTag = await encrypt(key, nonce, plaintext);
+
+  // Constructs the binary .guardian format
+  const vault = new Uint8Array(
+    MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + ciphertextWithTag.length
+  );
+
+  let offset = 0;
+
+  // Bytes 0-7: "GUARDIAN"
+  vault.set(MAGIC_HEADER, offset);
+  offset += MAGIC_HEADER.length;
+
+  // Byte 8: version
+  vault[offset] = VERSION;
+  offset += 1;
+
+  // Bytes 9-24: salt (16 bytes)
+  vault.set(salt, offset);
+  offset += SALT_LENGTH;
+
+  // Bytes 25-36: nonce (12 bytes)
+  vault.set(nonce, offset);
+  offset += NONCE_LENGTH;
+
+  // Bytes 37+: ciphertext + tag (16 bytes)
+  vault.set(ciphertextWithTag, offset);
+
+  return vault;
+}
+
+/**
  * Opens and decrypts a vault in binary .guardian format
  * 
  * @param password - Master password to derive the key
@@ -258,6 +317,74 @@ export async function openVault(
     return await tryDecrypt(deriveKeyPBKDF2);
   } catch (error) {
     throw new Error('Authentication failed: Invalid master password or corrupted vault file.');
+  }
+}
+
+/**
+ * Opens and decrypts a vault in binary .guardian format using a pre-derived symmetric key
+ * 
+ * @param key - 32-byte symmetric key for ChaCha20 decryption
+ * @param vaultData - Binary vault data
+ * @returns Decrypted vault data
+ */
+export async function openVaultWithKey(
+  key: Uint8Array,
+  vaultData: Uint8Array
+): Promise<VaultData> {
+  // Checks minimum size
+  const minSize = MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + TAG_LENGTH;
+  if (vaultData.length < minSize) {
+    throw new Error('Invalid vault format: file too short');
+  }
+
+  // Bytes 0-7: Verifies the magic header "GUARDIAN"
+  const magic = new TextDecoder().decode(vaultData.slice(0, MAGIC_HEADER.length));
+  if (magic !== 'GUARDIAN') {
+    throw new Error('Invalid vault format: incorrect magic header');
+  }
+
+  // Byte 8: Reads the version
+  const version = vaultData[8];
+  if (version !== VERSION) {
+    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}`);
+  }
+
+  // Bytes 25-36: Reads the nonce (12 bytes)
+  // Skip over the salt (Bytes 9-24) as we have the key directly
+  const nonce = new Uint8Array(vaultData.slice(25, 25 + NONCE_LENGTH));
+
+  // Bytes 37+: Reads the ciphertext + tag
+  const ciphertextWithTag = vaultData.slice(37);
+
+  try {
+    const plaintext = await decrypt(key, nonce, ciphertextWithTag);
+    const decryptedString = new TextDecoder().decode(plaintext);
+    let data: VaultData;
+    try {
+      data = JSON.parse(decryptedString) as VaultData;
+    } catch (parseError) {
+      throw new Error('Decrypted data is not valid JSON');
+    }
+
+    // Handle legacy vault format where entries was incorrectly nested
+    if (data.entries && typeof data.entries === 'object' && !Array.isArray(data.entries)) {
+      const nestedData = data.entries as any;
+      if (nestedData.entries && Array.isArray(nestedData.entries)) {
+        data = {
+          entries: nestedData.entries,
+          createdAt: nestedData.createdAt || data.createdAt || new Date().toISOString(),
+          lastModified: nestedData.lastModified || data.lastModified || new Date().toISOString()
+        };
+      }
+    }
+
+    if (!data.entries || !Array.isArray(data.entries) || !data.createdAt || !data.lastModified) {
+      throw new Error('Invalid vault format: incorrect data structure');
+    }
+
+    return data;
+  } catch (error) {
+    throw new Error('Authentication failed: Invalid key or corrupted vault file.');
   }
 }
 

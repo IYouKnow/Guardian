@@ -3,13 +3,14 @@
  * Uses chrome.storage.local to store encrypted vault data
  */
 
-import { createVault, loadVault, createEmptyVault } from "../../../shared/crypto/vault";
+import { createVaultWithKey, openVaultWithKey } from "../../../shared/crypto/vault";
 import type { VaultEntry } from "../../../shared/crypto/vault";
 
 const VAULT_STORAGE_KEY = "guardian_vault";
 const SETTINGS_STORAGE_KEY = "guardian_settings";
 const SESSION_STORAGE_KEY = "guardian_session";
 const FILE_HANDLE_STORAGE_KEY = "guardian_file_handle";
+const MASTER_SALT_STORAGE_KEY = "guardian_master_salt";
 
 export interface ExtensionSettings {
   theme?: "dark" | "slate" | "light" | "editor" | "violet";
@@ -43,11 +44,36 @@ function getStorage(): chrome.storage.StorageArea {
 }
 
 /**
- * Save encrypted vault to browser storage
+ * Get or create the stable extension master salt for local HKDF derivation
  */
-export async function saveVault(masterPassword: string, entries: VaultEntry[]): Promise<void> {
+export async function getExtensionMasterSalt(): Promise<Uint8Array> {
+  const storage = getStorage();
+  const result = await storage.get(MASTER_SALT_STORAGE_KEY);
+
+  if (result[MASTER_SALT_STORAGE_KEY]) {
+    // Convert base64 back to Uint8Array
+    const base64Salt = result[MASTER_SALT_STORAGE_KEY];
+    const binaryString = atob(base64Salt);
+    const saltBytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      saltBytes[i] = binaryString.charCodeAt(i);
+    }
+    return saltBytes;
+  }
+
+  // Generate a new 16-byte salt
+  const newSalt = crypto.getRandomValues(new Uint8Array(16));
+  const base64Salt = btoa(String.fromCharCode(...newSalt));
+  await storage.set({ [MASTER_SALT_STORAGE_KEY]: base64Salt });
+  return newSalt;
+}
+
+/**
+ * Save encrypted vault to browser storage using the derived localAppKey
+ */
+export async function saveVault(key: Uint8Array, entries: VaultEntry[]): Promise<void> {
   try {
-    const encryptedVault = await createVault(masterPassword, entries);
+    const encryptedVault = await createVaultWithKey(key, entries);
 
     // Convert Uint8Array to base64 for storage
     const base64Vault = btoa(String.fromCharCode(...encryptedVault));
@@ -60,9 +86,9 @@ export async function saveVault(masterPassword: string, entries: VaultEntry[]): 
 }
 
 /**
- * Load and decrypt vault from browser storage
+ * Load and decrypt vault from browser storage using the derived localAppKey
  */
-export async function loadVaultFromStorage(masterPassword: string): Promise<VaultEntry[]> {
+export async function loadVaultFromStorage(key: Uint8Array): Promise<VaultEntry[]> {
   try {
     const result = await getStorage().get(VAULT_STORAGE_KEY);
     const base64Vault = result[VAULT_STORAGE_KEY];
@@ -79,11 +105,11 @@ export async function loadVaultFromStorage(masterPassword: string): Promise<Vaul
       vaultBytes[i] = binaryString.charCodeAt(i);
     }
 
-    const decryptedVault = await loadVault(masterPassword, vaultBytes);
+    const decryptedVault = await openVaultWithKey(key, vaultBytes);
     return decryptedVault.entries;
   } catch (error) {
     console.error("Error loading vault:", error);
-    throw new Error("Invalid master password or corrupted vault");
+    throw new Error("Invalid key or corrupted vault");
   }
 }
 
@@ -103,10 +129,9 @@ export async function vaultExists(): Promise<boolean> {
 /**
  * Create a new vault and save it
  */
-export async function createNewVault(masterPassword: string): Promise<void> {
+export async function createNewVault(key: Uint8Array): Promise<void> {
   try {
-    const emptyVault = createEmptyVault();
-    await saveVault(masterPassword, emptyVault.entries);
+    await saveVault(key, []);
   } catch (error) {
     console.error("Error creating vault:", error);
     throw new Error("Failed to create vault");
