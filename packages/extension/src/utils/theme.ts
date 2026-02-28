@@ -1,5 +1,4 @@
-
-import { Theme } from "../types";
+import type { Theme } from "../types";
 import { getThemeClasses as getSharedThemeClasses } from "../../../shared/themes";
 
 export function getThemeClasses(theme: Theme) {

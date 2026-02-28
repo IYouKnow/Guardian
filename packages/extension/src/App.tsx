@@ -8,6 +8,9 @@ import Login from "./components/Login";
 import PasswordGrid from "./components/PasswordGrid";
 import PasswordDetail from "./components/PasswordDetail";
 import Settings from "./components/Settings";
+import Generator from "./components/Generator";
+import AddPasswordPanel from "./components/AddPasswordPanel";
+import EditPasswordModal from "./components/EditPasswordModal";
 import { SyncIndicator } from "./components/SyncIndicator";
 import { useSSE } from "./hooks/useSSE";
 import { openVault, type VaultEntry } from "../../shared/crypto/vault";
@@ -35,6 +38,22 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
   };
 }
 
+// Helper function to convert PasswordEntry back to VaultEntry for persistence
+function passwordEntryToVaultEntry(entry: PasswordEntry): VaultEntry {
+  return {
+    id: entry.id,
+    name: entry.title,
+    username: entry.username || undefined,
+    password: entry.password,
+    url: entry.website || undefined,
+    notes: entry.notes || undefined,
+    createdAt: entry.lastModified || new Date().toISOString(),
+    lastModified: new Date().toISOString(),
+  };
+}
+
+type ActiveTab = "vault" | "generator" | "settings";
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isCheckingAutoUnlock, setIsCheckingAutoUnlock] = useState(true);
@@ -46,12 +65,18 @@ function App() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPassword, setSelectedPassword] = useState<PasswordEntry | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("vault");
   const [theme, setTheme] = useState<Theme>("dark");
   const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
   const [clipboardClearSeconds, setClipboardClearSeconds] = useState(10);
   const [revealCensorSeconds, setRevealCensorSeconds] = useState(5);
   const [loginMode, setLoginMode] = useState<"local" | "server">("local");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  // Modal state
+  const [isAddingPassword, setIsAddingPassword] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<PasswordEntry | null>(null);
 
   const filePollIntervalRef = useRef<number | null>(null);
   const lastFileModifiedRef = useRef<number>(0);
@@ -168,7 +193,6 @@ function App() {
         if (handle) {
           setVaultFileHandle(handle);
           await saveFileHandle(handle);
-          // Permission checks simplified here, assume handled or handle exists
         }
 
         const arrayBuffer = await file.arrayBuffer();
@@ -178,12 +202,10 @@ function App() {
 
         lastModified = file.lastModified;
 
-        // Derive the secure localAppKey using the stable Master Salt instead of the fluctuating file salt
         const masterSalt = await getExtensionMasterSalt();
         const argon2Key = await deriveKey(password, masterSalt);
         localAppKey = await deriveHKDF(argon2Key, "guardian-extension-local-cache");
 
-        // Save session locally for persistence using the derived App Key
         await saveVault(localAppKey, decryptedVault.entries);
 
         if (handle) {
@@ -191,7 +213,6 @@ function App() {
         }
 
       } else {
-        // Server Mode
         const { url, username, password } = credentials;
         setLoginMode("server");
         const vaultData = await loginToServer(url, username, password);
@@ -204,11 +225,9 @@ function App() {
         derivedKeyToStore = vaultData.serverKey;
         if (derivedKeyToStore) setDerivedServerKey(derivedKeyToStore);
 
-        // Derive the secure localAppKey using the already stretched Server Argon2 Key as the HKDF IKM
         if (!derivedKeyToStore) throw new Error("Server key missing");
         localAppKey = await deriveHKDF(new Uint8Array(derivedKeyToStore), "guardian-extension-local-cache");
 
-        // Persist the server entries to local storage using the derived App Key
         await saveVault(localAppKey, vaultData.entries);
       }
 
@@ -216,7 +235,6 @@ function App() {
       setPasswords(loadedPasswords);
       setIsLoggedIn(true);
 
-      // Persist session to Service Worker (no passwords array anymore!)
       await chrome.runtime.sendMessage({
         action: 'updatePasswords',
         isLoggedIn: true,
@@ -224,7 +242,7 @@ function App() {
         mode: mode,
         serverUrl: urlToStore,
         authToken: tokenToStore,
-        serverKey: undefined, // Fully removed raw password byte transmission!
+        serverKey: undefined,
         derivedServerKey: derivedKeyToStore,
         localKey: Array.from(localAppKey),
       });
@@ -247,8 +265,6 @@ function App() {
       try {
         const metadata = await getFileMetadata(handle);
         if (metadata.lastModified > lastFileModifiedRef.current) {
-          // Reload logic...
-          // For now just log, preventing auto-reload complexity in this refactor
           console.log("File changed on disk");
         }
       } catch (err) {
@@ -266,21 +282,70 @@ function App() {
     setAuthToken(null);
     setLocalAppKey(null);
     setDerivedServerKey(null);
-    setShowSettings(false);
+    setActiveTab("vault");
     await clearSession();
     await clearFileHandle();
-    await deleteVault(); // Clean up locally persisted JIT encrypted vault.
+    await deleteVault();
     await chrome.runtime.sendMessage({ action: 'clearPasswords' });
   };
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await new Promise(r => setTimeout(r, 500));
-    // Simple refresh: Logout
     await handleLogout();
     setIsRefreshing(false);
   };
 
+  // ----- CRUD Handlers -----
+
+  const persistPasswords = async (newPasswords: PasswordEntry[]) => {
+    if (!localAppKey) return;
+    const entries = newPasswords.map(passwordEntryToVaultEntry);
+    const appKeyArray = new Uint8Array(localAppKey);
+    await saveVault(appKeyArray, entries);
+    await chrome.runtime.sendMessage({
+      action: 'updatePasswords',
+      isLoggedIn: true,
+      lastModified: Date.now(),
+      mode: loginMode,
+      serverUrl,
+      authToken,
+      serverKey: undefined,
+      derivedServerKey,
+      localKey: localAppKey,
+    });
+  };
+
+  const handleAddPassword = async (entry: PasswordEntry) => {
+    const updated = [...passwords, entry];
+    setPasswords(updated);
+    setIsAddingPassword(false);
+    setSelectedPassword(entry);
+    await persistPasswords(updated);
+  };
+
+  const handleEditPassword = async (entry: PasswordEntry) => {
+    const updated = passwords.map((p) => (p.id === entry.id ? entry : p));
+    setPasswords(updated);
+    // Update selected password if it's the one being edited
+    if (selectedPassword?.id === entry.id) {
+      setSelectedPassword(entry);
+    }
+    setShowEditModal(false);
+    setEditTarget(null);
+    await persistPasswords(updated);
+  };
+
+  const handleDeletePassword = async (id: string) => {
+    const updated = passwords.filter((p) => p.id !== id);
+    setPasswords(updated);
+    if (selectedPassword?.id === id) {
+      setSelectedPassword(null);
+    }
+    await persistPasswords(updated);
+  };
+
+  // SSE sync
   useEffect(() => {
     if (!lastEvent) return;
     if (lastEvent.type === 'vault_updated') {
@@ -292,7 +357,6 @@ function App() {
             const loadedPasswords = vaultData.entries.map(vaultEntryToPasswordEntry);
             setPasswords(loadedPasswords);
 
-            // Re-saving the JIT cache uses our derived App Key without needing the Master Password!
             const appKeyArray = new Uint8Array(localAppKey);
             await saveVault(appKeyArray, vaultData.entries);
 
@@ -319,11 +383,19 @@ function App() {
     }
   }, [lastEvent, loginMode, serverUrl, authToken, localAppKey, syncVault]);
 
-  const filteredPasswords = passwords.filter((p) =>
-    (p.title && p.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (p.username && p.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (p.website && p.website.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // Derived data
+  const categories = Array.from(
+    new Set(passwords.map((p) => p.category).filter(Boolean))
+  ) as string[];
+
+  const filteredPasswords = passwords.filter((p) => {
+    const matchesSearch =
+      (p.title && p.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.username && p.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (p.website && p.website.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
 
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor);
@@ -350,7 +422,8 @@ function App() {
       );
     }
 
-    if (showSettings) {
+    // Tab: Settings
+    if (activeTab === "settings") {
       return (
         <Settings
           theme={theme}
@@ -361,13 +434,23 @@ function App() {
           onClipboardClearSecondsChange={setClipboardClearSeconds}
           revealCensorSeconds={revealCensorSeconds}
           onRevealCensorSecondsChange={setRevealCensorSeconds}
-          onBack={() => setShowSettings(false)}
+          onBack={() => setActiveTab("vault")}
           onLogout={handleLogout}
         />
       );
     }
 
-    // SPLIT VIEW LAYOUT
+    // Tab: Generator
+    if (activeTab === "generator") {
+      return (
+        <Generator
+          theme={theme}
+          accentColor={accentColor}
+        />
+      );
+    }
+
+    // Tab: Vault — SPLIT VIEW LAYOUT
     return (
       <div className="flex bg-black/5 h-full w-full">
         {/* Left Drawer (List) */}
@@ -396,10 +479,17 @@ function App() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </button>
-                <button onClick={() => setShowSettings(true)} className={`p-1 rounded-md transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`} title="Settings">
+                {/* Add password button */}
+                <button
+                  onClick={() => {
+                    setSelectedPassword(null);
+                    setIsAddingPassword(true);
+                  }}
+                  className={`p-1 rounded-md transition-all ${themeClasses.hoverBg} ${accentClasses.textClass} hover:opacity-80`}
+                  title="Add Password"
+                >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                 </button>
               </div>
@@ -417,6 +507,19 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
+            {/* Category filter */}
+            {categories.length > 0 && (
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className={`w-full mt-2 ${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-2.5 py-1.5 text-[11px] ${themeClasses.text} focus:outline-none focus:ring-1 ${accentClasses.focusRingClass} transition-all`}
+              >
+                <option value="all">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            )}
           </header>
 
           <div className="flex-1 overflow-y-auto px-2 py-2 scrollbar-hide">
@@ -427,7 +530,10 @@ function App() {
             ) : (
               <PasswordGrid
                 passwords={filteredPasswords}
-                onCardClick={setSelectedPassword}
+                onCardClick={(pw) => {
+                  setIsAddingPassword(false);
+                  setSelectedPassword(pw);
+                }}
                 onCopyUsername={(username) => navigator.clipboard.writeText(username)}
                 onCopyPassword={(password) => {
                   navigator.clipboard.writeText(password);
@@ -448,7 +554,23 @@ function App() {
         {/* Right Content (Detail) */}
         <main className="flex-1 overflow-hidden relative">
           <AnimatePresence mode="wait">
-            {selectedPassword ? (
+            {isAddingPassword ? (
+              <motion.div
+                key="add-password"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1 }}
+                className="h-full w-full"
+              >
+                <AddPasswordPanel
+                  onAddPassword={handleAddPassword}
+                  onCancel={() => setIsAddingPassword(false)}
+                  theme={theme}
+                  accentColor={accentColor}
+                />
+              </motion.div>
+            ) : selectedPassword ? (
               <motion.div
                 key={selectedPassword.id}
                 initial={{ opacity: 0, scale: 0.98 }}
@@ -469,6 +591,11 @@ function App() {
                     }
                   }}
                   onBack={() => setSelectedPassword(null)}
+                  onEdit={() => {
+                    setEditTarget(selectedPassword);
+                    setShowEditModal(true);
+                  }}
+                  onDelete={() => handleDeletePassword(selectedPassword.id)}
                   theme={theme}
                   accentColor={accentColor}
                   revealCensorSeconds={revealCensorSeconds}
@@ -497,9 +624,70 @@ function App() {
   };
 
   return (
-    <div className={`w-full h-full ${themeClasses.bg} selection:bg-${accentColor}-400/30 overflow-hidden transition-colors duration-300 relative`}>
+    <div className={`w-full h-full ${themeClasses.bg} selection:bg-${accentColor}-400/30 overflow-hidden transition-colors duration-300 relative flex flex-col`}>
       <SyncIndicator isSyncing={isSyncing} lastEventTimestamp={lastEvent?.timestamp} />
-      {renderContent()}
+
+      <div className="flex-1 overflow-hidden">
+        {renderContent()}
+      </div>
+
+      {/* Bottom Navigation Bar — only when logged in */}
+      {isLoggedIn && (
+        <nav className={`flex items-center justify-around border-t ${themeClasses.border} ${themeClasses.headerBg} shrink-0`}>
+          {([
+            {
+              id: "vault" as ActiveTab,
+              label: "Vault",
+              icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              ),
+            },
+            {
+              id: "generator" as ActiveTab,
+              label: "Generator",
+              icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ),
+            },
+            {
+              id: "settings" as ActiveTab,
+              label: "Settings",
+              icon: (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              ),
+            },
+          ]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center gap-0.5 py-2 px-4 transition-all ${activeTab === tab.id
+                ? `${accentClasses.textClass} opacity-100`
+                : `${themeClasses.textTertiary} opacity-60 hover:opacity-100`
+                }`}
+            >
+              {tab.icon}
+              <span className="text-[9px] font-semibold">{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {/* Edit Password Modal */}
+      {editTarget && (
+        <EditPasswordModal
+          isOpen={showEditModal}
+          password={editTarget}
+          onClose={() => { setShowEditModal(false); setEditTarget(null); }}
+          onSave={handleEditPassword}
+        />
+      )}
     </div>
   );
 }
