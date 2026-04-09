@@ -18,7 +18,7 @@ import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
 import { useToast } from "./hooks/useToast";
 import { useSSE } from "./hooks/useSSE";
-import { SyncIndicator } from "./components/SyncIndicator";
+import { SyncIndicator } from "@guardian/shared";
 import { motion, AnimatePresence } from "framer-motion";
 
 function App() {
@@ -385,7 +385,7 @@ function App() {
   return (
     <div className={`relative flex flex-col h-screen overflow-hidden font-sans ${themeClasses.bg} ${themeClasses.text} transition-colors duration-500`}>
       <TitleBar theme={activeTheme} accentColor={preferences.accentColor} />
-      <SyncIndicator isSyncing={isSyncing} lastEventTimestamp={lastEvent?.timestamp} />
+      <SyncIndicator isSyncing={isSyncing} variant="subtle" />
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Modern Background Layers */}

@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { useTheme } from './context/ThemeContext';
 import { useSSE } from './hooks/useSSE';
-import { SyncIndicator } from './components/SyncIndicator';
+import { SyncIndicator } from "@guardian/shared";
 
 const navItems = [
   { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard' },
@@ -63,7 +63,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   return (
     <div className={`h-screen overflow-hidden ${themeClasses.bg} transition-all duration-300`}>
       <Toaster position="bottom-right" theme={theme === 'light' ? 'light' : 'dark'} />
-      <SyncIndicator isSyncing={isSyncing} lastEventTimestamp={lastEvent?.timestamp} />
+      <SyncIndicator isSyncing={isSyncing} variant="full" />
 
       {/* Mobile Header */}
       <div className={`lg:hidden fixed top-0 left-0 right-0 z-50 ${themeClasses.bg}/95 backdrop-blur-xl border-b ${themeClasses.divider} transition-colors duration-300`}>

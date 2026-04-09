@@ -25,7 +25,7 @@ export default function Dashboard() {
       >
         <div>
           <h1 className={`text-2xl font-bold ${themeClasses.text} transition-all duration-300`}>Dashboard</h1>
-          <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Welcome back, Admin</p>
+          <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Welcome back, vawd</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20 transition-all duration-300">
