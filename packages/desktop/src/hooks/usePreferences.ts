@@ -181,31 +181,30 @@ export function usePreferences() {
 
   // When syncTheme or serverSettings change, apply server settings if sync is ON
   useEffect(() => {
+    if (!serverSettings || !preferences.syncTheme) return;
+
+    const { theme, accentColor } = serverSettings;
+    const hasThemeChange = theme && theme !== preferences.theme;
+    const hasAccentChange = accentColor && accentColor !== preferences.accentColor;
+
+    if (!hasThemeChange && !hasAccentChange) return;
+
     console.log("[usePreferences] Sync check. Enabled:", preferences.syncTheme, "ServerSettings:", serverSettings);
-    if (preferences.syncTheme && serverSettings) {
-      const { theme, accentColor } = serverSettings;
-
-      let hasChanges = false;
-      const updates: Partial<Preferences> = {};
-
-      if (theme && theme !== preferences.theme) {
-        console.log("[usePreferences] Theme mismatch. Local:", preferences.theme, "Server:", theme);
-        updates.theme = theme;
-        hasChanges = true;
-      }
-      if (accentColor && accentColor !== preferences.accentColor) {
-        console.log("[usePreferences] Accent mismatch. Local:", preferences.accentColor, "Server:", accentColor);
-        updates.accentColor = accentColor;
-        hasChanges = true;
-      }
-
-      if (hasChanges) {
-        console.log("[usePreferences] Applying updates:", updates);
-        setPreferences(prev => ({ ...prev, ...updates }));
-        persistSettings(updates);
-      }
+    if (hasThemeChange) {
+      console.log("[usePreferences] Theme mismatch. Local:", preferences.theme, "Server:", theme);
     }
-  }, [preferences.syncTheme, preferences.theme, preferences.accentColor, serverSettings, persistSettings]);
+    if (hasAccentChange) {
+      console.log("[usePreferences] Accent mismatch. Local:", preferences.accentColor, "Server:", accentColor);
+    }
+
+    const updates: Partial<Preferences> = {};
+    if (hasThemeChange) updates.theme = theme;
+    if (hasAccentChange) updates.accentColor = accentColor;
+
+    console.log("[usePreferences] Applying updates:", updates);
+    setPreferences(prev => ({ ...prev, ...updates }));
+    persistSettings(updates);
+  }, [serverSettings, preferences.syncTheme, preferences.theme, preferences.accentColor, persistSettings]);
 
   const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
     console.log("[usePreferences] loadFromVault called with:", vaultSettings);

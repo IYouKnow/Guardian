@@ -40,7 +40,6 @@ export function useSSE(serverUrl: string | null, authToken: string | null) {
                     const data = JSON.parse(event.data) as SSEEvent;
 
                     if (data.type === 'ping') {
-                        // Ignoring pings. They just keep the cloudflare tunnel alive.
                         return;
                     }
 
@@ -50,14 +49,6 @@ export function useSSE(serverUrl: string | null, authToken: string | null) {
 
                     console.log('[SSE] Received event:', data);
                     setLastEvent(data);
-
-                    // Show syncing indicator
-                    setIsSyncing(true);
-
-                    // Auto-hide the syncing indicator after 2 seconds
-                    setTimeout(() => {
-                        setIsSyncing(false);
-                    }, 2000);
 
                 } catch (err) {
                     console.error('[SSE] Failed to parse message', err);
@@ -93,5 +84,5 @@ export function useSSE(serverUrl: string | null, authToken: string | null) {
         };
     }, [serverUrl, authToken]);
 
-    return { isSyncing, lastEvent };
+    return { isSyncing, lastEvent, setIsSyncing };
 }

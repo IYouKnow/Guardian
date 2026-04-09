@@ -71,25 +71,31 @@ function App() {
     authToken,
   } = useVault();
 
-  const { isSyncing, lastEvent } = useSSE(serverUrl, authToken);
+  const { isSyncing, lastEvent, setIsSyncing } = useSSE(serverUrl, authToken);
 
   const { toasts, removeToast, success, error: showError } = useToast();
 
   const handleSync = async () => {
     try {
-      // If local, maybe reload file? For now just server
-      if (connectionMode === 'server') {
+      if (connectionMode === 'server' && !isSyncing) {
+        setIsSyncing(true);
         const vaultData = await syncVault();
         loadPasswords(vaultData.entries);
         if (vaultData.settings) {
           await loadFromVault(vaultData.settings as any);
         }
-        success("Synced with server");
+        setTimeout(() => {
+          setIsSyncing(false);
+          setSyncedAt(Date.now());
+        }, 1500);
       }
     } catch (err) {
       console.error("Sync failed:", err);
+      setIsSyncing(false);
     }
   };
+
+  const [syncedAt, setSyncedAt] = useState<number>(0);
 
   // When toggling Sync Theme ON, immediately fetch server preferences
   const handleSyncThemeChange = async (sync: boolean) => {
@@ -100,7 +106,6 @@ function App() {
         if (vaultData.settings) {
           await loadFromVault(vaultData.settings as any);
         }
-        success("Theme synced with server");
       } catch (err) {
         console.error("Failed to sync theme:", err);
         showError("Failed to sync theme from server");
@@ -114,12 +119,40 @@ function App() {
   };
 
   // Listen for SSE events to trigger a background sync
+  const lastVaultEventTime = useRef<number>(0);
+  const isBackgroundSyncing = useRef(false);
   useEffect(() => {
     if (!lastEvent) return;
 
-    if (lastEvent.type === 'vault_updated' || lastEvent.type === 'prefs_updated') {
-      console.log(`[SSE] Received ${lastEvent.type}. Triggering sync...`);
-      handleSync();
+    if (lastEvent.type === 'vault_updated') {
+      const now = Date.now();
+      if (now - lastVaultEventTime.current < 2000) {
+        console.log('[SSE] Skipping sync - debounce vault_updated');
+        return;
+      }
+      // Background sync - don't show syncing indicator
+      if (isBackgroundSyncing.current) return;
+      isBackgroundSyncing.current = true;
+      
+      lastVaultEventTime.current = now;
+      console.log(`[SSE] Received ${lastEvent.type}. Triggering background sync...`);
+      
+      syncVault().then(vaultData => {
+        loadPasswords(vaultData.entries);
+        if (vaultData.settings) {
+          loadFromVault(vaultData.settings as any);
+        }
+      }).catch(err => console.error('Background sync failed:', err))
+        .finally(() => { isBackgroundSyncing.current = false; });
+        
+    } else if (lastEvent.type === 'prefs_updated') {
+      console.log('[SSE] Received prefs_updated. Fetching preferences...');
+      fetch(`${serverUrl}/api/preferences`, {
+        headers: { "Authorization": `Bearer ${authToken}` }
+      })
+        .then(res => res.json())
+        .then(data => loadFromVault(data))
+        .catch(err => console.error('Failed to fetch preferences:', err));
     }
   }, [lastEvent]);
 
