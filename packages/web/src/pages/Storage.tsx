@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    HardDrive, TriangleAlert, Users, FileText, Image,
+    HardDrive, Users, FileText, Image,
     Archive, ChevronRight, TrendingUp, Server, Settings, Shield,
     ArrowUpRight, ArrowDownRight, Gauge, Layers, ChartPie, ChartBar
 } from 'lucide-react';
@@ -149,16 +149,6 @@ export default function Storage() {
                         Manage Quotas
                     </Button>
                 </div>
-            </motion.div>
-
-            {/* Mock Data Warning */}
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
-            >
-                <TriangleAlert className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium text-sm">Notice: Storage metrics are simulated. Real-time disk usage is not yet connected.</span>
             </motion.div>
 
             {/* Hero Usage Card */}

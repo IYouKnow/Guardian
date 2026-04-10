@@ -43,10 +43,10 @@ export default function ActivityChart() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3, duration: 0.4 }}
-      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-6 h-full transition-all duration-300 flex flex-col`}
+      transition={{ delay: 0.2, duration: 0.2 }}
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-5 h-full transition-all duration-200 flex flex-col`}
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">

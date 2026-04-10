@@ -27,10 +27,10 @@ export default function StatsCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4 }}
-      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-5 hover:border-${accentClasses.base}/30 transition-all duration-300 group`}
+      transition={{ delay, duration: 0.2 }}
+      className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-4 hover:border-white/10 transition-all duration-200 group`}
     >
       <div className="flex items-start justify-between mb-3">
         <div className={`p-2.5 rounded-xl ${accentClasses.bgClass}/10 group-hover:${accentClasses.bgClass}/20 transition-all`}>

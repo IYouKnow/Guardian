@@ -48,19 +48,7 @@ export default function Users() {
   }, [users]);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className={`text-3xl font-bold ${themeClasses.text} transition-all duration-300`}>User Management</h1>
-          <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Manage and monitor user accounts</p>
-        </div>
-      </motion.div>
-
+    <div className="space-y-5">
       {/* Stats */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}

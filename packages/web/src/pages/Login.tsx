@@ -54,9 +54,9 @@ export default function Login() {
 
             {/* Main Content */}
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
                 className="relative z-10 w-full max-w-md p-6"
             >
                 <div className="group relative bg-zinc-900/80 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-white/5">

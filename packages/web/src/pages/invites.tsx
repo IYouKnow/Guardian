@@ -69,22 +69,18 @@ export default function Invites() {
   }, [invites, searchQuery, statusFilter]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        className="flex items-center justify-between"
       >
-        <div>
-          <h1 className={`text-3xl font-bold ${themeClasses.text} transition-all duration-300`}>Invites & Tokens</h1>
-          <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Create and manage invite codes</p>
-        </div>
         <Button
           onClick={() => setShowCreateModal(true)}
-          className={`h-11 px-5 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} ${accentClasses.onContrastClass} font-semibold rounded-xl shadow-lg ${accentClasses.shadowClass} focus-visible:ring-0 focus-visible:ring-offset-0`}
+          className={`h-10 px-4 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} ${accentClasses.onContrastClass} font-medium rounded-lg text-sm`}
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-4 h-4 mr-2" />
           Create Invite
         </Button>
       </motion.div>

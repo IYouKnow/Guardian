@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+
 import type { Theme, AccentColor } from "../themes/index";
 import { getAccentColorClasses, getThemeClasses } from "../themes/index";
 
@@ -35,60 +35,54 @@ export const SettingsLayout = ({
     const accentClasses = getAccentColorClasses(accentColor, theme);
 
     return (
-        <div className={`flex flex-col h-full w-full ${themeClasses.text} overflow-hidden font-sans rounded-3xl transition-colors duration-300`}>
-            <div className="max-w-5xl mx-auto w-full h-full flex px-4 md:px-10 pt-6 md:pt-8 bg-transparent">
+        <div className={`flex flex-col h-full w-full ${themeClasses.text} overflow-hidden font-sans rounded-xl transition-colors duration-200`}>
+            <div className="max-w-5xl mx-auto w-full h-full flex px-4 md:px-6 pt-4 md:pt-6 bg-transparent">
                 {/* Floating Sidebar Navigation */}
-                <div className="hidden md:block w-48 md:w-56 flex-shrink-0 pr-4 md:pr-10">
-                    <div className="mb-8 md:mb-10">
-                        <h1 className="text-lg md:text-xl font-black tracking-tight uppercase opacity-90 truncate">{title}</h1>
-                        <p className={`text-[8px] md:text-[9px] font-bold uppercase tracking-[0.2em] mt-0.5 ${themeClasses.textTertiary} truncate`}>{subtitle}</p>
+                <div className="hidden md:block w-44 md:w-48 flex-shrink-0 pr-4 md:pr-8">
+                    <div className="mb-6 md:mb-8">
+                        <h1 className="text-lg md:text-xl font-semibold tracking-tight truncate">{title}</h1>
+                        <p className={`text-xs ${themeClasses.textTertiary} truncate`}>{subtitle}</p>
                     </div>
 
-                    <nav className="space-y-1 focus:outline-none">
+                    <nav className="space-y-0.5 focus:outline-none">
                         {navItems.map((item) => (
                             <button
                                 key={item.id}
                                 onClick={() => onSectionChange(item.id)}
-                                className={`w-full flex items-center gap-2.5 md:gap-3 px-3.5 md:px-4 py-3 md:py-3.5 rounded-xl transition-all duration-300 group relative ${activeSection === item.id
-                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-200 group relative ${activeSection === item.id
+                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass}`
                                     : `${themeClasses.textSecondary} ${themeClasses.hoverBg}`
                                     }`}
                             >
-                                <div className={`transition-transform duration-300 shrink-0 ${activeSection === item.id ? 'scale-105' : 'group-hover:scale-105 opacity-60'}`}>
+                                <div className={`transition-transform duration-200 shrink-0 ${activeSection === item.id ? '' : 'group-hover:opacity-70'}`}>
                                     {item.icon}
                                 </div>
-                                <span className="text-[11px] md:text-xs font-bold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
-                                {activeSection === item.id && (
-                                    <motion.div
-                                        layoutId="section-indicator"
-                                        className={`absolute left-0 w-1 h-4 md:h-5 rounded-full ${accentClasses.onContrastClass === 'text-white' ? 'bg-white/40' : 'bg-black/40'}`}
-                                    />
-                                )}
+                                <span className="text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
                             </button>
                         ))}
                     </nav>
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto pb-20 px-2 md:px-4 scrollbar-hide min-w-0">
+                <div className="flex-1 overflow-y-auto pb-16 px-2 md:px-4 scrollbar-hide min-w-0">
                     {/* Header for Mobile/Title */}
-                    <header className="md:hidden mb-6 flex items-center gap-4">
+                    <header className="md:hidden mb-4 flex items-center gap-3">
                         {onBack && (
                             <button onClick={onBack} className={`p-2 -ml-2 rounded-lg transition-all ${themeClasses.hoverBg} ${themeClasses.textSecondary} hover:${themeClasses.activeText}`}>
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                             </button>
                         )}
-                        <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">{title}</h1>
+                        <h1 className="text-xl font-semibold">{title}</h1>
                     </header>
 
                     {/* Mobile Navigation (Horizontal Scroll) */}
-                    <div className="md:hidden mb-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
+                    <div className="md:hidden mb-4 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2">
                         {navItems.map((item) => (
                             <button
                                 key={item.id}
                                 onClick={() => onSectionChange(item.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${activeSection === item.id
-                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} ${accentClasses.shadowClass} border-transparent`
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all border shrink-0 ${activeSection === item.id
+                                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} border-transparent`
                                     : `${themeClasses.inputBg} ${themeClasses.textSecondary} ${themeClasses.border}`
                                     }`}
                             >

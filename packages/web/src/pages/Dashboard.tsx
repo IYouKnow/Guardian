@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Users, Key, HardDrive, Zap, Server, TriangleAlert } from 'lucide-react';
+import { Users, Key, HardDrive, Zap, Server } from 'lucide-react';
 import StatsCard, { type StatsCardProps } from '@/components/dashboard/StatsCard';
 import ActivityChart from '@/components/dashboard/ActivityChart';
 import RecentActivity from '@/components/dashboard/RecentActivity';
@@ -16,43 +16,13 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className={`text-2xl font-bold ${themeClasses.text} transition-all duration-300`}>Dashboard</h1>
-          <p className={`${themeClasses.textSecondary} mt-1 transition-all duration-300`}>Welcome back, vawd</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500/10 border border-green-500/20 transition-all duration-300">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-green-400 text-sm font-medium transition-all duration-300">All Systems Operational</span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Mock Data Warning */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
-      >
-        <TriangleAlert className="w-5 h-5 flex-shrink-0" />
-        <span className="font-medium">Notice: This dashboard is currently using mock data. Real-time statistics are not yet connected.</span>
-      </motion.div>
-
-      {/* Stats Grid */}
+    <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((stat, index) => (
-          <StatsCard key={stat.title} {...stat} delay={index * 0.1} />
+          <StatsCard key={stat.title} {...stat} delay={index * 0.05} />
         ))}
       </div>
 
-      {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
         <div className="lg:col-span-2 h-full">
           <ActivityChart />
@@ -62,39 +32,41 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Server Status */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5, duration: 0.4 }}
-        className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl p-5 transition-all duration-300`}
+        transition={{ delay: 0.3, duration: 0.3 }}
+        className={`
+          ${themeClasses.cardBg} border ${themeClasses.border} rounded-xl p-5
+          transition-all duration-200
+        `}
       >
-        <div className="flex items-center gap-3 mb-5">
-          <div className={`p-2 rounded-lg ${accentClasses.bgClass}/10 transition-all duration-300`}>
-            <Server className={`w-5 h-5 ${accentClasses.textClass} transition-all duration-300`} />
+        <div className="flex items-center gap-3 mb-4">
+          <div className={`p-2 rounded-lg ${accentClasses.lightClass} transition-all duration-200`}>
+            <Server className={`w-4 h-4 ${accentClasses.textClass} transition-all duration-200`} />
           </div>
           <div>
-            <h3 className={`${themeClasses.text} font-semibold transition-all duration-300`}>Server Health</h3>
-            <p className={`${themeClasses.textSecondary} text-sm transition-all duration-300`}>Real-time performance metrics</p>
+            <h3 className={`${themeClasses.text} font-medium text-sm transition-all duration-200`}>Server Health</h3>
+            <p className={`${themeClasses.textSecondary} text-xs transition-all duration-200`}>Real-time performance metrics</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: 'CPU Usage', value: 24 },
             { label: 'Memory', value: 68 },
             { label: 'Disk I/O', value: 42 },
           ].map((metric) => (
-            <div key={metric.label} className="space-y-3">
+            <div key={metric.label} className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className={`${themeClasses.textSecondary} text-sm transition-all duration-300`}>{metric.label}</span>
-                <span className={`${themeClasses.text} font-semibold transition-all duration-300`}>{metric.value}%</span>
+                <span className={`${themeClasses.textSecondary} text-xs transition-all duration-200`}>{metric.label}</span>
+                <span className={`${themeClasses.text} font-medium text-sm transition-all duration-200`}>{metric.value}%</span>
               </div>
-              <div className={`h-2 ${themeClasses.divider} bg-opacity-10 bg-current rounded-full overflow-hidden transition-all duration-300`}>
+              <div className={`h-1.5 ${themeClasses.divider} bg-opacity-10 bg-current rounded-full overflow-hidden transition-all duration-200`}>
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${metric.value}%` }}
-                  transition={{ delay: 0.8, duration: 0.8, ease: "easeOut" }}
+                  transition={{ delay: 0.4, duration: 0.5, ease: "easeOut" }}
                   className={`h-full ${accentClasses.bgClass} rounded-full`}
                 />
               </div>
