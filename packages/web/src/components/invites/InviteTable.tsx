@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   Table,
   TableBody,
@@ -15,11 +14,10 @@ import {
   Check,
   Trash2,
   Loader2,
-  ArrowUpDown,
-  ChevronDown,
-  Filter,
-  SortAsc,
-  SortDesc
+  Clock,
+  Users,
+  Ticket,
+  MoreHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi, type Invite } from '@/api/admin';
@@ -27,15 +25,27 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import DeleteInviteModal from './DeleteInviteModal';
 import { useTheme } from '../../context/ThemeContext';
 
-function CountdownTimer({ expiresAt, status }: { expiresAt: string | null, status: string }) {
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    ACTIVE: 'bg-green-500/15 text-green-400 border-green-500/30',
+    USED: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    EXPIRED: 'bg-red-500/15 text-red-400 border-red-500/30',
+    REVOKED: 'bg-red-500/15 text-red-400 border-red-500/30',
+  };
+
+  return (
+    <Badge variant="outline" className={`${styles[status] || ''} font-medium text-[10px] px-2 py-0 border`}>
+      {status}
+    </Badge>
+  );
+}
+
+function ExpiryDisplay({ expiresAt, status }: { expiresAt: string | null, status: string }) {
   const { themeClasses, accentClasses } = useTheme();
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
 
@@ -73,27 +83,28 @@ function CountdownTimer({ expiresAt, status }: { expiresAt: string | null, statu
     return () => clearInterval(timer);
   }, [expiresAt, status]);
 
-  if (!expiresAt) return <span className={`${themeClasses.textTertiary}`}>-</span>;
-  if (status !== 'ACTIVE' || !timeLeft) {
-    if (status === 'EXPIRED') {
-      return (
-        <div className={`inline-flex items-center px-2.5 py-1 ${themeClasses.inputBg} border border-red-500/10 rounded-md shadow-inner`}>
-          <span className="font-mono text-[11px] tracking-wider text-red-500/80 font-medium whitespace-nowrap">
-            {new Date(expiresAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-          </span>
-        </div>
-      );
-    }
+  if (!expiresAt) return <span className={`${themeClasses.textTertiary} text-xs`}>Never</span>;
+  
+  if (status === 'EXPIRED') {
     return (
-      <span className={`${themeClasses.textSecondary}`}>
-        {new Date(expiresAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+      <span className="text-red-400 text-xs">
+        {new Date(expiresAt).toLocaleDateString()}
+      </span>
+    );
+  }
+
+  if (!timeLeft) {
+    return (
+      <span className={`${themeClasses.textSecondary} text-xs`}>
+        {new Date(expiresAt).toLocaleDateString()}
       </span>
     );
   }
 
   return (
-    <div className={`inline-flex items-center px-2.5 py-1 ${themeClasses.inputBg} border ${themeClasses.border} rounded-md shadow-inner`}>
-      <span className={`font-mono text-[11px] tracking-wider ${accentClasses.textClass} font-medium whitespace-nowrap`}>
+    <div className="flex items-center gap-1.5">
+      <Clock className={`w-3 h-3 ${accentClasses.textClass}`} />
+      <span className={`${accentClasses.textClass} text-xs font-medium`}>
         {timeLeft}
       </span>
     </div>
@@ -111,42 +122,23 @@ interface InviteTableProps {
   onResetFilters?: () => void;
 }
 
-type SortKey = keyof Invite | 'uses';
-
 const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, isLoading, onRefresh, onResetFilters }, ref) => {
   const { themeClasses, accentClasses } = useTheme();
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' } | null>(null);
-  const [filters, setFilters] = useState<Record<string, string[]>>({});
   const [inviteToDelete, setInviteToDelete] = useState<Invite | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [now, setNow] = useState(Date.now());
   const [copiedId, setCopiedId] = useState<number | null>(null);
-
-  const statusStyles = {
-    ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
-    USED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    EXPIRED: 'bg-red-500/10 text-red-500 border-red-500/20',
-    REVOKED: 'bg-red-500/10 text-red-400 border-red-500/20',
-  };
-
-  // Update 'now' every second to trigger live expiry updates
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   useImperativeHandle(ref, () => ({
     clearFilters: () => {
-      setFilters({});
-      setSortConfig(null);
+      onResetFilters?.();
     }
   }));
 
   const copyCode = (code: string, id: number) => {
     navigator.clipboard.writeText(code);
     setCopiedId(id);
-    toast.success('Invite code copied to clipboard');
+    toast.success('Copied to clipboard');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -160,284 +152,143 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
       toast.success('Invite deleted');
       onRefresh();
       setInviteToDelete(null);
-    } catch (error: any) {
-      toast.error(error.response?.data || 'Failed to delete invite');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: string } };
+      toast.error(err.response?.data || 'Failed to delete');
     } finally {
       setIsDeleting(false);
       setDeletingId(null);
     }
   };
 
-  const handleSort = (key: SortKey) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const toggleFilter = (column: string, value: string) => {
-    setFilters(prev => {
-      const current = prev[column] || [];
-      const updated = current.includes(value)
-        ? current.filter(v => v !== value)
-        : [...current, value];
-
-      const newFilters = { ...prev };
-      if (updated.length === 0) {
-        delete newFilters[column];
-      } else {
-        newFilters[column] = updated;
-      }
-      return newFilters;
-    });
-  };
-
-  const processedInvites = useMemo(() => {
-    let result = invites.map(invite => {
-      const isExpired = invite.expires_at && new Date(invite.expires_at).getTime() < now;
-      if (isExpired && invite.status === 'ACTIVE') {
-        return { ...invite, status: 'EXPIRED' as const };
-      }
-      return invite;
-    });
-
-    // Apply column filters
-    Object.entries(filters).forEach(([column, values]) => {
-      result = result.filter(invite => {
-        const val = String(invite[column as keyof Invite] || '');
-        return values.includes(val);
-      });
-    });
-
-    // Apply sorting
-    if (sortConfig) {
-      result.sort((a, b) => {
-        let aValue: any = sortConfig.key === 'uses' ? a.use_count : a[sortConfig.key as keyof Invite];
-        let bValue: any = sortConfig.key === 'uses' ? b.use_count : b[sortConfig.key as keyof Invite];
-
-        if (aValue === null) return 1;
-        if (bValue === null) return -1;
-
-        if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-
-    return result;
-  }, [invites, sortConfig, filters, now]);
-
-  const getUniqueValues = (column: keyof Invite) => {
-    const values = invites.map(i => String(i[column] || ''));
-    return Array.from(new Set(values)).filter(Boolean).sort();
-  };
-
   if (isLoading) {
     return (
-      <div className={`py-20 flex items-center justify-center ${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl`}>
-        <Loader2 className={`w-8 h-8 animate-spin ${accentClasses.textClass}`} />
+      <div className={`py-20 flex items-center justify-center ${themeClasses.cardBg} border ${themeClasses.border} rounded-xl`}>
+        <Loader2 className={`w-6 h-6 animate-spin ${accentClasses.textClass}`} />
       </div>
     );
   }
 
-  const ColumnHeader = ({ title, sortKey, filterKey }: { title: string, sortKey?: SortKey, filterKey?: keyof Invite }) => (
-    <TableHead className={`${themeClasses.textSecondary} font-medium group`}>
-      <div className="flex items-center gap-1">
-        <div
-          className={`flex items-center gap-2 cursor-pointer select-none hover:${themeClasses.text} transition-colors ${sortConfig?.key === sortKey ? themeClasses.text : ''}`}
-          onClick={() => sortKey && handleSort(sortKey)}
-        >
-          {title}
-          {sortKey && (
-            <span className={`transition-opacity ${sortConfig?.key === sortKey ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-              {sortConfig?.key === sortKey ? (
-                sortConfig.direction === 'asc' ? <SortAsc className="w-3.5 h-3.5" /> : <SortDesc className="w-3.5 h-3.5" />
-              ) : (
-                <ArrowUpDown className="w-3.5 h-3.5" />
-              )}
-            </span>
-          )}
-        </div>
-
-        {filterKey && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className={`h-6 w-6 p-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 hover:${themeClasses.hoverBg}`}>
-                <ChevronDown className={`w-3.5 h-3.5 ${filters[filterKey] ? accentClasses.textClass : ''}`} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className={`w-48 ${themeClasses.sectionBg} border ${themeClasses.border} ${themeClasses.text} backdrop-blur-xl`}>
-              <DropdownMenuLabel className={`text-xs ${themeClasses.textTertiary} uppercase tracking-wider`}>Filter {title}</DropdownMenuLabel>
-              <DropdownMenuSeparator className={`${themeClasses.divider}`} />
-              {getUniqueValues(filterKey).map(val => (
-                <DropdownMenuCheckboxItem
-                  key={val}
-                  checked={filters[filterKey]?.includes(val)}
-                  onCheckedChange={() => toggleFilter(filterKey, val)}
-                  className={`focus:${themeClasses.hoverBg} focus:${themeClasses.text}`}
-                >
-                  {val}
-                </DropdownMenuCheckboxItem>
-              ))}
-              {filters[filterKey] && (
-                <>
-                  <DropdownMenuSeparator className={`${themeClasses.divider}`} />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      const newFilters = { ...filters };
-                      delete newFilters[filterKey];
-                      setFilters(newFilters);
-                    }}
-                    className={`text-xs text-center justify-center ${accentClasses.textClass} hover:${accentClasses.textClass}/80 focus:${themeClasses.hoverBg}`}
-                  >
-                    Clear Filter
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </TableHead>
-  );
-
   return (
-    <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl shadow-2xl overflow-hidden`}>
-      <div className="w-full overflow-x-auto custom-scrollbar">
+    <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-xl overflow-hidden`}>
+      <div className="w-full overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className={`${themeClasses.divider} hover:bg-transparent bg-white/[0.02]`}>
-              <ColumnHeader title="Invite Code" sortKey="token" />
-              <ColumnHeader title="Status" sortKey="status" filterKey="status" />
-              <ColumnHeader title="Uses" sortKey="uses" />
-              <ColumnHeader title="Expires At" sortKey="expires_at" />
-              <ColumnHeader title="Note" sortKey="note" />
-              <TableHead className={`${themeClasses.textSecondary} font-medium text-right pr-6`}>Actions</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs`}>Token</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs`}>Status</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs`}>Uses</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs`}>Created</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs`}>Expires</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs`}>Note</TableHead>
+              <TableHead className={`${themeClasses.textTertiary} font-medium text-xs text-right`}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <AnimatePresence mode="wait" initial={false}>
-              {processedInvites.length === 0 ? (
-                <TableRow key="empty">
-                  <TableCell colSpan={6} className="text-center py-20">
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex flex-col items-center gap-3"
+            {invites.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-16">
+                  <div className="flex flex-col items-center gap-2">
+                    <Ticket className={`w-6 h-6 ${themeClasses.textTertiary}`} />
+                    <div className={`${themeClasses.textSecondary} text-sm`}>No invites found</div>
+                    <Button
+                      variant="link"
+                      onClick={onResetFilters}
+                      className={`${accentClasses.textClass} text-xs`}
                     >
-                      <Filter className={`w-8 h-8 ${themeClasses.textTertiary}`} />
-                      <div className={`${themeClasses.textSecondary}`}>No invites match your filters.</div>
+                      Clear search
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              invites.map((invite) => (
+                <TableRow
+                  key={invite.id}
+                  className={`${themeClasses.divider} hover:${themeClasses.hoverBg} transition-colors`}
+                >
+                  <TableCell className="py-3">
+                    <div className="flex items-center gap-2">
+                      <code className={`px-2 py-1 ${themeClasses.inputBg} rounded ${accentClasses.textClass} font-mono text-xs`}>
+                        {invite.token}
+                      </code>
                       <Button
-                        variant="link"
-                        onClick={() => {
-                          setFilters({});
-                          setSortConfig(null);
-                          onResetFilters?.();
-                        }}
-                        className={`${accentClasses.textClass} hover:${accentClasses.textClass}/80`}
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => copyCode(invite.token, invite.id)}
+                        className={`h-6 w-6 ${themeClasses.textTertiary} hover:${themeClasses.text}`}
                       >
-                        Reset all table filters
-                      </Button>
-                    </motion.div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                processedInvites.map((invite, index) => (
-                  <motion.tr
-                    key={invite.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: index * 0.03, duration: 0.2 }}
-                    className={`${themeClasses.divider} hover:${themeClasses.hoverBg} transition-colors group/row`}
-                  >
-                    <TableCell className="py-4">
-                      <div className="flex items-center gap-2 group/code w-fit">
-                        <div className="relative flex items-center">
-                          <code className={`pl-3 pr-10 py-1.5 ${themeClasses.inputBg} rounded-lg ${accentClasses.textClass} font-mono text-sm min-w-[140px]`}>
-                            {invite.token}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => copyCode(invite.token, invite.id)}
-                            className={`absolute right-1 h-7 w-7 ${themeClasses.textTertiary} hover:${themeClasses.text} hover:${themeClasses.hoverBg}`}
-                          >
-                            <AnimatePresence mode="wait" initial={false}>
-                              {copiedId === invite.id ? (
-                                <motion.div
-                                  key="check"
-                                  initial={{ scale: 0.5, opacity: 0 }}
-                                  animate={{ scale: 1.1, opacity: 1 }}
-                                  exit={{ scale: 0.5, opacity: 0 }}
-                                  transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                                >
-                                  <Check className={`w-3.5 h-3.5 ${accentClasses.textClass}`} />
-                                </motion.div>
-                              ) : (
-                                <motion.div
-                                  key="copy"
-                                  initial={{ scale: 0.8, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  exit={{ scale: 0.8, opacity: 0 }}
-                                  transition={{ duration: 0.1 }}
-                                >
-                                  <Copy className="w-3.5 h-3.5" />
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </Button>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`${statusStyles[invite.status]} font-medium px-2.5 py-0.5`}>
-                        {invite.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={`${themeClasses.textSecondary}`}>
-                      <div className="flex flex-col">
-                        <span className={`font-medium ${themeClasses.textSecondary}`}>{invite.use_count} / {invite.max_uses === 0 ? '∞' : invite.max_uses}</span>
-                        {invite.used_by && (
-                          <span className={`text-[10px] ${themeClasses.textTertiary} mt-0.5 truncate max-w-[120px]`}>
-                            {invite.used_by}
-                          </span>
+                        {copiedId === invite.id ? (
+                          <Check className="w-3 h-3 text-green-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell className={`${themeClasses.textSecondary}`}>
-                      <CountdownTimer expiresAt={invite.expires_at} status={invite.status} />
-                    </TableCell>
-                    <TableCell className={`${themeClasses.textSecondary} text-sm max-w-[200px] truncate`}>
-                      {invite.note || <span className={`${themeClasses.textTertiary}`}>-</span>}
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <div className="flex items-center justify-end gap-1 transition-opacity">
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <StatusBadge status={invite.status} />
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <div className="flex items-center gap-2">
+                      <Users className={`w-3.5 h-3.5 ${themeClasses.textTertiary}`} />
+                      <span className={`${themeClasses.text} text-sm`}>
+                        {invite.use_count}
+                        {invite.max_uses > 0 && <span className={`${themeClasses.textTertiary}`}>/{invite.max_uses}</span>}
+                        {invite.max_uses === 0 && <span className={`${themeClasses.textTertiary}`}> / ∞</span>}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <span className={`${themeClasses.textSecondary} text-xs`}>
+                      {new Date(invite.created_at).toLocaleDateString()}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <ExpiryDisplay expiresAt={invite.expires_at} status={invite.status} />
+                  </TableCell>
+                  <TableCell className="py-3">
+                    {invite.note ? (
+                      <span className={`${themeClasses.textSecondary} text-xs max-w-[200px] truncate block`}>
+                        {invite.note}
+                      </span>
+                    ) : (
+                      <span className={`${themeClasses.textTertiary} text-xs`}>—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-3 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
+                          className={`h-7 w-7 ${themeClasses.textSecondary} hover:${themeClasses.text}`}
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className={`${themeClasses.sectionBg} border ${themeClasses.border} ${themeClasses.text}`}>
+                        <DropdownMenuItem
+                          onClick={() => copyCode(invite.token, invite.id)}
+                          className={`text-xs ${themeClasses.textSecondary} hover:${themeClasses.text}`}
+                        >
+                          <Copy className="w-3 h-3 mr-2" />
+                          Copy token
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           disabled={invite.use_count > 0 || deletingId === invite.id}
                           onClick={() => setInviteToDelete(invite)}
-                          className={`h-8 w-8 ${themeClasses.textSecondary} hover:text-red-400 hover:${themeClasses.hoverBg} disabled:opacity-30 disabled:hover:bg-transparent`}
+                          className={`text-xs text-red-400 hover:text-red-300 ${deletingId === invite.id ? 'opacity-50' : ''}`}
                         >
-                          {deletingId === invite.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </motion.tr>
-                ))
-              )}
-            </AnimatePresence>
+                          <Trash2 className="w-3 h-3 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -452,5 +303,7 @@ const InviteTable = forwardRef<InviteTableHandle, InviteTableProps>(({ invites, 
     </div>
   );
 });
+
+InviteTable.displayName = 'InviteTable';
 
 export default InviteTable;

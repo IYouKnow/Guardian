@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Filter, Download } from 'lucide-react';
+import { Plus, Search, Download, RefreshCw } from 'lucide-react';
 import InviteTable, { type InviteTableHandle } from '@/components/invites/InviteTable';
 import CreateInviteModal from '@/components/invites/CreateInviteModal';
 import ExportInvitesModal from '@/components/invites/ExportInvitesModal';
@@ -16,7 +15,6 @@ export default function Invites() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'USED' | 'EXPIRED'>('ALL');
   const [invites, setInvites] = useState<Invite[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -25,7 +23,7 @@ export default function Invites() {
     try {
       const data = await adminApi.getInvites();
       setInvites(data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch invites');
     } finally {
       setIsLoading(false);
@@ -36,180 +34,71 @@ export default function Invites() {
     fetchInvites();
   }, []);
 
-  const handleCreateSuccess = () => {
-    fetchInvites();
-  };
-
-  const handleClearFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('ALL');
-    tableRef.current?.clearFilters();
-  };
-
-  const handleExport = () => {
-    setShowExportModal(true);
-  };
-
-  const stats = useMemo(() => {
-    return {
-      total: invites.length,
-      active: invites.filter(i => i.status === 'ACTIVE').length,
-      used: invites.filter(i => i.status === 'USED').length,
-      expired: invites.filter(i => i.status === 'EXPIRED').length,
-    };
-  }, [invites]);
-
   const filteredInvites = useMemo(() => {
     return invites.filter(invite => {
       const matchesSearch = invite.token.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (invite.note && invite.note.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesStatus = statusFilter === 'ALL' || invite.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     });
-  }, [invites, searchQuery, statusFilter]);
+  }, [invites, searchQuery]);
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
+    <div className="space-y-4">
+      {/* Minimal Header */}
+      <div className="flex items-center gap-2">
         <Button
           onClick={() => setShowCreateModal(true)}
-          className={`h-10 px-4 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} ${accentClasses.onContrastClass} font-medium rounded-lg text-sm`}
+          className={`h-8 px-3 ${accentClasses.bgClass} hover:${accentClasses.bgHoverClass} ${accentClasses.onContrastClass} font-medium rounded-md text-xs`}
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Create Invite
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          New Invite
         </Button>
-      </motion.div>
-
-      {/* Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
-      >
-        {[
-          { label: 'Total Invites', value: stats.total, filter: 'ALL' },
-          { label: 'Active', value: stats.active, filter: 'ACTIVE' },
-          { label: 'Used', value: stats.used, filter: 'USED' },
-          { label: 'Expired', value: stats.expired, filter: 'EXPIRED' },
-        ].map((stat) => (
-          <motion.div
-            key={stat.label}
-            onClick={() => setStatusFilter(stat.filter as any)}
-            className={`cursor-pointer p-4 rounded-xl border transition-all duration-300 ${statusFilter === stat.filter
-              ? `${themeClasses.activeBg} border-${accentClasses.base}`
-              : `${themeClasses.cardBg} border-transparent ${themeClasses.hoverBg}`
-              }`}
-          >
-            <p className={`${themeClasses.textSecondary} text-sm font-medium transition-all duration-300`}>{stat.label}</p>
-            <p className={`text-2xl font-bold mt-1 transition-all duration-300 ${statusFilter === stat.filter ? accentClasses.textClass : themeClasses.text}`}>
-              {isLoading ? '...' : stat.value}
-            </p>
-          </motion.div>
-        ))}
-      </motion.div>
-
-      {/* Search & Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="flex flex-col sm:flex-row gap-3"
-      >
-        <div className="relative flex-1">
-          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${themeClasses.textTertiary} transition-all duration-300`} />
-          <Input
-            placeholder="Search invite codes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`pl-11 h-11 ${themeClasses.inputBg} ${themeClasses.border} ${themeClasses.text} placeholder:${themeClasses.textTertiary} focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-xl transition-all duration-300`}
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleClearFilters}
-            className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0`}
-          >
-            <Filter className="w-4 h-4 mr-2" />
-            Clear Filters
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExport}
-            className={`h-11 px-4 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-xl focus-visible:ring-0 focus-visible:ring-offset-0`}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-        </div>
-      </motion.div>
-
-      {/* Invite Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <InviteTable
-          ref={tableRef}
-          invites={filteredInvites}
-          isLoading={isLoading}
-          onRefresh={fetchInvites}
-          onResetFilters={handleClearFilters}
-        />
-      </motion.div>
-
-      {/* Pagination */}
-      {!isLoading && filteredInvites.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-          className="flex items-center justify-between"
-        >
-          <p className={`${themeClasses.textSecondary} text-sm`}>Showing {filteredInvites.length} invites</p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className={`bg-transparent ${themeClasses.border} ${themeClasses.textTertiary} rounded-lg`}
-              disabled
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={`${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} rounded-lg`}
-            >
-              1
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className={`bg-transparent ${themeClasses.border} ${themeClasses.textTertiary} rounded-lg`}
-              disabled
-            >
-              Next
-            </Button>
+        
+        <div className="flex-1 max-w-[280px]">
+          <div className="relative">
+            <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${themeClasses.textTertiary}`} />
+            <Input
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`pl-8 h-8 text-xs ${themeClasses.inputBg} ${themeClasses.border} ${themeClasses.text} placeholder:${themeClasses.textTertiary} focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none rounded-md`}
+            />
           </div>
-        </motion.div>
-      )}
+        </div>
 
-      {/* Create Invite Modal */}
+        <Button
+          variant="outline"
+          onClick={fetchInvites}
+          className={`h-8 px-2.5 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-md text-xs`}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+        
+        <Button
+          variant="outline"
+          onClick={() => setShowExportModal(true)}
+          className={`h-8 px-2.5 bg-transparent ${themeClasses.border} ${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text} rounded-md text-xs`}
+        >
+          <Download className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
+      {/* Table */}
+      <InviteTable
+        ref={tableRef}
+        invites={filteredInvites}
+        isLoading={isLoading}
+        onRefresh={fetchInvites}
+        onResetFilters={() => setSearchQuery('')}
+      />
+
+      {/* Modals */}
       <CreateInviteModal
         open={showCreateModal}
         onOpenChange={setShowCreateModal}
-        onSuccess={handleCreateSuccess}
+        onSuccess={fetchInvites}
       />
 
-      {/* Export Invites Modal */}
       <ExportInvitesModal
         open={showExportModal}
         onOpenChange={setShowExportModal}
