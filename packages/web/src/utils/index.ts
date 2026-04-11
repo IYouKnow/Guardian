@@ -31,4 +31,3 @@ export function getPageNameFromPath(path: string): string {
 
   return pathMap[path] || 'Dashboard';
 }
-
