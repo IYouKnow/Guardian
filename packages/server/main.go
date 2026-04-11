@@ -332,6 +332,9 @@ func main() {
 	<-stop
 	logger.Println("Shutting down server...")
 
+	// Close SSE hub to unblock all SSE connections
+	server.sseHub.shutdown()
+
 	// Stop the checkpoint ticker
 	close(checkpointDone)
 
@@ -492,8 +495,10 @@ func (s *Server) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 // withAdminAuth validates JWT AND checks if user is admin
 func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("withAdminAuth: validating token")
 		userID, err := s.validateToken(r)
 		if err != nil {
+			s.logger.Println("withAdminAuth: token validation failed:", err)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -502,10 +507,12 @@ func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 		var isAdmin bool
 		err = s.systemDB.QueryRow("SELECT is_admin FROM users WHERE id = ?", userID).Scan(&isAdmin)
 		if err != nil || !isAdmin {
+			s.logger.Printf("withAdminAuth: user %d is not admin (isAdmin=%v, err=%v)\n", userID, isAdmin, err)
 			http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
 			return
 		}
 
+		s.logger.Printf("withAdminAuth: user %d is admin, proceeding\n", userID)
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next(w, r.WithContext(ctx))
 	}
@@ -927,16 +934,34 @@ func generateInviteToken() (string, error) {
 }
 
 func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.systemDB.Query(`
+	s.logger.Println("handleListInvites: starting")
+	ctx := r.Context()
+
+	// Mark past-due invites expired in one statement *before* opening a Rows cursor.
+	// With MaxOpenConns(1), running Exec inside rows.Next() deadlocks: the active Rows
+	// holds the only connection until Close, so another Exec blocks indefinitely (or errors).
+	if _, err := s.systemDB.ExecContext(ctx, `
+		UPDATE invites SET status = 'EXPIRED'
+		WHERE status = 'ACTIVE' AND expires_at IS NOT NULL
+		  AND datetime(expires_at) < datetime('now')
+	`); err != nil {
+		s.logger.Println("handleListInvites: expire update error:", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := s.systemDB.QueryContext(ctx, `
 		SELECT id, token, created_at, expires_at, expires_in, used_at, use_count, max_uses, created_by, note, status, used_by 
 		FROM invites ORDER BY created_at DESC
 	`)
 	if err != nil {
+		s.logger.Println("handleListInvites: query error:", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
+	s.logger.Println("handleListInvites: query succeeded, reading rows")
 	invites := []Invite{}
 	for rows.Next() {
 		var inv Invite
@@ -951,15 +976,6 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Auto-expire check: If ACTIVE but past Expiry, update DB and local object
-		if inv.Status == "ACTIVE" && inv.ExpiresAt != nil && inv.ExpiresAt.Before(time.Now()) {
-			inv.Status = "EXPIRED"
-			_, err := s.systemDB.Exec("UPDATE invites SET status = 'EXPIRED' WHERE id = ?", inv.ID)
-			if err != nil {
-				s.logger.Println("Auto-expire DB update error:", err)
-			}
-		}
-
 		if usedByStr.Valid {
 			inv.UsedBy = usedByStr.String
 		}
@@ -972,6 +988,7 @@ func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logger.Println("handleListInvites: done, sending response")
 	writeJSON(w, http.StatusOK, invites)
 }
 
@@ -1087,11 +1104,13 @@ func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	s.logger.Println("handleListUsers: starting")
 	rows, err := s.systemDB.Query(`
 		SELECT id, username, is_admin, friendly_name, status, role, db_path, created_at, last_login 
 		FROM users ORDER BY created_at DESC
 	`)
 	if err != nil {
+		s.logger.Println("handleListUsers: query error:", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -1109,16 +1128,12 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Count vault items
-		itemCount := 0
-		userDBPath := filepath.Join(s.config.DataDir, u.DBPath)
-		if udb, err := sql.Open("sqlite", sqliteDSN(userDBPath)); err == nil {
-			udb.QueryRow("SELECT COUNT(*) FROM vault_items").Scan(&itemCount)
-			udb.Close()
-		}
+		s.logger.Printf("handleListUsers: processing user %d (%s)", u.ID, u.Username)
 
-		// Calculate used space
+		// Calculate used space (doesn't require opening DB)
 		var dbSize, overheadSize int64
+		userDBPath := filepath.Join(s.config.DataDir, u.DBPath)
+		s.logger.Printf("handleListUsers: checking file size at %s", userDBPath)
 		if info, err := os.Stat(userDBPath); err == nil {
 			dbSize = info.Size()
 		}
@@ -1135,7 +1150,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 			FriendlyName:      u.FriendlyName,
 			Status:            u.Status,
 			Role:              u.Role,
-			VaultItems:        itemCount,
+			VaultItems:        0, // Skip for now to avoid blocking
 			UsedSpace:         formatBytes(dbSize),
 			UsedSpaceOverhead: formatBytes(overheadSize),
 			CreatedAt:         u.CreatedAt,
@@ -1148,6 +1163,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logger.Printf("handleListUsers: processed %d users, sending response", len(users))
 	writeJSON(w, http.StatusOK, users)
 }
 

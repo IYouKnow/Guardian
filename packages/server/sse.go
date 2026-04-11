@@ -17,8 +17,9 @@ type SSEEvent struct {
 
 // SSEHub manages all active SSE connections
 type SSEHub struct {
-	clients map[int]map[chan string]bool
-	mu      sync.RWMutex
+	clients    map[int]map[chan string]bool
+	mu         sync.RWMutex
+	shutdowned bool
 }
 
 // NewSSEHub creates a new SSEHub and starts the heartbeat goroutine
@@ -26,10 +27,10 @@ func NewSSEHub() *SSEHub {
 	hub := &SSEHub{
 		clients: make(map[int]map[chan string]bool),
 	}
-	
+
 	// Start the heartbeat goroutine
 	go hub.startHeartbeat()
-	
+
 	return hub
 }
 
@@ -55,7 +56,9 @@ func (h *SSEHub) RemoveClient(userID int, ch chan string) {
 			delete(h.clients, userID)
 		}
 	}
-	close(ch)
+	if !h.shutdowned {
+		close(ch)
+	}
 }
 
 // BroadcastToUser sends an event to all connected devices of a specific user
@@ -72,7 +75,7 @@ func (h *SSEHub) BroadcastToUser(userID int, eventType string) {
 		Type:      eventType,
 		Timestamp: time.Now().Unix(),
 	}
-	
+
 	eventData, err := json.Marshal(event)
 	if err != nil {
 		return
@@ -97,7 +100,7 @@ func (h *SSEHub) broadcastToAll(eventType string) {
 		Type:      eventType,
 		Timestamp: time.Now().Unix(),
 	}
-	
+
 	eventData, err := json.Marshal(event)
 	if err != nil {
 		return
@@ -111,6 +114,21 @@ func (h *SSEHub) broadcastToAll(eventType string) {
 			}
 		}
 	}
+}
+
+// shutdown closes all client channels to unblock SSE connections
+func (h *SSEHub) shutdown() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.shutdowned = true
+
+	for _, userClients := range h.clients {
+		for ch := range userClients {
+			close(ch)
+		}
+	}
+	h.clients = make(map[int]map[chan string]bool)
 }
 
 // startHeartbeat sends a ping event every 30 seconds to keep proxies awake (e.g. Cloudflare tunnels)
@@ -133,7 +151,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	// Allowing CORS if needed, though usually handled by middleware
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Verify authentication. 
+	// Verify authentication.
 	// EventSource in browsers cannot send custom headers (like Authorization).
 	// So we must pass the token in the URL query parameters: ?token=...
 	tokenStr := r.URL.Query().Get("token")
@@ -144,7 +162,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	// We'll temporarily set the Authorization header so our existing validateToken method works
 	r.Header.Set("Authorization", "Bearer "+tokenStr)
-	
+
 	userID, err := s.validateToken(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -180,7 +198,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			// SSE format requires "data: <payload>\n\n"
 			fmt.Fprintf(w, "data: %s\n\n", msg)
-			
+
 			// Flush the response writer to send data immediately
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()

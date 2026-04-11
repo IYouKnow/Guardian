@@ -35,3 +35,4 @@ Desktop.ini
 # Extension builds
 packages/extension/dist/
 packages/extension/.vite/
+packages/server/server.exe

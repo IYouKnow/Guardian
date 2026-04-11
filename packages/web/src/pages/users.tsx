@@ -7,6 +7,7 @@ import UserTable from '@/components/users/UserTable';
 import ExportUsersModal from '@/components/users/ExportUsersModal';
 import { adminApi, type AdminUser } from '@/api/admin';
 import { useTheme } from '../context/ThemeContext';
+import { toast } from 'sonner';
 
 export default function Users() {
   const { themeClasses, accentClasses } = useTheme();
@@ -23,6 +24,8 @@ export default function Users() {
         setUsers(data);
       } catch (error) {
         console.error('Failed to fetch users:', error);
+        const err = error as { response?: { data?: string } };
+        toast.error(err.response?.data || 'Failed to fetch users');
       } finally {
         setLoading(false);
       }

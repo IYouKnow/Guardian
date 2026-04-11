@@ -5,12 +5,14 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    timeout: 10000,
 });
 
 // Request interceptor to add JWT token
 apiClient.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('guardian_token');
+        console.log('Request URL:', config.url, 'Token exists:', !!token);
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -25,6 +27,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
+        console.error('API Error:', error);
         if (error.response?.status === 401) {
             // Clear token and redirect to login
             localStorage.removeItem('guardian_token');
