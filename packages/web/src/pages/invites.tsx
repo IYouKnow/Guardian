@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Download, RefreshCw } from 'lucide-react';
+import { Plus, Search, Download, RefreshCw, HelpCircle } from 'lucide-react';
 import InviteTable, { type InviteTableHandle } from '@/components/invites/InviteTable';
 import CreateInviteModal from '@/components/invites/CreateInviteModal';
 import ExportInvitesModal from '@/components/invites/ExportInvitesModal';
@@ -42,9 +42,13 @@ export default function Invites() {
     });
   }, [invites, searchQuery]);
 
+  const activeCount = invites.filter(i => i.status === 'ACTIVE').length;
+  const usedCount = invites.filter(i => i.status === 'USED').length;
+  const expiredCount = invites.filter(i => i.status === 'EXPIRED').length;
+
   return (
-    <div className="space-y-4">
-      {/* Minimal Header */}
+    <div className="space-y-3">
+      {/* Header Row */}
       <div className="flex items-center gap-2">
         <Button
           onClick={() => setShowCreateModal(true)}
@@ -54,7 +58,7 @@ export default function Invites() {
           New Invite
         </Button>
         
-        <div className="flex-1 max-w-[280px]">
+        <div className="flex-1 max-w-[240px]">
           <div className="relative">
             <Search className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${themeClasses.textTertiary}`} />
             <Input
@@ -81,6 +85,27 @@ export default function Invites() {
         >
           <Download className="w-3.5 h-3.5" />
         </Button>
+
+        <div className="flex items-center gap-3 ml-auto text-xs">
+          <span className={`${themeClasses.textTertiary}`}>
+            Total: <span className={`${themeClasses.text} font-medium`}>{invites.length}</span>
+          </span>
+          <span className={`${themeClasses.textTertiary}`}>
+            Active: <span className="text-green-400 font-medium">{activeCount}</span>
+          </span>
+          <span className={`${themeClasses.textTertiary}`}>
+            Used: <span className="text-blue-400 font-medium">{usedCount}</span>
+          </span>
+          <span className={`${themeClasses.textTertiary}`}>
+            Expired: <span className="text-red-400 font-medium">{expiredCount}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Help Text */}
+      <div className={`flex items-center gap-1.5 text-[10px] ${themeClasses.textTertiary}`}>
+        <HelpCircle className="w-3 h-3" />
+        <span>Invite tokens allow others to register. Active invites can be used until they expire or reach max uses.</span>
       </div>
 
       {/* Table */}

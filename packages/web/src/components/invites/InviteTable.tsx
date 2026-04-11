@@ -47,7 +47,31 @@ function StatusBadge({ status }: { status: string }) {
 
 function ExpiryDisplay({ expiresAt, status }: { expiresAt: string | null, status: string }) {
   const { themeClasses, accentClasses } = useTheme();
-  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+  
+  const calculateTimeLeft = (): string | null => {
+    if (!expiresAt || status !== 'ACTIVE') return null;
+    
+    const now = new Date().getTime();
+    const expiry = new Date(expiresAt).getTime();
+    const distance = expiry - now;
+
+    if (isNaN(distance) || distance <= 0) return null;
+
+    const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+
+    return parts.join(' ');
+  };
+
+  const [timeLeft, setTimeLeft] = useState<string | null>(() => calculateTimeLeft());
 
   useEffect(() => {
     if (!expiresAt || status !== 'ACTIVE') {
@@ -56,28 +80,7 @@ function ExpiryDisplay({ expiresAt, status }: { expiresAt: string | null, status
     }
 
     const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const expiry = new Date(expiresAt).getTime();
-      const distance = expiry - now;
-
-      if (isNaN(distance) || distance <= 0) {
-        setTimeLeft(null);
-        clearInterval(timer);
-        return;
-      }
-
-      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-      const parts = [];
-      if (days > 0) parts.push(`${days}d`);
-      if (hours > 0) parts.push(`${hours}h`);
-      parts.push(`${minutes}m`);
-      parts.push(`${seconds}s`);
-
-      setTimeLeft(parts.join(' '));
+      setTimeLeft(calculateTimeLeft());
     }, 1000);
 
     return () => clearInterval(timer);
@@ -88,7 +91,7 @@ function ExpiryDisplay({ expiresAt, status }: { expiresAt: string | null, status
   if (status === 'EXPIRED') {
     return (
       <span className="text-red-400 text-xs">
-        {new Date(expiresAt).toLocaleDateString()}
+        {new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </span>
     );
   }
@@ -96,7 +99,7 @@ function ExpiryDisplay({ expiresAt, status }: { expiresAt: string | null, status
   if (!timeLeft) {
     return (
       <span className={`${themeClasses.textSecondary} text-xs`}>
-        {new Date(expiresAt).toLocaleDateString()}
+        {new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </span>
     );
   }
