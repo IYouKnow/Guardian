@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,6 +19,8 @@ import {
   Command,
   Server,
   Cog,
+  Circle,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -103,7 +105,14 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   const { theme, themeClasses, accentClasses, refetchPreferences } = useTheme();
   const { isSyncing, lastEvent } = useSSE();
   const { isOpen: commandPaletteOpen, setIsOpen: setCommandPaletteOpen } = useCommandPalette();
-  const location = useLocation();
+  const [serverVersion, setServerVersion] = useState<string>('?');
+
+  useEffect(() => {
+    fetch('/health')
+      .then(res => res.json())
+      .then(data => setServerVersion(data.version || '?'))
+      .catch(() => setServerVersion('?'));
+  }, []);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => ({
@@ -155,6 +164,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
               <Shield className={`w-4 h-4 ${accentClasses.onContrastClass}`} />
             </div>
             <span className={`font-semibold ${themeClasses.text} text-sm transition-all duration-300`}>Guardian</span>
+            <span className={`text-xs ${themeClasses.textTertiary} px-1.5 py-0.5 rounded ${themeClasses.sectionBg} border ${themeClasses.border}`}>v{serverVersion}</span>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -202,22 +212,16 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
       `}>
         <div className="flex flex-col h-full">
           <div className={`flex items-center justify-between h-14 px-4 border-b ${themeClasses.divider} transition-all duration-200`}>
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-lg ${accentClasses.bgClass} flex items-center justify-center transition-colors duration-300`}>
-                  <Shield className={`w-4 h-4 ${accentClasses.onContrastClass}`} />
-                </div>
+            <div className={`flex items-center gap-3 ${sidebarCollapsed ? 'lg:justify-center lg:w-full' : 'pl-1'}`}>
+              <div className={`w-10 h-10 rounded-lg ${accentClasses.bgClass} flex items-center justify-center transition-colors duration-300`}>
+                <Shield className={`w-5 h-5 ${accentClasses.onContrastClass}`} />
+              </div>
+              {!sidebarCollapsed && (
                 <div className="flex-1 min-w-0">
                   <span className={`font-semibold ${themeClasses.text} text-sm transition-all duration-300 block leading-tight`}>Guardian</span>
-                  <span className={`text-xs ${themeClasses.textTertiary} transition-all duration-300`}>Admin Panel</span>
                 </div>
-              </div>
-            )}
-            {sidebarCollapsed && (
-              <div className={`w-8 h-8 mx-auto rounded-lg ${accentClasses.bgClass} flex items-center justify-center`}>
-                <Shield className={`w-4 h-4 ${accentClasses.onContrastClass}`} />
-              </div>
-            )}
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -334,50 +338,76 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
             )}
           </nav>
 
-          {(() => {
-            const storedUser = localStorage.getItem('guardian_user');
-            const user = storedUser ? JSON.parse(storedUser) : null;
-            const username = user?.username || 'User';
-            const role = user?.is_admin ? 'Admin' : 'User';
-            const initial = username.charAt(0).toUpperCase();
+          <div className={`p-1.5 lg:p-2 border-t ${themeClasses.divider} transition-all duration-300`}>
+            {(() => {
+              const storedUser = localStorage.getItem('guardian_user');
+              const user = storedUser ? JSON.parse(storedUser) : null;
+              const username = user?.username || 'User';
+              const role = user?.is_admin ? 'Admin' : 'User';
+              const initial = username.charAt(0).toUpperCase();
 
-            return (
-              <div className={`p-2 lg:p-3 border-t ${themeClasses.divider} transition-all duration-300`}>
-                <div className={`
-                  flex items-center gap-2 lg:gap-3 p-2 lg:p-3 rounded-lg 
-                  ${themeClasses.sectionBg} border ${themeClasses.border}
-                  transition-all duration-300
-                  ${sidebarCollapsed ? 'justify-center' : ''}
-                `}>
-                  <div className={`w-8 h-8 rounded-lg ${accentClasses.bgClass} flex items-center justify-center flex-shrink-0`}>
-                    <span className={`text-sm font-semibold ${accentClasses.onContrastClass}`}>{initial}</span>
+              return (
+                <>
+                  <div className={`
+                    flex items-center gap-2 p-1.5 rounded-lg 
+                    ${themeClasses.hoverBg}
+                    transition-all duration-300
+                    ${sidebarCollapsed ? 'justify-center' : ''}
+                  `}>
+                    <div className={`w-8 h-8 rounded-md ${accentClasses.bgClass} flex items-center justify-center flex-shrink-0`}>
+                      <span className={`text-xs font-semibold ${accentClasses.onContrastClass}`}>{initial}</span>
+                    </div>
+                    {!sidebarCollapsed && (
+                      <>
+                        <div className="min-w-0 flex-1">
+                          <p className={`${themeClasses.text} text-xs font-medium truncate transition-all duration-300`}>{username}</p>
+                          <p className={`${themeClasses.textTertiary} text-[10px] transition-all duration-300`}>{role}</p>
+                        </div>
+                        <Link
+                          to={createPageUrl('Login')}
+                          onClick={() => {
+                            localStorage.removeItem('guardian_token');
+                            localStorage.removeItem('guardian_user');
+                          }}
+                          className={`
+                            w-7 h-7 flex items-center justify-center rounded-md 
+                            ${themeClasses.textTertiary} hover:text-red-400 hover:bg-red-500/10 
+                            transition-all duration-200 flex-shrink-0
+                          `}
+                          title="Sign Out"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                        </Link>
+                      </>
+                    )}
                   </div>
+
                   {!sidebarCollapsed && (
-                    <div className="min-w-0 flex-1">
-                      <p className={`${themeClasses.text} text-sm font-medium truncate transition-all duration-300`}>{username}</p>
-                      <p className={`${themeClasses.textTertiary} text-xs transition-all duration-300`}>{role}</p>
+                    <div className="mt-1 flex items-center justify-between text-[10px]">
+                      <a
+                        href="https://github.com/iyouknow/guardian"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`
+                          flex items-center gap-1.5 px-2 py-1 rounded-md
+                          ${themeClasses.textTertiary} ${themeClasses.hoverBg} hover:${themeClasses.text}
+                          transition-all duration-150
+                        `}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Docs</span>
+                      </a>
+                      
+                      <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${themeClasses.textTertiary}`}>
+                        <Circle className="w-1.5 h-1.5 fill-emerald-400 text-emerald-400" />
+                        <span>v{serverVersion}</span>
+                      </div>
                     </div>
                   )}
-                  <Link
-                    to={createPageUrl('Login')}
-                    onClick={() => {
-                      localStorage.removeItem('guardian_token');
-                      localStorage.removeItem('guardian_user');
-                    }}
-                    className={`
-                      w-8 h-8 flex items-center justify-center rounded-lg 
-                      ${themeClasses.textTertiary} hover:text-red-400 hover:bg-red-500/10 
-                      transition-all duration-200 flex-shrink-0
-                      ${sidebarCollapsed ? 'hidden lg:flex' : ''}
-                    `}
-                    title="Sign Out"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </Link>
-                </div>
-              </div>
-            );
-          })()}
+                </>
+              );
+            })()}
+          </div>
         </div>
       </aside>
 
