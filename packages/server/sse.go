@@ -131,7 +131,7 @@ func (h *SSEHub) shutdown() {
 	h.clients = make(map[int]map[chan string]bool)
 }
 
-// startHeartbeat sends a ping event every 30 seconds to keep proxies awake (e.g. Cloudflare tunnels)
+// startHeartbeat sends a ping event every 30 seconds to keep intermediaries (reverse proxies, load balancers) from closing idle SSE connections.
 func (h *SSEHub) startHeartbeat() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

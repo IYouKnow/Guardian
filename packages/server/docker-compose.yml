@@ -1,20 +1,4 @@
 ## Guardian Server — Docker Compose
-##
-## Works for:
-##   - Plain Docker:  docker compose --env-file .env up -d
-##   - CasaOS:        App Store → Custom Install → Docker Compose → paste this file
-##                    then edit JWT_SECRET in the Environment Variables panel.
-##
-## Before first start:
-##   - Set JWT_SECRET to a real random string. Examples:
-##        Linux/macOS: openssl rand -base64 32
-##        PowerShell:  [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }) -as [byte[]])
-##
-## Optional Cloudflare Tunnel (HTTPS):
-##   1. Cloudflare Zero Trust → Networks → Tunnels → Create a Tunnel (Docker).
-##   2. Copy the token and set TUNNEL_TOKEN in .env (or edit it in CasaOS).
-##   3. Public Hostname → Service: http://guardian-server:8080
-##   4. Start with:  docker compose --profile tunnel up -d
 
 name: guardian-server
 
@@ -27,9 +11,7 @@ services:
       - "8080:8080"
     environment:
       PORT: "8080"
-      # Replace the value below with a strong random string before first start.
       JWT_SECRET: CHANGE_ME_TO_A_RANDOM_SECRET
-      # Optional: invite code required to create the first admin account.
       ADMIN_INVITE_CODE: ""
     volumes:
       - guardian-data:/app/data
@@ -58,19 +40,6 @@ services:
           description:
             en_us: "Optional. Invite code required to create the first admin account"
 
-  cloudflared:
-    profiles: [tunnel]
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared_tunnel
-    restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
-    networks:
-      - guardian-network
-    depends_on:
-      - guardian-server
-
 volumes:
   guardian-data:
     name: guardian-data
@@ -95,7 +64,6 @@ x-casaos:
   category: Utilities
   developer: iYouKnow
   author: iYouKnow
-  icon: https://icon.casaos.io/main/all/guardian-server.png
   description:
     en_us: |
       Guardian password manager server. After install, open http://<your-host-ip>:8080

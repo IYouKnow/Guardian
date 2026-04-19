@@ -45,7 +45,7 @@ export function useSSE() {
                     const data = JSON.parse(event.data) as SSEEvent;
 
                     if (data.type === 'ping') {
-                        // Ignoring pings. They just keep the cloudflare tunnel alive.
+                        // Ignoring pings. They just keep the SSE connection alive through proxies.
                         return;
                     }
 

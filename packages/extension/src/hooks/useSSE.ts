@@ -40,7 +40,7 @@ export function useSSE(serverUrl: string | null | undefined, authToken: string |
                     const data = JSON.parse(event.data) as SSEEvent;
 
                     if (data.type === 'ping') {
-                        // Ignoring pings. They just keep the cloudflare tunnel alive.
+                        // Ignoring pings. They just keep the SSE connection alive through proxies.
                         return;
                     }
 
