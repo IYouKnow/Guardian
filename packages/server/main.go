@@ -227,6 +227,7 @@ func main() {
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
+	mux.HandleFunc("DELETE /vault/items/{id}", server.withUserAuth(server.handleDeleteItem))
 
 	// SSE Events
 	mux.HandleFunc("GET /api/events", server.handleEvents)
@@ -916,6 +917,42 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Items synced"})
+}
+
+// handleDeleteItem removes a single vault item by id for the authenticated user
+func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "Missing item id", http.StatusBadRequest)
+		return
+	}
+
+	db, err := s.getUserDB(r.Context())
+	if err != nil {
+		http.Error(w, "Storage access failed", http.StatusInternalServerError)
+		return
+	}
+
+	res, err := db.Exec("DELETE FROM vault_items WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Delete failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		// Idempotent: still return success so clients can delete without
+		// worrying about whether the server already purged the entry.
+		writeJSON(w, http.StatusOK, map[string]string{"message": "Item not found (already deleted)"})
+		return
+	}
+
+	// Broadcast vault change to other sessions
+	if userID, ok := r.Context().Value(userIDKey).(int); ok {
+		s.sseHub.BroadcastToUser(userID, "vault_updated")
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Item deleted"})
 }
 
 // --- Admin Handlers ---

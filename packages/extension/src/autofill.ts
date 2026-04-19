@@ -410,6 +410,406 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Save-on-submit prompt
+// ---------------------------------------------------------------------------
+
+interface CapturedCredential {
+  username: string;
+  password: string;
+  url: string;
+}
+
+let lastCapturedCredential: CapturedCredential | null = null;
+let saveBannerHost: HTMLElement | null = null;
+let saveBannerRoot: ShadowRoot | null = null;
+let lastPromptKey: string | null = null;
+let lastPromptAt = 0;
+
+// Find the most likely username/email field associated with a password field.
+function findAssociatedUsernameField(
+  passwordField: HTMLInputElement,
+  scope: Document | HTMLElement,
+): HTMLInputElement | null {
+  const candidates = Array.from(
+    scope.querySelectorAll<HTMLInputElement>(
+      'input[type="text"], input[type="email"], input[type="tel"], input:not([type])',
+    ),
+  ).filter((el) => {
+    if (el.disabled || el.readOnly) return false;
+    if (el.offsetParent === null && el.type !== 'hidden') return false;
+    return true;
+  });
+
+  if (candidates.length === 0) return null;
+
+  // Prefer fields that appear BEFORE the password in DOM order.
+  const before = candidates.filter((el) => {
+    const pos = el.compareDocumentPosition(passwordField);
+    return (pos & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  });
+
+  const pool = before.length > 0 ? before : candidates;
+
+  // Score by how likely this is a username/email field.
+  const scored = pool.map((el) => {
+    let score = 0;
+    const hint = `${el.autocomplete || ''} ${el.name || ''} ${el.id || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+    if (/email/.test(hint)) score += 3;
+    if (/user/.test(hint)) score += 3;
+    if (/login/.test(hint)) score += 2;
+    if (el.type === 'email') score += 2;
+    if (el.autocomplete === 'username') score += 5;
+    return { el, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.el || null;
+}
+
+// Capture the current username + password from the given form (or document).
+function captureFrom(scope: Document | HTMLElement | null): CapturedCredential | null {
+  const root = scope || document;
+  const passwordField = Array.from(
+    root.querySelectorAll<HTMLInputElement>('input[type="password"]'),
+  ).find((el) => !!el.value);
+
+  if (!passwordField || !passwordField.value) return null;
+
+  const usernameField = findAssociatedUsernameField(passwordField, root);
+  const cred: CapturedCredential = {
+    username: usernameField?.value || '',
+    password: passwordField.value,
+    url: window.location.href,
+  };
+  lastCapturedCredential = cred;
+  return cred;
+}
+
+// Ask the background if we should prompt, and if so, show the banner.
+async function attemptPromptSave(cred: CapturedCredential | null) {
+  if (!cred || !cred.password || cred.password.length < 4) return;
+
+  // De-duplicate: don't re-prompt for the same credential within 10s.
+  const key = `${cred.url}|${cred.username}|${cred.password}`;
+  const now = Date.now();
+  if (key === lastPromptKey && now - lastPromptAt < 10_000) return;
+  lastPromptKey = key;
+  lastPromptAt = now;
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'checkShouldPromptSave',
+      url: cred.url,
+      username: cred.username,
+      password: cred.password,
+    });
+    if (!response) return;
+
+    if (response.prompt === 'save') {
+      showSaveBanner({ mode: 'save', credential: cred });
+    } else if (response.prompt === 'update') {
+      showSaveBanner({
+        mode: 'update',
+        credential: cred,
+        entryId: response.entryId,
+        entryTitle: response.entryTitle,
+      });
+    }
+  } catch (err) {
+    // SW may be asleep or extension reloaded — stay silent.
+    console.warn('Guardian: save-prompt check failed', err);
+  }
+}
+
+// Build the banner host + shadow root (once).
+function ensureSaveBannerHost(): ShadowRoot {
+  if (saveBannerRoot && saveBannerHost && saveBannerHost.isConnected) {
+    return saveBannerRoot;
+  }
+  saveBannerHost = document.createElement('div');
+  saveBannerHost.id = 'guardian-save-banner-host';
+  saveBannerHost.style.cssText = `
+    all: initial;
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 2147483647;
+  `;
+  saveBannerRoot = saveBannerHost.attachShadow({ mode: 'closed' });
+  document.documentElement.appendChild(saveBannerHost);
+  return saveBannerRoot;
+}
+
+function hideSaveBanner() {
+  if (saveBannerHost && saveBannerHost.parentNode) {
+    saveBannerHost.parentNode.removeChild(saveBannerHost);
+  }
+  saveBannerHost = null;
+  saveBannerRoot = null;
+}
+
+interface BannerOptions {
+  mode: 'save' | 'update';
+  credential: CapturedCredential;
+  entryId?: string;
+  entryTitle?: string;
+}
+
+function showSaveBanner(options: BannerOptions) {
+  const root = ensureSaveBannerHost();
+  root.innerHTML = '';
+
+  const domain = getDomain(options.credential.url) || 'this site';
+  const isUpdate = options.mode === 'update';
+  const title = isUpdate ? 'Update password?' : 'Save password?';
+  const subtitle = isUpdate
+    ? `We noticed a new password for "${options.entryTitle || domain}".`
+    : `Save this login for ${domain} to your Guardian vault?`;
+  const primaryLabel = isUpdate ? 'Update' : 'Save';
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    width: 320px;
+    background: #0a0a0a;
+    color: #ffffff;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    padding: 14px 16px;
+    box-sizing: border-box;
+  `;
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
+
+  const icon = document.createElement('div');
+  icon.style.cssText = `
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.25), rgba(250, 204, 21, 0.1));
+    border: 1px solid rgba(250, 204, 21, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  `;
+  icon.innerHTML = `
+    <svg width="14" height="14" fill="none" stroke="rgb(250, 204, 21)" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
+    </svg>
+  `;
+
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-size:13px;font-weight:600;';
+  titleEl.textContent = title;
+
+  header.appendChild(icon);
+  header.appendChild(titleEl);
+
+  const subtitleEl = document.createElement('div');
+  subtitleEl.style.cssText = 'font-size:12px;color:#9ca3af;margin-bottom:10px;line-height:1.4;';
+  subtitleEl.textContent = subtitle;
+
+  const credsBox = document.createElement('div');
+  credsBox.style.cssText = `
+    background: #111111;
+    border: 1px solid #1f1f1f;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    margin-bottom: 12px;
+  `;
+  const userRow = document.createElement('div');
+  userRow.style.cssText = 'color:#d4d4d8;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  userRow.textContent = options.credential.username || '(no username)';
+  const passRow = document.createElement('div');
+  passRow.style.cssText = 'color:#71717a;font-family:monospace;letter-spacing:2px;';
+  passRow.textContent = '•'.repeat(Math.min(12, options.credential.password.length));
+  credsBox.appendChild(userRow);
+  credsBox.appendChild(passRow);
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:8px;align-items:center;';
+
+  const makeBtn = (label: string, primary: boolean) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.style.cssText = `
+      border: 1px solid ${primary ? 'rgb(250, 204, 21)' : '#27272a'};
+      background: ${primary ? 'rgb(250, 204, 21)' : 'transparent'};
+      color: ${primary ? '#000000' : '#d4d4d8'};
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    `;
+    return btn;
+  };
+
+  const primaryBtn = makeBtn(primaryLabel, true);
+  const neverBtn = makeBtn('Never', false);
+  const laterBtn = makeBtn('Not now', false);
+  laterBtn.style.marginLeft = 'auto';
+
+  primaryBtn.onclick = async () => {
+    primaryBtn.disabled = true;
+    primaryBtn.textContent = '...';
+    try {
+      if (isUpdate && options.entryId) {
+        await chrome.runtime.sendMessage({
+          action: 'updatePassword',
+          entryId: options.entryId,
+          password: options.credential.password,
+        });
+      } else {
+        await chrome.runtime.sendMessage({
+          action: 'savePassword',
+          url: options.credential.url,
+          username: options.credential.username,
+          password: options.credential.password,
+          title: domain,
+        });
+      }
+    } catch (err) {
+      console.warn('Guardian: save failed', err);
+    } finally {
+      hideSaveBanner();
+    }
+  };
+
+  neverBtn.onclick = async () => {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'neverAskForDomain',
+        domain,
+      });
+    } catch {
+      // ignore
+    }
+    hideSaveBanner();
+  };
+
+  laterBtn.onclick = () => hideSaveBanner();
+
+  actions.appendChild(neverBtn);
+  actions.appendChild(laterBtn);
+  actions.appendChild(primaryBtn);
+
+  wrap.appendChild(header);
+  wrap.appendChild(subtitleEl);
+  wrap.appendChild(credsBox);
+  wrap.appendChild(actions);
+  root.appendChild(wrap);
+
+  // Auto-dismiss after 30s.
+  window.setTimeout(() => {
+    if (saveBannerRoot === root) hideSaveBanner();
+  }, 30_000);
+}
+
+// Attach listeners that capture credentials and trigger the prompt.
+function attachCaptureListeners() {
+  // Capture on real form submissions (most reliable signal).
+  document.addEventListener(
+    'submit',
+    (event) => {
+      const form = event.target as HTMLElement | null;
+      const cred = captureFrom(form);
+      if (cred) attemptPromptSave(cred);
+    },
+    true,
+  );
+
+  // Enter key inside a password field → likely a submit.
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key !== 'Enter') return;
+      const target = event.target as HTMLInputElement | null;
+      if (!target || target.tagName !== 'INPUT' || target.type !== 'password') return;
+      if (!target.value) return;
+      const scope = target.closest('form') || document;
+      const cred = captureFrom(scope);
+      if (cred) window.setTimeout(() => attemptPromptSave(cred), 200);
+    },
+    true,
+  );
+
+  // Click on login-ish buttons inside SPAs (no <form>).
+  document.addEventListener(
+    'click',
+    (event) => {
+      const el = (event.target as HTMLElement | null)?.closest(
+        'button, [role="button"], input[type="submit"], a[href]',
+      ) as HTMLElement | null;
+      if (!el) return;
+      const type = el.getAttribute('type')?.toLowerCase();
+      const label = (
+        el.textContent ||
+        el.getAttribute('aria-label') ||
+        el.getAttribute('value') ||
+        ''
+      )
+        .toLowerCase()
+        .trim();
+      const looksLikeSubmit =
+        type === 'submit' ||
+        /\b(log[\s-]?in|sign[\s-]?in|sign[\s-]?up|register|create\s+account|continue)\b/.test(
+          label,
+        );
+      if (!looksLikeSubmit) return;
+      const scope = el.closest('form') || document;
+      const cred = captureFrom(scope);
+      if (cred) window.setTimeout(() => attemptPromptSave(cred), 400);
+    },
+    true,
+  );
+
+  // Fallback: keep capturing the latest typed password so an SPA that
+  // navigates away after login still has a chance to prompt on the next page.
+  document.addEventListener(
+    'input',
+    (event) => {
+      const target = event.target as HTMLInputElement | null;
+      if (!target || target.tagName !== 'INPUT' || target.type !== 'password') return;
+      const scope = target.closest('form') || document;
+      captureFrom(scope);
+    },
+    true,
+  );
+
+  // If the page URL changes after a captured password, try prompting —
+  // covers SPAs that push a new history entry on login.
+  let lastHref = window.location.href;
+  const checkNav = () => {
+    if (window.location.href !== lastHref) {
+      lastHref = window.location.href;
+      if (lastCapturedCredential) {
+        attemptPromptSave({ ...lastCapturedCredential, url: lastHref });
+      }
+    }
+  };
+  window.addEventListener('popstate', checkNav);
+  window.addEventListener('hashchange', checkNav);
+  const origPush = history.pushState;
+  const origReplace = history.replaceState;
+  history.pushState = function (...args: Parameters<typeof origPush>) {
+    const ret = origPush.apply(this, args);
+    window.setTimeout(checkNav, 0);
+    return ret;
+  };
+  history.replaceState = function (...args: Parameters<typeof origReplace>) {
+    const ret = origReplace.apply(this, args);
+    window.setTimeout(checkNav, 0);
+    return ret;
+  };
+}
+
 // Initialize
 function init() {
   // Listen for focus events on input fields
@@ -424,6 +824,9 @@ function init() {
       positionDropdown(currentInput);
     }
   }, true);
+
+  // Save-on-submit capture + prompt.
+  attachCaptureListeners();
 }
 
 // Start when DOM is ready

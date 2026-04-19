@@ -3,7 +3,8 @@
  * Handles password matching and autofill coordination
  */
 
-import { openVaultWithKey } from "../../shared/crypto/vault";
+import { openVaultWithKey, createVaultWithKey, type VaultEntry } from "../../shared/crypto/vault";
+import { pushEntriesToServer } from "./utils/serverSync";
 
 
 
@@ -37,6 +38,8 @@ let cachedDerivedServerKey: number[] | undefined;
 let cachedLocalKey: number[] | undefined;
 
 const SESSION_STORAGE_KEY = 'guardian_active_session';
+const VAULT_STORAGE_KEY = 'guardian_vault';
+const NEVER_ASK_KEY = 'guardian_autofill_never';
 
 // Load session from storage on startup
 async function loadSessionFromStorage() {
@@ -175,6 +178,142 @@ async function findMatches(url: string): Promise<AutofillMatch[]> {
   return matches;
 }
 
+// Decrypt the locally cached vault using the in-memory / session key.
+// Returns null if not unlocked or not available.
+async function readDecryptedVault(): Promise<VaultEntry[] | null> {
+  await loadSessionFromStorage();
+  if (!isLoggedIn || !cachedLocalKey) return null;
+  try {
+    const storage = chrome.storage as any;
+    const result = await storage.local.get(VAULT_STORAGE_KEY);
+    const base64Vault = result[VAULT_STORAGE_KEY];
+    if (!base64Vault) return [];
+    const bin = atob(base64Vault);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const decrypted = await openVaultWithKey(new Uint8Array(cachedLocalKey), bytes);
+    return decrypted.entries;
+  } catch (e) {
+    console.warn('Failed to read vault in SW', e);
+    return null;
+  }
+}
+
+// Re-encrypt and persist the vault.
+async function writeEncryptedVault(entries: VaultEntry[]): Promise<boolean> {
+  if (!cachedLocalKey) return false;
+  try {
+    const encrypted = await createVaultWithKey(new Uint8Array(cachedLocalKey), entries);
+    const base64 = btoa(String.fromCharCode(...encrypted));
+    const storage = chrome.storage as any;
+    await storage.local.set({ [VAULT_STORAGE_KEY]: base64 });
+    sessionLastModified = Date.now();
+    await saveSessionToStorage();
+    return true;
+  } catch (e) {
+    console.error('Failed to write vault in SW', e);
+    return false;
+  }
+}
+
+// If the user is in server mode, push the given entries to the server so
+// the change is persisted across devices. Silent no-op in local mode.
+// Errors are logged but not fatal — the local cache is already the source
+// of truth for the current session; the next manual sync will reconcile.
+async function maybePushToServer(entries: VaultEntry[]): Promise<void> {
+  if (cachedMode !== 'server') return;
+  if (!cachedServerUrl || !cachedAuthToken || !cachedDerivedServerKey) return;
+  try {
+    await pushEntriesToServer(
+      cachedServerUrl,
+      cachedAuthToken,
+      new Uint8Array(cachedDerivedServerKey),
+      entries,
+    );
+  } catch (err) {
+    console.error('[SW] Failed to push entries to server:', err);
+  }
+}
+
+// Broadcast that the vault was mutated so any open popup can re-read it.
+function broadcastVaultMutated() {
+  try {
+    (chrome.runtime.sendMessage as any)({ action: 'vaultMutated' }, () => {
+      // Swallow "no receiver" errors — popup may not be open.
+      void (chrome.runtime as any).lastError;
+    });
+  } catch {
+    // ignore
+  }
+}
+
+async function getNeverAskList(): Promise<string[]> {
+  try {
+    const storage = chrome.storage as any;
+    const result = await storage.local.get(NEVER_ASK_KEY);
+    return Array.isArray(result[NEVER_ASK_KEY]) ? result[NEVER_ASK_KEY] : [];
+  } catch {
+    return [];
+  }
+}
+
+async function addToNeverAskList(domain: string): Promise<void> {
+  try {
+    const list = await getNeverAskList();
+    if (!list.includes(domain)) {
+      list.push(domain);
+      const storage = chrome.storage as any;
+      await storage.local.set({ [NEVER_ASK_KEY]: list });
+    }
+  } catch (e) {
+    console.warn('Failed to update never-ask list', e);
+  }
+}
+
+// Decide whether a captured credential should trigger a save/update prompt.
+async function classifyCapturedCredential(
+  url: string,
+  username: string,
+  password: string,
+): Promise<
+  | { prompt: 'none' }
+  | { prompt: 'save' }
+  | { prompt: 'update'; entryId: string; entryTitle: string }
+> {
+  if (!password || password.length < 4) return { prompt: 'none' };
+  if (!isLoggedIn) return { prompt: 'none' };
+
+  const domain = getDomain(url);
+  if (!domain) return { prompt: 'none' };
+
+  const neverAsk = await getNeverAskList();
+  if (neverAsk.includes(domain)) return { prompt: 'none' };
+
+  const entries = await readDecryptedVault();
+  if (!entries) return { prompt: 'none' };
+
+  // Exact match on domain + username + password → already stored, do nothing.
+  const sameDomainEntries = entries.filter((e) => urlMatches(e.url || '', url));
+
+  const exact = sameDomainEntries.find(
+    (e) => (e.username || '') === username && e.password === password,
+  );
+  if (exact) return { prompt: 'none' };
+
+  // Same domain + username but different password → offer update.
+  if (username) {
+    const sameUser = sameDomainEntries.find(
+      (e) => (e.username || '').toLowerCase() === username.toLowerCase(),
+    );
+    if (sameUser) {
+      return { prompt: 'update', entryId: sameUser.id, entryTitle: sameUser.name };
+    }
+  }
+
+  // Otherwise it's a brand-new credential.
+  return { prompt: 'save' };
+}
+
 // Handle messages from content scripts and popup
 (chrome.runtime.onMessage as any).addListener((message: any, _sender: any, sendResponse: any) => {
   if (message.action === 'getMatches') {
@@ -242,6 +381,89 @@ async function findMatches(url: string): Promise<AutofillMatch[]> {
     }).catch(() => {
       sendResponse({ success: true });
     });
+    return true;
+  }
+
+  if (message.action === 'checkShouldPromptSave') {
+    classifyCapturedCredential(
+      String(message.url || ''),
+      String(message.username || ''),
+      String(message.password || ''),
+    )
+      .then((result) => sendResponse(result))
+      .catch((err) => {
+        console.warn('classifyCapturedCredential failed', err);
+        sendResponse({ prompt: 'none' });
+      });
+    return true;
+  }
+
+  if (message.action === 'savePassword') {
+    (async () => {
+      const entries = await readDecryptedVault();
+      if (!entries) {
+        sendResponse({ success: false, reason: 'locked' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const domain = getDomain(String(message.url || '')) || 'New login';
+      const newEntry: VaultEntry = {
+        id: (crypto as any).randomUUID ? (crypto as any).randomUUID() : `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: String(message.title || domain),
+        username: String(message.username || ''),
+        password: String(message.password || ''),
+        url: String(message.url || ''),
+        notes: '',
+        createdAt: now,
+        lastModified: now,
+      };
+      const ok = await writeEncryptedVault([...entries, newEntry]);
+      if (ok) {
+        await maybePushToServer([newEntry]);
+        broadcastVaultMutated();
+      }
+      sendResponse({ success: ok, id: newEntry.id });
+    })();
+    return true;
+  }
+
+  if (message.action === 'updatePassword') {
+    (async () => {
+      const entries = await readDecryptedVault();
+      if (!entries) {
+        sendResponse({ success: false, reason: 'locked' });
+        return;
+      }
+      const targetId = String(message.entryId || '');
+      const newPassword = String(message.password || '');
+      const now = new Date().toISOString();
+      let mutatedEntry: VaultEntry | null = null;
+      const next = entries.map((e) => {
+        if (e.id === targetId) {
+          const updated = { ...e, password: newPassword, lastModified: now };
+          mutatedEntry = updated;
+          return updated;
+        }
+        return e;
+      });
+      if (!mutatedEntry) {
+        sendResponse({ success: false, reason: 'not-found' });
+        return;
+      }
+      const ok = await writeEncryptedVault(next);
+      if (ok) {
+        await maybePushToServer([mutatedEntry]);
+        broadcastVaultMutated();
+      }
+      sendResponse({ success: ok });
+    })();
+    return true;
+  }
+
+  if (message.action === 'neverAskForDomain') {
+    addToNeverAskList(String(message.domain || ''))
+      .then(() => sendResponse({ success: true }))
+      .catch(() => sendResponse({ success: false }));
     return true;
   }
 

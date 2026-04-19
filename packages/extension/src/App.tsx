@@ -24,6 +24,7 @@ import {
   loadFileHandle
 } from "./utils/fileSystem";
 import { useExtensionVault } from "./hooks/useExtensionVault";
+import { pushEntriesToServer, deleteEntryFromServer } from "./utils/serverSync";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -80,6 +81,10 @@ function App() {
 
   const filePollIntervalRef = useRef<number | null>(null);
   const lastFileModifiedRef = useRef<number>(0);
+  // Tracks the timestamp of our last successful server push so we can
+  // ignore the matching `vault_updated` SSE echo that the server sends
+  // back to every session for this user (including ours).
+  const lastLocalPushAtRef = useRef<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Server Hook
@@ -298,7 +303,17 @@ function App() {
 
   // ----- CRUD Handlers -----
 
-  const persistPasswords = async (newPasswords: PasswordEntry[]) => {
+  // Persist the given password list:
+  //   1. Re-encrypt and save the local cache.
+  //   2. Sync session state with the service worker.
+  //   3. If in server mode, push the changed entries to the server.
+  //
+  // `changedEntries` limits the server PUT to just the rows that actually
+  // changed; if omitted we push every entry (used on first login / bulk).
+  const persistPasswords = async (
+    newPasswords: PasswordEntry[],
+    changedEntries?: PasswordEntry[],
+  ) => {
     if (!localAppKey) return;
     const entries = newPasswords.map(passwordEntryToVaultEntry);
     const appKeyArray = new Uint8Array(localAppKey);
@@ -314,6 +329,22 @@ function App() {
       derivedServerKey,
       localKey: localAppKey,
     });
+
+    if (loginMode === 'server' && serverUrl && authToken && derivedServerKey) {
+      const toPush = (changedEntries || newPasswords).map(passwordEntryToVaultEntry);
+      try {
+        await pushEntriesToServer(
+          serverUrl,
+          authToken,
+          new Uint8Array(derivedServerKey),
+          toPush,
+        );
+        lastLocalPushAtRef.current = Date.now();
+      } catch (err) {
+        console.error("Failed to push vault changes to server:", err);
+        throw err;
+      }
+    }
   };
 
   const handleAddPassword = async (entry: PasswordEntry) => {
@@ -321,7 +352,7 @@ function App() {
     setPasswords(updated);
     setIsAddingPassword(false);
     setSelectedPassword(entry);
-    await persistPasswords(updated);
+    await persistPasswords(updated, [entry]);
   };
 
   const handleEditPassword = async (entry: PasswordEntry) => {
@@ -333,7 +364,7 @@ function App() {
     }
     setShowEditModal(false);
     setEditTarget(null);
-    await persistPasswords(updated);
+    await persistPasswords(updated, [entry]);
   };
 
   const handleDeletePassword = async (id: string) => {
@@ -342,13 +373,54 @@ function App() {
     if (selectedPassword?.id === id) {
       setSelectedPassword(null);
     }
+
+    // Delete on server first (server-mode only) so we don't leave a stale
+    // row behind. If the request fails we still update the local cache —
+    // the next manual sync / SSE refresh will reconcile state.
+    if (loginMode === 'server' && serverUrl && authToken) {
+      try {
+        await deleteEntryFromServer(serverUrl, authToken, id);
+        lastLocalPushAtRef.current = Date.now();
+      } catch (err) {
+        console.error("Failed to delete entry on server:", err);
+      }
+    }
+
     await persistPasswords(updated);
   };
+
+  // Listen for vault mutations that happen in the service worker
+  // (e.g. save-on-submit from the content script) and reload the vault
+  // so the popup stays in sync without a manual refresh.
+  useEffect(() => {
+    if (!isLoggedIn || !localAppKey) return;
+
+    const handler = (message: any) => {
+      if (message?.action !== 'vaultMutated') return;
+      const appKeyArray = new Uint8Array(localAppKey);
+      loadVaultFromStorage(appKeyArray)
+        .then((entries) => {
+          setPasswords(entries.map(vaultEntryToPasswordEntry));
+        })
+        .catch((err) => console.warn('vaultMutated reload failed', err));
+    };
+
+    (chrome.runtime.onMessage as any).addListener(handler);
+    return () => {
+      (chrome.runtime.onMessage as any).removeListener(handler);
+    };
+  }, [isLoggedIn, localAppKey]);
 
   // SSE sync
   useEffect(() => {
     if (!lastEvent) return;
     if (lastEvent.type === 'vault_updated') {
+      // Ignore the echo of our own push: the server broadcasts to every
+      // session of this user, including us. Within 3s of a local push we
+      // already have the canonical state in memory.
+      if (Date.now() - lastLocalPushAtRef.current < 3000) {
+        return;
+      }
       console.log("[SSE] Vault updated! Refreshing...");
       if (loginMode === 'server' && serverUrl && authToken && localAppKey && derivedServerKey) {
         setIsRefreshing(true);
