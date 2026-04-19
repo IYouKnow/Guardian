@@ -326,51 +326,116 @@ function hideDropdown() {
   matches = [];
 }
 
-// Fill credentials into form
+// React/Vue/Svelte tracked-input aware value setter. A naked
+// `input.value = x` bypasses React's synthetic event system and the value
+// snaps back on the next render. Using the native setter from the
+// prototype descriptor and dispatching the usual lifecycle events makes
+// the framework pick up the change as if the user had typed it.
+function setInputValueNative(input: HTMLInputElement, value: string) {
+  const proto =
+    input instanceof HTMLTextAreaElement
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+  const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+  if (nativeSetter) {
+    nativeSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+  // Fire the events a real user would: focus → input → change → blur-ish.
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+}
+
+// Locate username + password fields starting from the current input.
+// Works whether the page uses a <form> or a plain <div> (very common on
+// modern SPAs like Twitter/X, GitHub, etc.).
+function findLoginFields(startFrom: HTMLInputElement): {
+  username: HTMLInputElement | null;
+  password: HTMLInputElement | null;
+} {
+  // Search scope: nearest form if any, else the whole document.
+  const scope: Document | HTMLElement = startFrom.closest('form') || document;
+
+  const isVisible = (el: HTMLInputElement) =>
+    !el.disabled && !el.readOnly && el.offsetParent !== null;
+
+  const allPasswords = Array.from(
+    scope.querySelectorAll<HTMLInputElement>('input[type="password"]'),
+  ).filter(isVisible);
+
+  // Pick the password field nearest to the user's current input.
+  let passwordField: HTMLInputElement | null = null;
+  if (startFrom.type === 'password') {
+    passwordField = startFrom;
+  } else if (allPasswords.length > 0) {
+    passwordField =
+      allPasswords.find(
+        (p) =>
+          !!(startFrom.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING),
+      ) || allPasswords[0];
+  }
+
+  // Pick the best matching username/email field, preferring one that
+  // comes before the password field.
+  const usernameCandidates = Array.from(
+    scope.querySelectorAll<HTMLInputElement>(
+      'input[type="text"], input[type="email"], input[type="tel"], input:not([type])',
+    ),
+  ).filter((el) => isVisible(el) && el !== passwordField);
+
+  const scoreField = (el: HTMLInputElement): number => {
+    let score = 0;
+    const hint = `${el.autocomplete || ''} ${el.name || ''} ${el.id || ''} ${el.getAttribute('aria-label') || ''}`.toLowerCase();
+    if (el.autocomplete === 'username' || el.autocomplete === 'email') score += 10;
+    if (el.type === 'email') score += 4;
+    if (/email/.test(hint)) score += 3;
+    if (/user(name)?/.test(hint)) score += 3;
+    if (/login/.test(hint)) score += 2;
+    if (/phone|mobile/.test(hint)) score += 1;
+    return score;
+  };
+
+  let usernameField: HTMLInputElement | null = null;
+  if (startFrom.type !== 'password') {
+    usernameField = startFrom;
+  } else if (passwordField) {
+    const before = usernameCandidates.filter(
+      (el) =>
+        !!(el.compareDocumentPosition(passwordField!) & Node.DOCUMENT_POSITION_FOLLOWING),
+    );
+    const pool = before.length > 0 ? before : usernameCandidates;
+    const scored = pool.map((el) => ({ el, score: scoreField(el) }));
+    scored.sort((a, b) => b.score - a.score);
+    usernameField = scored[0]?.el || null;
+  }
+
+  return { username: usernameField, password: passwordField };
+}
+
+// Fill credentials into the page. Works on both classic <form> logins
+// and modern form-less SPAs.
 function fillCredentials(match: AutofillMatch) {
   if (!currentInput) return;
 
-  // Find the form
-  const form = currentInput.closest('form');
-  if (!form) return;
+  const { username: usernameField, password: passwordField } =
+    findLoginFields(currentInput);
 
-  // Find username field (if current is password)
-  let usernameField: HTMLInputElement | null = null;
-  let passwordField: HTMLInputElement | null = null;
-
-  if (isPasswordField) {
-    passwordField = currentInput;
-    // Try to find username field before password field
-    const inputs = Array.from(form.querySelectorAll('input[type="text"], input[type="email"], input[name*="user"], input[name*="email"], input[id*="user"], input[id*="email"]'));
-    usernameField = inputs.find(input => {
-      const elem = input as HTMLInputElement;
-      return elem !== passwordField &&
-        (elem.type === 'text' || elem.type === 'email' ||
-          elem.name?.toLowerCase().includes('user') ||
-          elem.name?.toLowerCase().includes('email') ||
-          elem.id?.toLowerCase().includes('user') ||
-          elem.id?.toLowerCase().includes('email'));
-    }) as HTMLInputElement | null;
-  } else {
-    usernameField = currentInput;
-    // Try to find password field after username field
-    const inputs = Array.from(form.querySelectorAll('input[type="password"]'));
-    passwordField = inputs[0] as HTMLInputElement | null;
-  }
-
-  // Fill username
   if (usernameField && match.username) {
-    usernameField.value = match.username;
-    usernameField.dispatchEvent(new Event('input', { bubbles: true }));
-    usernameField.dispatchEvent(new Event('change', { bubbles: true }));
+    usernameField.focus();
+    setInputValueNative(usernameField, match.username);
   }
 
-  // Fill password
   if (passwordField && match.password) {
-    passwordField.value = match.password;
-    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-    passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+    passwordField.focus();
+    setInputValueNative(passwordField, match.password);
   }
+
+  // Put focus somewhere sensible so the user can immediately press Enter.
+  if (passwordField) passwordField.focus();
+  else if (usernameField) usernameField.focus();
 }
 
 // Get domain from URL
@@ -400,18 +465,38 @@ function urlMatches(entryWebsite: string, currentUrl: string): boolean {
   return false;
 }
 
+// Decide whether a focused field is a plausible login field. We accept
+// type=password always, and type=text/email/tel when hints or nearby
+// password fields suggest a login context. This replaces the old rule
+// that required a <form> ancestor, which fails on most modern SPAs.
+function isLoginLikeField(input: HTMLInputElement): boolean {
+  if (!input || !input.tagName || input.tagName !== 'INPUT') return false;
+  if (input.disabled || input.readOnly) return false;
+
+  const type = (input.type || '').toLowerCase();
+  if (type === 'password') return true;
+  if (type !== 'text' && type !== 'email' && type !== 'tel' && type !== '') return false;
+
+  // Strong positive signals from HTML attributes.
+  const ac = (input.autocomplete || '').toLowerCase();
+  if (ac === 'username' || ac === 'email' || ac.startsWith('new-password') || ac.startsWith('current-password')) {
+    return true;
+  }
+  const hint = `${input.name || ''} ${input.id || ''} ${input.getAttribute('aria-label') || ''} ${input.placeholder || ''}`.toLowerCase();
+  if (/\b(user(name)?|email|login|account)\b/.test(hint)) return true;
+
+  // Fallback: the page has a visible password field somewhere → this
+  // text/email field is probably its companion username.
+  const pwdNearby = document.querySelector<HTMLInputElement>('input[type="password"]');
+  if (pwdNearby && pwdNearby.offsetParent !== null) return true;
+
+  return false;
+}
+
 // Handle input focus
 async function handleInputFocus(event: FocusEvent) {
   const input = event.target as HTMLInputElement;
-
-  // Only handle text, email, and password inputs
-  if (!input || (input.type !== 'text' && input.type !== 'email' && input.type !== 'password')) {
-    return;
-  }
-
-  // Check if it's likely a login form
-  const form = input.closest('form');
-  if (!form) return;
+  if (!isLoginLikeField(input)) return;
 
   // Request matching passwords from background script
   try {
@@ -422,7 +507,7 @@ async function handleInputFocus(event: FocusEvent) {
     });
 
     if (response) {
-      const matches = response.matches || [];
+      const matches: AutofillMatch[] = Array.isArray(response.matches) ? response.matches : [];
       const isLoggedIn = response.isLoggedIn || false;
 
       // Show dropdown if we have matches OR if user is logged in (to show create option)
@@ -431,7 +516,9 @@ async function handleInputFocus(event: FocusEvent) {
       }
     }
   } catch (error) {
-    console.error('Guardian autofill error:', error);
+    if (!extensionContextInvalid) {
+      console.error('Guardian autofill error:', error);
+    }
   }
 }
 
@@ -920,12 +1007,14 @@ function init() {
   // Listen for clicks outside to close dropdown
   document.addEventListener('click', handleClickOutside);
 
-  // Listen for scroll to reposition dropdown
-  window.addEventListener('scroll', () => {
+  // Keep the dropdown glued to the input on scroll/resize.
+  const reposition = () => {
     if (currentInput && autofillDropdown && autofillDropdown.style.display !== 'none') {
       positionDropdown(currentInput);
     }
-  }, true);
+  };
+  window.addEventListener('scroll', reposition, true);
+  window.addEventListener('resize', reposition);
 
   // Save-on-submit capture + prompt.
   attachCaptureListeners();

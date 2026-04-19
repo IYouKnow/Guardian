@@ -335,8 +335,14 @@ async function classifyCapturedCredential(
 // Handle messages from content scripts and popup
 (chrome.runtime.onMessage as any).addListener((message: any, _sender: any, sendResponse: any) => {
   if (message.action === 'getMatches') {
-    const matches = findMatches(message.url);
-    sendResponse({ matches, isLoggedIn });
+    findMatches(message.url)
+      .then((matches) => {
+        sendResponse({ matches, isLoggedIn });
+      })
+      .catch((err) => {
+        console.warn('[SW] findMatches failed', err);
+        sendResponse({ matches: [], isLoggedIn });
+      });
     return true;
   }
 
