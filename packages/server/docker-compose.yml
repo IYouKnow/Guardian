@@ -14,7 +14,10 @@ services:
       JWT_SECRET: CHANGE_ME_TO_A_RANDOM_SECRET
       ADMIN_INVITE_CODE: ""
     volumes:
-      - guardian-data:/app/data
+      # Host path follows the CasaOS convention. On plain Docker, either create
+      # this folder (mkdir -p /DATA/AppData/guardian-server/data) or change it
+      # to any path you prefer (e.g. ./data for a folder next to this file).
+      - /DATA/AppData/guardian-server/data:/app/data
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -30,6 +33,7 @@ services:
             en_us: "Web UI and API (HTTP)"
       volumes:
         - container: /app/data
+          host: /DATA/AppData/guardian-server/data
           description:
             en_us: "SQLite databases and app data"
       envs:
@@ -39,10 +43,6 @@ services:
         - container: ADMIN_INVITE_CODE
           description:
             en_us: "Optional. Invite code required to create the first admin account"
-
-volumes:
-  guardian-data:
-    name: guardian-data
 
 networks:
   guardian-network:
