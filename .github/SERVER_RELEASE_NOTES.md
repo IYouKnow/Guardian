@@ -1,11 +1,17 @@
 # Release Notes
 
 ## What's New
-- **Advanced User and Admin Features**: Includes new capabilities for tracking user storage usage, enhanced invite validation, and improved user role display in the footer.
-- **Theme and UI Enhancements**: Implements system theme support, theme synchronization options, and refined accent color handling with new glow effects.
-- **Infrastructure Upgrades**: Added Cloudflare Tunnel configuration and optimized Docker builds with better file handling.
-- **Preference Management**: New endpoints and logic for handling user preferences and improved connection mode management.
-- **Shared Improvements**: General enhancements to build scripts, UI components, and theme integration across the platform.
+
+- **Real-time Sync (SSE)**: New Server-Sent Events endpoint pushes live vault and preference updates to connected desktop, extension, and web clients — no more polling. Includes a 30-second heartbeat to keep connections alive through reverse proxies and load balancers.
+- **Preferences API**: New endpoints to store per-user preferences (theme, connection mode, and more) so settings follow the user across every device.
+- **Admin Dashboard Polish**: Redesigned invite management, new command palette (Ctrl/Cmd+K), breadcrumb navigation, reworked dashboard cards and activity charts, and a visible server version indicator in the footer.
+- **Docker Compose Cleanup**: The bundled `docker-compose.yml` is now a single-service file. The experimental Cloudflare Tunnel profile and the `TUNNEL_TOKEN` variable have been removed — a first-class, dashboard-integrated remote access option will be introduced in a future release.
+- **Release Workflow Fixes**: Corrected the Docker pull commands and release title shown on the GitHub Releases page (previously double-prefixed with `server-v`).
+
+## Upgrade Notes
+
+- If your previous install used `docker compose --profile tunnel up -d`, the `cloudflared` service is no longer part of the template. Keep running your own `cloudflared` container on the same Docker network, or wait for the upcoming built-in option.
+- The Docker image tag format is unchanged on the registry (`1.0.2`, `1.0`, `1`). Only the release notes and release title have been cleaned up.
 
 ## Docker Installation
 Pull the latest image from the GitHub Container Registry:
