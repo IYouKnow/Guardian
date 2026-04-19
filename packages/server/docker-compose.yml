@@ -1,16 +1,22 @@
-# Guardian Server - Docker Compose
-# Standard setup using the pre-built image from GitHub
-#
-# --- CLOUDFLARE TUNNEL SETUP (HTTPS) ---
-# 1. Create a Tunnel: Go to Cloudflare Zero Trust > Networks > Tunnels > Create a Tunnel.
-# 2. Select Docker: Choose the Docker environment for the installation.
-# 3. Get Token: Copy the token from the provided command (e.g., tunnel run --token <TOKEN>).
-# 4. Configure .env: Add TUNNEL_TOKEN=<your_token> to your .env file.
-# 5. Configure Public Hostname:
-#    - In the Tunnel settings, go to "Public Hostname".
-#    - Add a public hostname (e.g., guardian.yourdomain.com).
-#    - Service: http://guardian-server:8080
-# ---------------------------------------
+## Guardian Server — Docker Compose
+##
+## Works for:
+##   - Plain Docker:  docker compose --env-file .env up -d
+##   - CasaOS:        App Store → Custom Install → Docker Compose → paste this file
+##                    then edit JWT_SECRET in the Environment Variables panel.
+##
+## Before first start:
+##   - Set JWT_SECRET to a real random string. Examples:
+##        Linux/macOS: openssl rand -base64 32
+##        PowerShell:  [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }) -as [byte[]])
+##
+## Optional Cloudflare Tunnel (HTTPS):
+##   1. Cloudflare Zero Trust → Networks → Tunnels → Create a Tunnel (Docker).
+##   2. Copy the token and set TUNNEL_TOKEN in .env (or edit it in CasaOS).
+##   3. Public Hostname → Service: http://guardian-server:8080
+##   4. Start with:  docker compose --profile tunnel up -d
+
+name: guardian-server
 
 services:
   guardian-server:
@@ -18,27 +24,48 @@ services:
     image: ghcr.io/iyouknow/guardian-server:latest
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8080"
+      - "8080:8080"
     environment:
-      - PORT=8080
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      PORT: "8080"
+      # Replace the value below with a strong random string before first start.
+      JWT_SECRET: CHANGE_ME_TO_A_RANDOM_SECRET
+      # Optional: invite code required to create the first admin account.
+      ADMIN_INVITE_CODE: ""
     volumes:
       - guardian-data:/app/data
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
     networks:
       - guardian-network
+    x-casaos:
+      ports:
+        - container: "8080"
+          description:
+            en_us: "Web UI and API (HTTP)"
+      volumes:
+        - container: /app/data
+          description:
+            en_us: "SQLite databases and app data"
+      envs:
+        - container: JWT_SECRET
+          description:
+            en_us: "REQUIRED. Random secret used to sign JWTs. Generate with: openssl rand -base64 32"
+        - container: ADMIN_INVITE_CODE
+          description:
+            en_us: "Optional. Invite code required to create the first admin account"
 
   cloudflared:
+    profiles: [tunnel]
     image: cloudflare/cloudflared:latest
     container_name: cloudflared_tunnel
     restart: unless-stopped
     command: tunnel run
     environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     networks:
       - guardian-network
     depends_on:
@@ -51,3 +78,32 @@ volumes:
 networks:
   guardian-network:
     name: guardian-network
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: guardian-server
+  port_map: "8080"
+  scheme: http
+  hostname: ""
+  index: /
+  title:
+    en_us: Guardian Server
+  tagline:
+    en_us: Self-hosted password manager server
+  category: Utilities
+  developer: iYouKnow
+  author: iYouKnow
+  icon: https://icon.casaos.io/main/all/guardian-server.png
+  description:
+    en_us: |
+      Guardian password manager server. After install, open http://<your-host-ip>:8080
+      and complete setup. Replace JWT_SECRET with a strong random string before first
+      start; the first user to register becomes admin (use ADMIN_INVITE_CODE to secure
+      this).
+  tips:
+    before_install:
+      en_us: |
+        REQUIRED: replace JWT_SECRET with a strong random string (e.g. `openssl rand -base64 32`).
+        Optional: set ADMIN_INVITE_CODE to restrict who can create the first admin account.
