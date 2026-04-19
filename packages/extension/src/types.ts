@@ -11,6 +11,8 @@ export interface PasswordEntry {
   notes?: string;
   tags?: string[];
   breached?: boolean;
+  // Optional data URL of the site's favicon, captured on save-on-submit.
+  favicon?: string;
 }
 
 export type Theme = "dark" | "slate" | "light" | "editor" | "violet";

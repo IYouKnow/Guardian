@@ -36,6 +36,7 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
     website: vaultEntry.url || "",
     notes: vaultEntry.notes || "",
     breached: false,
+    favicon: vaultEntry.favicon,
   };
 }
 
@@ -50,6 +51,7 @@ function passwordEntryToVaultEntry(entry: PasswordEntry): VaultEntry {
     notes: entry.notes || undefined,
     createdAt: entry.lastModified || new Date().toISOString(),
     lastModified: new Date().toISOString(),
+    favicon: entry.favicon,
   };
 }
 

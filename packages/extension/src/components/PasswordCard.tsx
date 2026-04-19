@@ -25,8 +25,10 @@ export default function PasswordCard({
 }: PasswordCardProps) {
   const [copiedUser, setCopiedUser] = useState(false);
   const [copiedPass, setCopiedPass] = useState(false);
+  const [faviconFailed, setFaviconFailed] = useState(false);
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor);
+  const showFavicon = !!password.favicon && !faviconFailed;
 
   const handleCopyUser = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -56,9 +58,21 @@ export default function PasswordCard({
       <div className="p-2 flex items-center gap-3">
         {/* Icon/Image */}
         <div className="relative flex-shrink-0">
-          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-xs shadow-inner`}>
-            {password.title.charAt(0).toUpperCase()}
-          </div>
+          {showFavicon ? (
+            <div className={`w-8 h-8 rounded-lg bg-white/5 border ${themeClasses.border} flex items-center justify-center overflow-hidden shadow-inner`}>
+              <img
+                src={password.favicon}
+                alt=""
+                className="w-5 h-5 object-contain"
+                onError={() => setFaviconFailed(true)}
+                draggable={false}
+              />
+            </div>
+          ) : (
+            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-xs shadow-inner`}>
+              {password.title.charAt(0).toUpperCase()}
+            </div>
+          )}
           {password.breached && (
             <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full flex items-center justify-center border-2 border-black">
               <div className="w-0.5 h-0.5 bg-white rounded-full" />

@@ -253,6 +253,48 @@ async function maybePushToServer(entries: VaultEntry[]): Promise<ServerPushStatu
   }
 }
 
+// Fetch a favicon URL and return a data URL, or null on any failure.
+// Keeps entries self-contained (no runtime cross-origin leaks) and bounded
+// in size. The SW has host permissions for <all_urls>, so cross-origin
+// favicon fetches succeed here even when a content script couldn't do it.
+const MAX_FAVICON_BYTES = 32 * 1024;
+
+async function fetchFaviconAsDataUrl(url: string | undefined): Promise<string | undefined> {
+  if (!url) return undefined;
+  try {
+    const resp = await fetch(url, { credentials: 'omit' });
+    if (!resp.ok) return undefined;
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.startsWith('image/') && !ct.includes('icon')) return undefined;
+    const blob = await resp.blob();
+    if (blob.size === 0 || blob.size > MAX_FAVICON_BYTES) return undefined;
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+    const b64 = btoa(binary);
+    const mime = blob.type || 'image/x-icon';
+    return `data:${mime};base64,${b64}`;
+  } catch (err) {
+    console.warn('[SW] favicon fetch failed', err);
+    return undefined;
+  }
+}
+
+// Pick the best human-readable name for a new entry: prefer the page
+// title when it's reasonable, fall back to the domain.
+function pickEntryName(tabTitle: string | undefined, url: string, explicit?: string): string {
+  if (explicit && explicit.trim().length > 0) return explicit.trim();
+  const title = (tabTitle || '').trim();
+  const domain = getDomain(url);
+  if (!title) return domain || 'New login';
+  // Strip leading/trailing noise like "· Login" / "— Sign in" etc, but keep
+  // the site name if present (e.g. "Login · GitHub" → "GitHub").
+  const cleaned = title.replace(/\s*[·|\-–—]\s*(log[\s-]?in|sign[\s-]?in|sign[\s-]?up|login|signin)\s*$/i, '').trim();
+  const preferred = cleaned || title;
+  if (preferred.length > 80) return preferred.slice(0, 80);
+  return preferred || domain || 'New login';
+}
+
 // Broadcast that the vault was mutated so any open popup can re-read it.
 function broadcastVaultMutated() {
   try {
@@ -333,7 +375,7 @@ async function classifyCapturedCredential(
 }
 
 // Handle messages from content scripts and popup
-(chrome.runtime.onMessage as any).addListener((message: any, _sender: any, sendResponse: any) => {
+(chrome.runtime.onMessage as any).addListener((message: any, sender: any, sendResponse: any) => {
   if (message.action === 'getMatches') {
     findMatches(message.url)
       .then((matches) => {
@@ -428,6 +470,8 @@ async function classifyCapturedCredential(
         url: message.url,
         username: message.username,
         hasPassword: !!message.password,
+        tabTitle: sender?.tab?.title,
+        tabFavicon: sender?.tab?.favIconUrl,
       });
       const entries = await readDecryptedVault();
       if (!entries) {
@@ -436,16 +480,24 @@ async function classifyCapturedCredential(
         return;
       }
       const now = new Date().toISOString();
-      const domain = getDomain(String(message.url || '')) || 'New login';
+      const url = String(message.url || '');
+      const tabTitle: string | undefined = sender?.tab?.title;
+      const tabFavIconUrl: string | undefined = sender?.tab?.favIconUrl;
+
+      // Kick off favicon fetch in parallel with vault write so the UI
+      // doesn't stall on a slow image request.
+      const faviconPromise = fetchFaviconAsDataUrl(tabFavIconUrl);
+
       const newEntry: VaultEntry = {
         id: (crypto as any).randomUUID ? (crypto as any).randomUUID() : `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: String(message.title || domain),
+        name: pickEntryName(tabTitle, url, message.title),
         username: String(message.username || ''),
         password: String(message.password || ''),
-        url: String(message.url || ''),
+        url,
         notes: '',
         createdAt: now,
         lastModified: now,
+        favicon: await faviconPromise,
       };
       const ok = await writeEncryptedVault([...entries, newEntry]);
       let push: ServerPushStatus = { state: 'skipped', reason: 'local-mode' };
