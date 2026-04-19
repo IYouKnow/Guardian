@@ -216,13 +216,28 @@ async function writeEncryptedVault(entries: VaultEntry[]): Promise<boolean> {
   }
 }
 
+type ServerPushStatus =
+  | { state: 'skipped'; reason: 'local-mode' | 'missing-session' }
+  | { state: 'ok' }
+  | { state: 'failed'; error: string };
+
 // If the user is in server mode, push the given entries to the server so
-// the change is persisted across devices. Silent no-op in local mode.
-// Errors are logged but not fatal — the local cache is already the source
-// of truth for the current session; the next manual sync will reconcile.
-async function maybePushToServer(entries: VaultEntry[]): Promise<void> {
-  if (cachedMode !== 'server') return;
-  if (!cachedServerUrl || !cachedAuthToken || !cachedDerivedServerKey) return;
+// the change is persisted across devices. Returns a rich status so the
+// caller can surface server-push failures to the UI (saving locally but
+// failing to push is dangerous: the local cache gets overwritten by the
+// server's stale copy on next login).
+async function maybePushToServer(entries: VaultEntry[]): Promise<ServerPushStatus> {
+  if (cachedMode !== 'server') {
+    return { state: 'skipped', reason: 'local-mode' };
+  }
+  if (!cachedServerUrl || !cachedAuthToken || !cachedDerivedServerKey) {
+    console.warn('[SW] Cannot push to server — missing session data', {
+      hasUrl: !!cachedServerUrl,
+      hasToken: !!cachedAuthToken,
+      hasKey: !!cachedDerivedServerKey,
+    });
+    return { state: 'skipped', reason: 'missing-session' };
+  }
   try {
     await pushEntriesToServer(
       cachedServerUrl,
@@ -230,8 +245,11 @@ async function maybePushToServer(entries: VaultEntry[]): Promise<void> {
       new Uint8Array(cachedDerivedServerKey),
       entries,
     );
+    return { state: 'ok' };
   } catch (err) {
-    console.error('[SW] Failed to push entries to server:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[SW] Failed to push entries to server:', message);
+    return { state: 'failed', error: message };
   }
 }
 
@@ -400,8 +418,14 @@ async function classifyCapturedCredential(
 
   if (message.action === 'savePassword') {
     (async () => {
+      console.log('[SW] savePassword received', {
+        url: message.url,
+        username: message.username,
+        hasPassword: !!message.password,
+      });
       const entries = await readDecryptedVault();
       if (!entries) {
+        console.warn('[SW] savePassword rejected — vault locked');
         sendResponse({ success: false, reason: 'locked' });
         return;
       }
@@ -418,19 +442,23 @@ async function classifyCapturedCredential(
         lastModified: now,
       };
       const ok = await writeEncryptedVault([...entries, newEntry]);
+      let push: ServerPushStatus = { state: 'skipped', reason: 'local-mode' };
       if (ok) {
-        await maybePushToServer([newEntry]);
+        push = await maybePushToServer([newEntry]);
         broadcastVaultMutated();
       }
-      sendResponse({ success: ok, id: newEntry.id });
+      console.log('[SW] savePassword result', { ok, push, id: newEntry.id });
+      sendResponse({ success: ok, id: newEntry.id, push });
     })();
     return true;
   }
 
   if (message.action === 'updatePassword') {
     (async () => {
+      console.log('[SW] updatePassword received', { entryId: message.entryId });
       const entries = await readDecryptedVault();
       if (!entries) {
+        console.warn('[SW] updatePassword rejected — vault locked');
         sendResponse({ success: false, reason: 'locked' });
         return;
       }
@@ -447,15 +475,18 @@ async function classifyCapturedCredential(
         return e;
       });
       if (!mutatedEntry) {
+        console.warn('[SW] updatePassword rejected — id not found');
         sendResponse({ success: false, reason: 'not-found' });
         return;
       }
       const ok = await writeEncryptedVault(next);
+      let push: ServerPushStatus = { state: 'skipped', reason: 'local-mode' };
       if (ok) {
-        await maybePushToServer([mutatedEntry]);
+        push = await maybePushToServer([mutatedEntry]);
         broadcastVaultMutated();
       }
-      sendResponse({ success: ok });
+      console.log('[SW] updatePassword result', { ok, push });
+      sendResponse({ success: ok, push });
     })();
     return true;
   }

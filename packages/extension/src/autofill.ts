@@ -25,6 +25,40 @@ let autofillDropdown: HTMLElement | null = null;
 let isPasswordField = false;
 let matches: AutofillMatch[] = [];
 
+// True once we detect the extension context has been invalidated
+// (e.g. extension reloaded/updated). Stale content scripts from before
+// the reload cannot talk to the new service worker, so we quietly stop
+// trying rather than spamming the console on every event.
+let extensionContextInvalid = false;
+
+function isExtensionAlive(): boolean {
+  if (extensionContextInvalid) return false;
+  try {
+    // chrome.runtime.id becomes undefined after context invalidation.
+    return !!(chrome.runtime && chrome.runtime.id);
+  } catch {
+    extensionContextInvalid = true;
+    return false;
+  }
+}
+
+// Centralised wrapper around chrome.runtime.sendMessage that:
+// - short-circuits when the extension context is dead
+// - detects "Extension context invalidated" errors and disables further
+//   messaging from this stale content script
+async function safeSendMessage<T = any>(message: any): Promise<T | null> {
+  if (!isExtensionAlive()) return null;
+  try {
+    return (await chrome.runtime.sendMessage(message)) as T;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Extension context invalidated') || msg.includes('Receiving end does not exist')) {
+      extensionContextInvalid = true;
+    }
+    throw err;
+  }
+}
+
 // Create autofill dropdown UI
 function createAutofillDropdown(): HTMLElement {
   const dropdown = document.createElement('div');
@@ -155,11 +189,11 @@ function renderDropdown(matches: AutofillMatch[], showCreateOption: boolean = fa
     };
     createItem.onclick = () => {
       // Open extension to create password
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         action: 'openExtension',
         createPassword: true,
         url: currentUrl,
-      }).catch(console.error);
+      }).catch(() => {});
       hideDropdown();
     };
 
@@ -382,7 +416,7 @@ async function handleInputFocus(event: FocusEvent) {
   // Request matching passwords from background script
   try {
     const currentUrl = window.location.href;
-    const response = await chrome.runtime.sendMessage({
+    const response = await safeSendMessage<{ matches: AutofillMatch[]; isLoggedIn: boolean }>({
       action: 'getMatches',
       url: currentUrl
     });
@@ -498,7 +532,11 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
   lastPromptAt = now;
 
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await safeSendMessage<{
+      prompt: 'none' | 'save' | 'update';
+      entryId?: string;
+      entryTitle?: string;
+    }>({
       action: 'checkShouldPromptSave',
       url: cred.url,
       username: cred.username,
@@ -508,7 +546,7 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
 
     if (response.prompt === 'save') {
       showSaveBanner({ mode: 'save', credential: cred });
-    } else if (response.prompt === 'update') {
+    } else if (response.prompt === 'update' && response.entryId) {
       showSaveBanner({
         mode: 'update',
         credential: cred,
@@ -517,8 +555,10 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
       });
     }
   } catch (err) {
-    // SW may be asleep or extension reloaded — stay silent.
-    console.warn('Guardian: save-prompt check failed', err);
+    // Stale content script (extension reloaded) or SW unavailable — stay quiet.
+    if (!extensionContextInvalid) {
+      console.warn('Guardian: save-prompt check failed', err);
+    }
   }
 }
 
@@ -656,18 +696,31 @@ function showSaveBanner(options: BannerOptions) {
   const laterBtn = makeBtn('Not now', false);
   laterBtn.style.marginLeft = 'auto';
 
+  const status = document.createElement('div');
+  status.style.cssText = 'font-size:11px;margin-top:10px;line-height:1.4;display:none;';
+
+  const showStatus = (text: string, tone: 'ok' | 'warn' | 'err') => {
+    const color = tone === 'ok' ? '#22c55e' : tone === 'warn' ? 'rgb(250, 204, 21)' : '#ef4444';
+    status.style.color = color;
+    status.style.display = 'block';
+    status.textContent = text;
+  };
+
   primaryBtn.onclick = async () => {
     primaryBtn.disabled = true;
-    primaryBtn.textContent = '...';
+    neverBtn.disabled = true;
+    laterBtn.disabled = true;
+    primaryBtn.textContent = 'Saving...';
+    let response: any = null;
     try {
       if (isUpdate && options.entryId) {
-        await chrome.runtime.sendMessage({
+        response = await safeSendMessage({
           action: 'updatePassword',
           entryId: options.entryId,
           password: options.credential.password,
         });
       } else {
-        await chrome.runtime.sendMessage({
+        response = await safeSendMessage({
           action: 'savePassword',
           url: options.credential.url,
           username: options.credential.username,
@@ -677,14 +730,62 @@ function showSaveBanner(options: BannerOptions) {
       }
     } catch (err) {
       console.warn('Guardian: save failed', err);
-    } finally {
-      hideSaveBanner();
+      showStatus(
+        extensionContextInvalid
+          ? 'Guardian was updated. Please reload this page and try again.'
+          : 'Could not reach Guardian extension.',
+        'err',
+      );
+      window.setTimeout(() => hideSaveBanner(), 3500);
+      return;
     }
+
+    // Null response = extension context invalidated (stale script).
+    if (response === null && extensionContextInvalid) {
+      showStatus('Guardian was updated. Please reload this page and try again.', 'err');
+      window.setTimeout(() => hideSaveBanner(), 3500);
+      return;
+    }
+
+    // Interpret response from the service worker.
+    if (!response || !response.success) {
+      const reason = response?.reason || 'unknown';
+      if (reason === 'locked') {
+        showStatus('Guardian is locked. Open the popup to unlock, then try again.', 'err');
+      } else if (reason === 'not-found') {
+        showStatus('Entry no longer exists. Please try "Save" instead.', 'err');
+      } else {
+        showStatus('Save failed. Please try again.', 'err');
+      }
+      window.setTimeout(() => hideSaveBanner(), 3500);
+      return;
+    }
+
+    const push = response.push;
+    if (push?.state === 'failed') {
+      showStatus(
+        'Saved locally, but could not sync to server. Your entry may be lost on next login — check your server connection.',
+        'warn',
+      );
+      window.setTimeout(() => hideSaveBanner(), 5000);
+      return;
+    }
+    if (push?.state === 'skipped' && push.reason === 'missing-session') {
+      showStatus(
+        'Saved locally. Open the popup to finish syncing to your server.',
+        'warn',
+      );
+      window.setTimeout(() => hideSaveBanner(), 4500);
+      return;
+    }
+
+    showStatus(isUpdate ? 'Password updated.' : 'Password saved.', 'ok');
+    window.setTimeout(() => hideSaveBanner(), 1500);
   };
 
   neverBtn.onclick = async () => {
     try {
-      await chrome.runtime.sendMessage({
+      await safeSendMessage({
         action: 'neverAskForDomain',
         domain,
       });
@@ -704,6 +805,7 @@ function showSaveBanner(options: BannerOptions) {
   wrap.appendChild(subtitleEl);
   wrap.appendChild(credsBox);
   wrap.appendChild(actions);
+  wrap.appendChild(status);
   root.appendChild(wrap);
 
   // Auto-dismiss after 30s.
