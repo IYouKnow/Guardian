@@ -19,6 +19,8 @@ export interface ExtensionSettings {
   autoLockMinutes?: number;
   clipboardClearSeconds?: number;
   revealCensorSeconds?: number;
+  serverSessionExpiryEnabled?: boolean;
+  serverSessionExpiryDays?: number;
 }
 
 export interface SessionData {

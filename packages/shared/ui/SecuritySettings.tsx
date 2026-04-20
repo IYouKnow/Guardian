@@ -9,6 +9,10 @@ interface SecuritySettingsProps {
     onClipboardClearSecondsChange: (seconds: number) => void;
     revealCensorSeconds: number;
     onRevealCensorSecondsChange: (seconds: number) => void;
+    serverSessionExpiryEnabled?: boolean;
+    onServerSessionExpiryEnabledChange?: (enabled: boolean) => void;
+    serverSessionExpiryDays?: number;
+    onServerSessionExpiryDaysChange?: (days: number) => void;
     showTitle?: boolean;
 }
 
@@ -87,6 +91,10 @@ export const SecuritySettings = ({
     onClipboardClearSecondsChange,
     revealCensorSeconds,
     onRevealCensorSecondsChange,
+    serverSessionExpiryEnabled = true,
+    onServerSessionExpiryEnabledChange,
+    serverSessionExpiryDays = 7,
+    onServerSessionExpiryDaysChange,
     showTitle = true,
 }: SecuritySettingsProps) => {
     const themeClasses = getThemeClasses(theme);
@@ -127,6 +135,54 @@ export const SecuritySettings = ({
                     />
                 </div>
             </section>
+
+            {onServerSessionExpiryEnabledChange && onServerSessionExpiryDaysChange && (
+            <section className={`p-4 rounded-xl border ${themeClasses.border} ${themeClasses.cardBg}`}>
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col">
+                        <span className={`text-sm font-medium ${themeClasses.text}`}>Force Re-Login</span>
+                        <span className={`text-[10px] ${themeClasses.textSecondary}`}>
+                            Require server users to sign in again after a fixed number of days
+                        </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={serverSessionExpiryEnabled}
+                            onChange={(e) => onServerSessionExpiryEnabledChange(e.target.checked)}
+                        />
+                        <div className={`w-11 h-6 rounded-full transition-colors ${serverSessionExpiryEnabled ? `bg-${accentColor}-500` : 'bg-gray-600'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-${accentColor}-400/50 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all`}></div>
+                    </label>
+                </div>
+
+                {serverSessionExpiryEnabled ? (
+                    <div className="pt-2 border-t border-gray-700/20">
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="number"
+                                min="1"
+                                max="365"
+                                value={serverSessionExpiryDays}
+                                onChange={(e) => onServerSessionExpiryDaysChange(Math.max(1, Math.min(365, parseInt(e.target.value) || 1)))}
+                                className={`w-20 ${themeClasses.inputBg} border ${themeClasses.border} rounded-lg px-2 py-1 text-xs ${themeClasses.text} focus:outline-none focus:ring-1 ${accentClasses.focusRingClass}`}
+                            />
+                            <span className={`text-xs ${themeClasses.textSecondary}`}>days</span>
+                        </div>
+                        <p className={`mt-2 text-[10px] ${themeClasses.textSecondary}`}>
+                            Session expiry is absolute and does not extend with activity.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="pt-2 border-t border-red-500/20">
+                        <p className="text-[11px] text-red-400 font-semibold">Risk: disabling this keeps server sessions valid indefinitely.</p>
+                        <p className={`text-[10px] ${themeClasses.textSecondary} mt-1`}>
+                            Anyone with access to this browser profile can continue using your unlocked server session until you manually log out or revoke the token on the server.
+                        </p>
+                    </div>
+                )}
+            </section>
+            )}
         </div>
     );
 };

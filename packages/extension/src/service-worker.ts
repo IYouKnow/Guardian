@@ -21,6 +21,8 @@ interface SessionData {
   isLoggedIn: boolean;
   lastModified: number;
   mode?: 'local' | 'server';
+  issuedAt?: number;
+  expiresAt?: number;
   authToken?: string;
   serverUrl?: string;
   serverKey?: number[];
@@ -32,6 +34,8 @@ interface SessionData {
 let isLoggedIn = false;
 let sessionLastModified = 0;
 let cachedMode: 'local' | 'server' | undefined;
+let sessionIssuedAt: number | undefined;
+let sessionExpiresAt: number | undefined;
 let cachedAuthToken: string | undefined;
 let cachedServerUrl: string | undefined;
 let cachedServerKey: number[] | undefined;
@@ -39,25 +43,135 @@ let cachedDerivedServerKey: number[] | undefined;
 let cachedLocalKey: number[] | undefined;
 
 const SESSION_STORAGE_KEY = 'guardian_active_session';
+const SETTINGS_STORAGE_KEY = 'guardian_settings';
 const VAULT_STORAGE_KEY = 'guardian_vault';
 const NEVER_ASK_KEY = 'guardian_autofill_never';
+const DEFAULT_SERVER_SESSION_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * High-value session fields (tokens + key material) must not live in
+ * chrome.storage.local: it is persisted to disk under the browser profile.
+ * chrome.storage.session keeps data in memory for the lifetime of the
+ * browser session (still visible to profile-level attackers, but not idle
+ * disk theft of a closed browser in many setups).
+ */
+function getSessionPersistenceArea(): chrome.storage.StorageArea | null {
+  const storage = chrome.storage as any;
+  if (storage.session) return storage.session as chrome.storage.StorageArea;
+  if (storage.local) return storage.local as chrome.storage.StorageArea;
+  return null;
+}
+
+function clearInMemorySession() {
+  isLoggedIn = false;
+  sessionLastModified = 0;
+  cachedMode = undefined;
+  sessionIssuedAt = undefined;
+  sessionExpiresAt = undefined;
+  cachedAuthToken = undefined;
+  cachedServerUrl = undefined;
+  cachedServerKey = undefined;
+  cachedDerivedServerKey = undefined;
+  cachedLocalKey = undefined;
+}
+
+function isSessionExpired(mode?: 'local' | 'server', expiresAt?: number): boolean {
+  if (mode !== 'server') return false;
+  if (!expiresAt) return true;
+  return Date.now() >= expiresAt;
+}
+
+async function getServerSessionPolicy(): Promise<{ enabled: boolean; days: number }> {
+  try {
+    const storage = chrome.storage as any;
+    if (!storage.local) {
+      return { enabled: true, days: DEFAULT_SERVER_SESSION_DAYS };
+    }
+    const result = await storage.local.get([SETTINGS_STORAGE_KEY]);
+    const settings = result[SETTINGS_STORAGE_KEY] || {};
+
+    const enabled =
+      typeof settings.serverSessionExpiryEnabled === 'boolean'
+        ? settings.serverSessionExpiryEnabled
+        : true;
+
+    const rawDays = Number(settings.serverSessionExpiryDays);
+    const days = Number.isFinite(rawDays) && rawDays >= 1
+      ? Math.min(365, Math.floor(rawDays))
+      : DEFAULT_SERVER_SESSION_DAYS;
+
+    return { enabled, days };
+  } catch {
+    return { enabled: true, days: DEFAULT_SERVER_SESSION_DAYS };
+  }
+}
 
 // Load session from storage on startup
 async function loadSessionFromStorage() {
   try {
     const storage = chrome.storage as any;
-    if (!storage.session) return;
-    const result = await storage.session.get([SESSION_STORAGE_KEY]);
-    if (result[SESSION_STORAGE_KEY]) {
-      const session = result[SESSION_STORAGE_KEY] as SessionData;
+    const sessionArea = getSessionPersistenceArea();
+    if (!sessionArea && !storage.local) return;
+
+    let raw: Record<string, SessionData> | undefined;
+
+    if (sessionArea) {
+      const result = await sessionArea.get([SESSION_STORAGE_KEY]);
+      raw = result as Record<string, SessionData>;
+    }
+
+    // One-time migration: older builds stored the active session in local
+    // (disk). Move it to session storage and delete the local copy.
+    if (!raw?.[SESSION_STORAGE_KEY] && storage.local) {
+      const legacy = await storage.local.get([SESSION_STORAGE_KEY]);
+      if (legacy[SESSION_STORAGE_KEY]) {
+        const migrated = legacy[SESSION_STORAGE_KEY] as SessionData;
+        if (sessionArea) {
+          await sessionArea.set({ [SESSION_STORAGE_KEY]: migrated });
+        }
+        await storage.local.remove([SESSION_STORAGE_KEY]);
+        raw = { [SESSION_STORAGE_KEY]: migrated };
+      }
+    }
+
+    if (raw?.[SESSION_STORAGE_KEY]) {
+      const session = raw[SESSION_STORAGE_KEY] as SessionData;
+      const policy = await getServerSessionPolicy();
+      if (session.mode === 'server' && policy.enabled) {
+        if (isSessionExpired(session.mode, session.expiresAt)) {
+          clearInMemorySession();
+          await clearSessionFromStorage();
+          return;
+        }
+      } else if (session.mode === 'server' && !policy.enabled) {
+        // If forced re-login is disabled, drop expiration metadata so the
+        // session remains persistent until manual logout/token invalidation.
+        session.issuedAt = undefined;
+        session.expiresAt = undefined;
+      }
       isLoggedIn = session.isLoggedIn || false;
       sessionLastModified = session.lastModified || 0;
       cachedMode = session.mode;
+      sessionIssuedAt = session.issuedAt;
+      sessionExpiresAt = session.expiresAt;
       cachedAuthToken = session.authToken;
       cachedServerUrl = session.serverUrl;
       cachedServerKey = session.serverKey;
       cachedDerivedServerKey = session.derivedServerKey;
       cachedLocalKey = session.localKey;
+
+      // Backfill expiry metadata for active server sessions when policy is on.
+      if (
+        isLoggedIn &&
+        cachedMode === 'server' &&
+        policy.enabled &&
+        (!sessionIssuedAt || !sessionExpiresAt)
+      ) {
+        sessionIssuedAt = Date.now();
+        sessionExpiresAt = sessionIssuedAt + policy.days * DAY_MS;
+        await saveSessionToStorage();
+      }
     }
   } catch (error) {
     console.error('Failed to load session from storage:', error);
@@ -67,13 +181,15 @@ async function loadSessionFromStorage() {
 // Save session to storage
 async function saveSessionToStorage() {
   try {
-    const storage = chrome.storage as any;
-    if (!storage.session) return;
-    await storage.session.set({
+    const sessionArea = getSessionPersistenceArea();
+    if (!sessionArea) return;
+    await sessionArea.set({
       [SESSION_STORAGE_KEY]: {
         isLoggedIn,
         lastModified: sessionLastModified,
         mode: cachedMode,
+        issuedAt: sessionIssuedAt,
+        expiresAt: sessionExpiresAt,
         authToken: cachedAuthToken,
         serverUrl: cachedServerUrl,
         serverKey: cachedServerKey,
@@ -90,9 +206,14 @@ async function saveSessionToStorage() {
 async function clearSessionFromStorage() {
   try {
     const storage = chrome.storage as any;
+    const removes: Promise<void>[] = [];
     if (storage.session) {
-      await storage.session.remove([SESSION_STORAGE_KEY]);
+      removes.push(storage.session.remove([SESSION_STORAGE_KEY]));
     }
+    if (storage.local) {
+      removes.push(storage.local.remove([SESSION_STORAGE_KEY]));
+    }
+    await Promise.all(removes);
   } catch (error) {
     console.error('Failed to clear session from storage:', error);
   }
@@ -434,6 +555,8 @@ async function classifyCapturedCredential(
         isLoggedIn,
         lastModified: sessionLastModified,
         mode: cachedMode,
+        issuedAt: sessionIssuedAt,
+        expiresAt: sessionExpiresAt,
         authToken: cachedAuthToken,
         serverUrl: cachedServerUrl,
         serverKey: cachedServerKey,
@@ -456,19 +579,37 @@ async function classifyCapturedCredential(
   }
 
   if (message.action === 'updatePasswords') {
-    isLoggedIn = message.isLoggedIn || false;
-    sessionLastModified = message.lastModified || 0;
-    cachedMode = message.mode;
-    cachedAuthToken = message.authToken;
-    cachedServerUrl = message.serverUrl;
-    cachedServerKey = message.serverKey;
-    cachedDerivedServerKey = message.derivedServerKey;
-    cachedLocalKey = message.localKey;
+    (async () => {
+      isLoggedIn = message.isLoggedIn || false;
+      sessionLastModified = message.lastModified || 0;
+      cachedMode = message.mode;
+      cachedAuthToken = message.authToken;
+      cachedServerUrl = message.serverUrl;
+      cachedServerKey = message.serverKey;
+      cachedDerivedServerKey = message.derivedServerKey;
+      cachedLocalKey = message.localKey;
 
-    // Persist to session storage
-    saveSessionToStorage().then(() => {
+      if (isLoggedIn && cachedMode === 'server') {
+        const policy = await getServerSessionPolicy();
+        if (policy.enabled) {
+          const resetSessionTtl = Boolean(message.resetSessionTtl);
+          if (resetSessionTtl || !sessionIssuedAt) {
+            sessionIssuedAt = Date.now();
+          }
+          sessionExpiresAt = sessionIssuedAt + policy.days * DAY_MS;
+        } else {
+          sessionIssuedAt = undefined;
+          sessionExpiresAt = undefined;
+        }
+      } else {
+        sessionIssuedAt = undefined;
+        sessionExpiresAt = undefined;
+      }
+
+      // Persist to session storage
+      await saveSessionToStorage();
       sendResponse({ success: true });
-    }).catch(() => {
+    })().catch(() => {
       sendResponse({ success: true });
     });
     return true;
@@ -581,14 +722,7 @@ async function classifyCapturedCredential(
   }
 
   if (message.action === 'clearPasswords') {
-    isLoggedIn = false;
-    sessionLastModified = 0;
-    cachedMode = undefined;
-    cachedAuthToken = undefined;
-    cachedServerUrl = undefined;
-    cachedServerKey = undefined;
-    cachedDerivedServerKey = undefined;
-    cachedLocalKey = undefined;
+    clearInMemorySession();
     // Clear from session storage
     clearSessionFromStorage().then(() => {
       sendResponse({ success: true });
@@ -608,13 +742,6 @@ async function classifyCapturedCredential(
 
 // On install/update, clear session for security
 (chrome.runtime.onInstalled as any).addListener(() => {
-  isLoggedIn = false;
-  sessionLastModified = 0;
-  cachedMode = undefined;
-  cachedAuthToken = undefined;
-  cachedServerUrl = undefined;
-  cachedServerKey = undefined;
-  cachedDerivedServerKey = undefined;
-  cachedLocalKey = undefined;
+  clearInMemorySession();
   clearSessionFromStorage();
 });

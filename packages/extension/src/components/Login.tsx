@@ -278,8 +278,14 @@ export default function Login({
                   key={m}
                   type="button"
                   onClick={() => {
+                    if (m === mode) return;
                     setMode(m);
                     setLoginError("");
+                    setMasterPassword("");
+                    setShowMasterPassword(false);
+                    setCapsLockOn(false);
+                    setServerUrl("");
+                    setUsername("");
                   }}
                   className={`relative flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-lg transition-colors z-10 ${active ? "text-black" : `${themeClasses.textTertiary} hover:${themeClasses.text}`}`}
                 >
