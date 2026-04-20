@@ -17,13 +17,25 @@ interface AutofillMatch {
   password: string;
   title: string;
   website: string;
+  favicon?: string;
 }
 
 // State
 let currentInput: HTMLInputElement | null = null;
 let autofillDropdown: HTMLElement | null = null;
+// Persistent pieces of the dropdown — we rebuild only the list on
+// every search, so the search <input> keeps focus + caret position.
+let dropdownListEl: HTMLElement | null = null;
+let dropdownSearchEl: HTMLInputElement | null = null;
+let dropdownEmptyEl: HTMLElement | null = null;
+// Debounce timer for search keystrokes → SW round trip.
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let isPasswordField = false;
 let matches: AutofillMatch[] = [];
+// After we autofill, the act of `.focus()`ing the filled field re-fires
+// focusin → the dropdown would pop right back up. This timestamp lets
+// handleInputFocus swallow the echo for a short window.
+let lastAutofillAt = 0;
 
 // True once we detect the extension context has been invalidated
 // (e.g. extension reloaded/updated). Stale content scripts from before
@@ -59,7 +71,15 @@ async function safeSendMessage<T = any>(message: any): Promise<T | null> {
   }
 }
 
-// Create autofill dropdown UI
+// Lock icon used in the dropdown when an entry has no favicon.
+const lockSvg = `
+  <svg width="16" height="16" fill="none" stroke="rgb(250, 204, 21)" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
+  </svg>
+`;
+
+// Create autofill dropdown UI (outer shell only — the header/search and
+// list are added by buildDropdownChrome on each show).
 function createAutofillDropdown(): HTMLElement {
   const dropdown = document.createElement('div');
   dropdown.id = 'guardian-autofill-dropdown';
@@ -70,224 +90,244 @@ function createAutofillDropdown(): HTMLElement {
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     z-index: 999999;
-    min-width: 300px;
+    min-width: 320px;
     max-width: 400px;
-    max-height: 300px;
-    overflow-y: auto;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     display: none;
+    overflow: hidden;
   `;
 
   return dropdown;
 }
 
-// Render dropdown content
-function renderDropdown(matches: AutofillMatch[], showCreateOption: boolean = false, currentUrl: string = '') {
+// Build the persistent header (search + hint) and the list container
+// once, each time the dropdown is shown. Keeps the search input alive
+// across re-renders so keystrokes don't lose focus/caret.
+function buildDropdownChrome() {
   if (!autofillDropdown) return;
-
-  if (matches.length === 0 && !showCreateOption) {
-    autofillDropdown.style.display = 'none';
-    return;
-  }
 
   autofillDropdown.innerHTML = '';
 
-  matches.forEach((match, index) => {
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 10px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    background: #0a0a0a;
+  `;
+
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = `
+    position: relative;
+    display: flex;
+    align-items: center;
+  `;
+
+  const searchIcon = document.createElement('div');
+  searchIcon.style.cssText = `
+    position: absolute;
+    left: 9px;
+    display: flex;
+    pointer-events: none;
+    color: #71717a;
+  `;
+  searchIcon.innerHTML = `
+    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
+    </svg>
+  `;
+
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.placeholder = 'Search saved logins...';
+  search.autocomplete = 'off';
+  search.spellcheck = false;
+  search.style.cssText = `
+    width: 100%;
+    padding: 6px 10px 6px 28px;
+    background: #111111;
+    border: 1px solid #262626;
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 12px;
+    outline: none;
+    box-sizing: border-box;
+  `;
+  search.addEventListener('focus', () => {
+    search.style.borderColor = 'rgba(250, 204, 21, 0.5)';
+  });
+  search.addEventListener('blur', () => {
+    search.style.borderColor = '#262626';
+  });
+  // Debounced search → SW roundtrip → re-render list.
+  search.addEventListener('input', () => {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    const q = search.value;
+    searchDebounce = setTimeout(() => runSearch(q), 120);
+  });
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (matches.length > 0) {
+        fillCredentials(matches[0]);
+        hideDropdown();
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hideDropdown();
+    }
+  });
+  // Block the dropdown's own click-outside + blur logic from closing
+  // the menu when the user clicks into the search field.
+  search.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+  });
+
+  searchWrap.appendChild(searchIcon);
+  searchWrap.appendChild(search);
+  header.appendChild(searchWrap);
+  autofillDropdown.appendChild(header);
+
+  const list = document.createElement('div');
+  list.style.cssText = `
+    max-height: 260px;
+    overflow-y: auto;
+  `;
+  autofillDropdown.appendChild(list);
+
+  const empty = document.createElement('div');
+  empty.style.cssText = `
+    padding: 14px;
+    color: #71717a;
+    font-size: 12px;
+    text-align: center;
+    display: none;
+  `;
+  empty.textContent = 'No matches';
+  autofillDropdown.appendChild(empty);
+
+  dropdownSearchEl = search;
+  dropdownListEl = list;
+  dropdownEmptyEl = empty;
+}
+
+// Render just the list portion. Safe to call repeatedly as the user
+// types — it doesn't touch the search input.
+function renderMatchList(list: AutofillMatch[]) {
+  if (!dropdownListEl || !dropdownEmptyEl) return;
+
+  dropdownListEl.innerHTML = '';
+
+  if (list.length === 0) {
+    dropdownEmptyEl.style.display = 'block';
+    return;
+  }
+  dropdownEmptyEl.style.display = 'none';
+
+  list.forEach((match, idx) => {
     const item = document.createElement('div');
     item.style.cssText = `
-      padding: 12px 16px;
+      padding: 10px 14px;
       cursor: pointer;
-      border-bottom: 1px solid #1a1a1a;
       display: flex;
       align-items: center;
       gap: 12px;
-      transition: background 0.2s;
+      transition: background 0.15s;
+      ${idx < list.length - 1 ? 'border-bottom: 1px solid #1a1a1a;' : ''}
     `;
     item.onmouseenter = () => {
-      item.style.background = '#1a1a1a';
+      item.style.background = '#171717';
     };
     item.onmouseleave = () => {
       item.style.background = 'transparent';
     };
-    item.onclick = () => {
+    // Use mousedown so we fire before the search input's blur steals
+    // focus and closes the dropdown.
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
       fillCredentials(match);
       hideDropdown();
-    };
+    });
 
-    // Icon
+    // Icon: favicon if we captured one, else the lock fallback.
     const icon = document.createElement('div');
     icon.style.cssText = `
       width: 32px;
       height: 32px;
       border-radius: 6px;
-      background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(250, 204, 21, 0.1));
-      border: 1px solid rgba(250, 204, 21, 0.3);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(250, 204, 21, 0.1));
+      border: 1px solid rgba(250, 204, 21, 0.3);
     `;
-    icon.innerHTML = `
-      <svg width="16" height="16" fill="none" stroke="rgb(250, 204, 21)" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z" />
-      </svg>
-    `;
+    if (match.favicon) {
+      const img = document.createElement('img');
+      img.src = match.favicon;
+      img.alt = '';
+      img.style.cssText = 'width:20px;height:20px;object-fit:contain;';
+      img.onerror = () => {
+        icon.innerHTML = lockSvg;
+      };
+      icon.appendChild(img);
+    } else {
+      icon.innerHTML = lockSvg;
+    }
 
-    // Content
+    // Content: title (bold) + username (subdued).
     const content = document.createElement('div');
-    content.style.cssText = `
-      flex: 1;
-      min-width: 0;
-    `;
+    content.style.cssText = 'flex:1;min-width:0;';
 
-    const username = document.createElement('div');
-    username.style.cssText = `
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = `
       color: #ffffff;
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 2px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     `;
-    username.textContent = match.username || match.title;
+    titleEl.textContent = match.title || match.username || 'Saved login';
 
-    const password = document.createElement('div');
-    password.style.cssText = `
+    const userEl = document.createElement('div');
+    userEl.style.cssText = `
       color: #9ca3af;
-      font-size: 12px;
-      font-family: monospace;
-      letter-spacing: 2px;
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     `;
-    password.textContent = '••••••••';
+    userEl.textContent = match.username || '(no username)';
 
-    content.appendChild(username);
-    content.appendChild(password);
+    content.appendChild(titleEl);
+    content.appendChild(userEl);
 
     item.appendChild(icon);
     item.appendChild(content);
-    autofillDropdown.appendChild(item);
+    dropdownListEl!.appendChild(item);
   });
+}
 
-  // Create password option (if no matches found)
-  if (showCreateOption && matches.length === 0) {
-    const createItem = document.createElement('div');
-    createItem.style.cssText = `
-      padding: 12px 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-top: 1px solid #1a1a1a;
-      transition: background 0.2s;
-    `;
-    createItem.onmouseenter = () => {
-      createItem.style.background = '#1a1a1a';
-    };
-    createItem.onmouseleave = () => {
-      createItem.style.background = 'transparent';
-    };
-    createItem.onclick = () => {
-      // Open extension to create password
-      safeSendMessage({
-        action: 'openExtension',
-        createPassword: true,
-        url: currentUrl,
-      }).catch(() => {});
-      hideDropdown();
-    };
-
-    const createIcon = document.createElement('div');
-    createIcon.style.cssText = `
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `;
-    createIcon.innerHTML = `
-      <svg width="16" height="16" fill="none" stroke="rgb(250, 204, 21)" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-      </svg>
-    `;
-
-    const createText = document.createElement('div');
-    createText.style.cssText = `
-      flex: 1;
-    `;
-
-    const createTitle = document.createElement('div');
-    createTitle.style.cssText = `
-      color: rgb(250, 204, 21);
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 2px;
-    `;
-    createTitle.textContent = 'Save password for this site';
-
-    const createSubtitle = document.createElement('div');
-    createSubtitle.style.cssText = `
-      color: #9ca3af;
-      font-size: 12px;
-    `;
-    createSubtitle.textContent = getDomain(currentUrl) || 'This website';
-
-    createText.appendChild(createTitle);
-    createText.appendChild(createSubtitle);
-    createItem.appendChild(createIcon);
-    createItem.appendChild(createText);
-    autofillDropdown.appendChild(createItem);
+// Issue a getMatches query (with or without a search string) and
+// re-render the list. Empty query → URL-matched entries; non-empty →
+// fuzzy search across the whole vault.
+async function runSearch(query: string) {
+  try {
+    const response = await safeSendMessage<{ matches: AutofillMatch[]; isLoggedIn: boolean }>({
+      action: 'getMatches',
+      url: window.location.href,
+      query,
+    });
+    const next: AutofillMatch[] = Array.isArray(response?.matches) ? response!.matches : [];
+    matches = next;
+    renderMatchList(next);
+  } catch (err) {
+    if (!extensionContextInvalid) {
+      console.error('Guardian autofill search failed:', err);
+    }
   }
-
-  // Manage passwords option
-  const manageItem = document.createElement('div');
-  manageItem.style.cssText = `
-    padding: 12px 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-top: 1px solid #1a1a1a;
-    transition: background 0.2s;
-  `;
-  manageItem.onmouseenter = () => {
-    manageItem.style.background = '#1a1a1a';
-  };
-  manageItem.onmouseleave = () => {
-    manageItem.style.background = 'transparent';
-  };
-  manageItem.onclick = () => {
-    // Close dropdown - user can click extension icon to manage passwords
-    hideDropdown();
-  };
-
-  const manageIcon = document.createElement('div');
-  manageIcon.style.cssText = `
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
-  manageIcon.innerHTML = `
-    <svg width="16" height="16" fill="none" stroke="rgb(156, 163, 175)" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  `;
-
-  const manageText = document.createElement('div');
-  manageText.style.cssText = `
-    color: #9ca3af;
-    font-size: 13px;
-  `;
-  manageText.textContent = 'Manage passwords...';
-
-  manageItem.appendChild(manageIcon);
-  manageItem.appendChild(manageText);
-  autofillDropdown.appendChild(manageItem);
-
-  autofillDropdown.style.display = 'block';
 }
 
 // Position dropdown relative to input
@@ -303,17 +343,19 @@ function positionDropdown(input: HTMLInputElement) {
 }
 
 // Show dropdown
-function showDropdown(input: HTMLInputElement, passwordMatches: AutofillMatch[], showCreate: boolean = false, url: string = '') {
+function showDropdown(input: HTMLInputElement, passwordMatches: AutofillMatch[]) {
   matches = passwordMatches;
   currentInput = input;
   isPasswordField = input.type === 'password';
 
   if (!autofillDropdown) {
-    autofillDropdown = createAutofillDropdown();
-    document.body.appendChild(autofillDropdown);
+    autofillDropdown = document.body.appendChild(createAutofillDropdown());
   }
 
-  renderDropdown(matches, showCreate, url);
+  // Rebuild chrome each show so stale event listeners / state don't leak.
+  buildDropdownChrome();
+  renderMatchList(matches);
+  autofillDropdown.style.display = 'block';
   positionDropdown(input);
 }
 
@@ -322,6 +364,13 @@ function hideDropdown() {
   if (autofillDropdown) {
     autofillDropdown.style.display = 'none';
   }
+  if (searchDebounce) {
+    clearTimeout(searchDebounce);
+    searchDebounce = null;
+  }
+  dropdownListEl = null;
+  dropdownSearchEl = null;
+  dropdownEmptyEl = null;
   currentInput = null;
   matches = [];
 }
@@ -420,6 +469,10 @@ function findLoginFields(startFrom: HTMLInputElement): {
 function fillCredentials(match: AutofillMatch) {
   if (!currentInput) return;
 
+  // Mark the fill window *before* we touch focus so the focus-echo from
+  // our own .focus() calls below doesn't re-show the dropdown.
+  lastAutofillAt = Date.now();
+
   const { username: usernameField, password: passwordField } =
     findLoginFields(currentInput);
 
@@ -436,6 +489,10 @@ function fillCredentials(match: AutofillMatch) {
   // Put focus somewhere sensible so the user can immediately press Enter.
   if (passwordField) passwordField.focus();
   else if (usernameField) usernameField.focus();
+
+  // Refresh the timestamp *after* the focus calls so the 800ms window
+  // starts from the latest focus echo.
+  lastAutofillAt = Date.now();
 }
 
 // Get domain from URL
@@ -496,7 +553,14 @@ function isLoginLikeField(input: HTMLInputElement): boolean {
 // Handle input focus
 async function handleInputFocus(event: FocusEvent) {
   const input = event.target as HTMLInputElement;
+  // Ignore focus events originating inside our own UI (e.g. the
+  // search input in the dropdown) — otherwise focusing the search box
+  // would rebuild the dropdown and lose the keystroke.
+  if (autofillDropdown && autofillDropdown.contains(input)) return;
   if (!isLoginLikeField(input)) return;
+  // Suppress the echo from .focus() calls we just made inside
+  // fillCredentials — otherwise the dropdown re-pops the instant we fill.
+  if (Date.now() - lastAutofillAt < 800) return;
 
   // Request matching passwords from background script
   try {
@@ -508,11 +572,12 @@ async function handleInputFocus(event: FocusEvent) {
 
     if (response) {
       const matches: AutofillMatch[] = Array.isArray(response.matches) ? response.matches : [];
-      const isLoggedIn = response.isLoggedIn || false;
-
-      // Show dropdown if we have matches OR if user is logged in (to show create option)
-      if (matches.length > 0 || isLoggedIn) {
-        showDropdown(input, matches, isLoggedIn && matches.length === 0, currentUrl);
+      // Only show the dropdown when we have real credentials to offer.
+      // The save-on-submit banner already handles "no match yet → save this"
+      // after the form is submitted, so an empty dropdown on every focus
+      // would just be noise.
+      if (matches.length > 0) {
+        showDropdown(input, matches);
       }
     }
   } catch (error) {
@@ -812,7 +877,8 @@ function showSaveBanner(options: BannerOptions) {
           url: options.credential.url,
           username: options.credential.username,
           password: options.credential.password,
-          title: domain,
+          // Intentionally omit `title` so the service worker can use the
+          // real tab title via sender.tab.title (cleaner than the domain).
         });
       }
     } catch (err) {

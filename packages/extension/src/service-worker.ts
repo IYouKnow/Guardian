@@ -14,6 +14,7 @@ interface AutofillMatch {
   password: string;
   title: string;
   website: string;
+  favicon?: string;
 }
 
 interface SessionData {
@@ -127,8 +128,12 @@ function urlMatches(entryWebsite: string, currentUrl: string): boolean {
   return false;
 }
 
-// Find matching passwords for a URL
-async function findMatches(url: string): Promise<AutofillMatch[]> {
+// Find matching passwords. With no query, returns URL-matches for the
+// current tab. With a query, searches every saved entry by
+// title / username / website / notes so the user can still reach a
+// credential even when URL matching missed (different subdomain, no
+// saved URL, typo, etc.).
+async function findMatches(url: string, query?: string): Promise<AutofillMatch[]> {
   if (!isLoggedIn) {
     return [];
   }
@@ -161,21 +166,40 @@ async function findMatches(url: string): Promise<AutofillMatch[]> {
     return [];
   }
 
-  const matches: AutofillMatch[] = [];
+  const toMatch = (entry: VaultEntry): AutofillMatch => ({
+    id: entry.id,
+    username: entry.username || "",
+    password: entry.password,
+    title: entry.name,
+    website: entry.url || "",
+    favicon: entry.favicon,
+  });
 
-  for (const entry of decryptedVault.entries) {
-    if (urlMatches(entry.url || "", url)) {
-      matches.push({
-        id: entry.id,
-        username: entry.username || "",
-        password: entry.password,
-        title: entry.name,
-        website: entry.url || "",
-      });
-    }
+  const q = (query || "").trim().toLowerCase();
+
+  if (q.length > 0) {
+    // Search mode: score each entry, return top results. URL-matches get
+    // a boost so domain-relevant results stay near the top.
+    const scored = decryptedVault.entries.map((entry) => {
+      const hay = `${entry.name || ""} ${entry.username || ""} ${entry.url || ""} ${entry.notes || ""}`.toLowerCase();
+      let score = 0;
+      if (hay.includes(q)) score += 2;
+      if ((entry.name || "").toLowerCase().startsWith(q)) score += 5;
+      if ((entry.username || "").toLowerCase().startsWith(q)) score += 3;
+      if (urlMatches(entry.url || "", url)) score += 4;
+      return { entry, score };
+    });
+    return scored
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map((s) => toMatch(s.entry));
   }
 
-  return matches;
+  // No query: classic URL-match mode.
+  return decryptedVault.entries
+    .filter((entry) => urlMatches(entry.url || "", url))
+    .map(toMatch);
 }
 
 // Decrypt the locally cached vault using the in-memory / session key.
@@ -377,7 +401,7 @@ async function classifyCapturedCredential(
 // Handle messages from content scripts and popup
 (chrome.runtime.onMessage as any).addListener((message: any, sender: any, sendResponse: any) => {
   if (message.action === 'getMatches') {
-    findMatches(message.url)
+    findMatches(message.url, message.query)
       .then((matches) => {
         sendResponse({ matches, isLoggedIn });
       })
