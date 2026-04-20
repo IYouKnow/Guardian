@@ -15,8 +15,6 @@ interface SettingsProps {
     onClipboardClearSecondsChange: (seconds: number) => void;
     revealCensorSeconds: number;
     onRevealCensorSecondsChange: (seconds: number) => void;
-    serverSessionExpiryEnabled: boolean;
-    onServerSessionExpiryEnabledChange: (enabled: boolean) => void;
     serverSessionExpiryDays: number;
     onServerSessionExpiryDaysChange: (days: number) => void;
     onBack: () => void;
@@ -32,8 +30,6 @@ export default function Settings({
     onClipboardClearSecondsChange,
     revealCensorSeconds,
     onRevealCensorSecondsChange,
-    serverSessionExpiryEnabled,
-    onServerSessionExpiryEnabledChange,
     serverSessionExpiryDays,
     onServerSessionExpiryDaysChange,
     onBack,
@@ -100,8 +96,6 @@ export default function Settings({
                         onClipboardClearSecondsChange={onClipboardClearSecondsChange}
                         revealCensorSeconds={revealCensorSeconds}
                         onRevealCensorSecondsChange={onRevealCensorSecondsChange}
-                        serverSessionExpiryEnabled={serverSessionExpiryEnabled}
-                        onServerSessionExpiryEnabledChange={onServerSessionExpiryEnabledChange}
                         serverSessionExpiryDays={serverSessionExpiryDays}
                         onServerSessionExpiryDaysChange={onServerSessionExpiryDaysChange}
                         showTitle={true}

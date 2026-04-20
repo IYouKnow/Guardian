@@ -36,6 +36,7 @@ let matches: AutofillMatch[] = [];
 // focusin → the dropdown would pop right back up. This timestamp lets
 // handleInputFocus swallow the echo for a short window.
 let lastAutofillAt = 0;
+let lastNeedsLoginSaveBannerAt = 0;
 
 // True once we detect the extension context has been invalidated
 // (e.g. extension reloaded/updated). Stale content scripts from before
@@ -320,6 +321,12 @@ async function runSearch(query: string) {
       url: window.location.href,
       query,
     });
+    if (response && response.isLoggedIn === false) {
+      if (currentInput) {
+        showLoginRequiredDropdown(currentInput);
+      }
+      return;
+    }
     const next: AutofillMatch[] = Array.isArray(response?.matches) ? response!.matches : [];
     matches = next;
     renderMatchList(next);
@@ -355,6 +362,45 @@ function showDropdown(input: HTMLInputElement, passwordMatches: AutofillMatch[])
   // Rebuild chrome each show so stale event listeners / state don't leak.
   buildDropdownChrome();
   renderMatchList(matches);
+  autofillDropdown.style.display = 'block';
+  positionDropdown(input);
+}
+
+/**
+ * User is not signed in (vault locked). Same dropdown shell, clear CTA.
+ * Closing the popup does not require sign-in; full browser quit clears the session.
+ */
+function showLoginRequiredDropdown(input: HTMLInputElement) {
+  matches = [];
+  currentInput = input;
+  isPasswordField = input.type === 'password';
+
+  if (!autofillDropdown) {
+    autofillDropdown = document.body.appendChild(createAutofillDropdown());
+  }
+
+  autofillDropdown.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'padding: 14px 16px; max-width: 380px; box-sizing: border-box;';
+
+  const titleRow = document.createElement('div');
+  titleRow.style.cssText =
+    'color: #fafafa; font-size: 13px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;';
+  titleRow.innerHTML = `${lockSvg}<span>Sign in to Guardian</span>`;
+
+  const desc = document.createElement('div');
+  desc.style.cssText = 'color: #a1a1aa; font-size: 12px; line-height: 1.5;';
+  desc.textContent =
+    'Click the Guardian icon in the toolbar and sign in to use autofill. Your vault stays unlocked while this browser is open.';
+
+  wrap.appendChild(titleRow);
+  wrap.appendChild(desc);
+  autofillDropdown.appendChild(wrap);
+
+  dropdownListEl = null;
+  dropdownSearchEl = null;
+  dropdownEmptyEl = null;
+
   autofillDropdown.style.display = 'block';
   positionDropdown(input);
 }
@@ -571,13 +617,17 @@ async function handleInputFocus(event: FocusEvent) {
     });
 
     if (response) {
-      const matches: AutofillMatch[] = Array.isArray(response.matches) ? response.matches : [];
+      if (response.isLoggedIn === false) {
+        showLoginRequiredDropdown(input);
+        return;
+      }
+      const pwdMatches: AutofillMatch[] = Array.isArray(response.matches) ? response.matches : [];
       // Only show the dropdown when we have real credentials to offer.
       // The save-on-submit banner already handles "no match yet → save this"
       // after the form is submitted, so an empty dropdown on every focus
       // would just be noise.
-      if (matches.length > 0) {
-        showDropdown(input, matches);
+      if (pwdMatches.length > 0) {
+        showDropdown(input, pwdMatches);
       }
     }
   } catch (error) {
@@ -672,6 +722,46 @@ function captureFrom(scope: Document | HTMLElement | null): CapturedCredential |
   return cred;
 }
 
+/** Small banner when user submits a login but Guardian is locked (save flow). */
+function showNeedsLoginSaveBanner() {
+  const root = ensureSaveBannerHost();
+  root.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    width: 320px;
+    background: #0a0a0a;
+    color: #ffffff;
+    border: 1px solid rgba(250, 204, 21, 0.35);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-sizing: border-box;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  `;
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size: 13px; font-weight: 700; margin-bottom: 6px; color: #fafafa;';
+  title.textContent = 'Sign in to Guardian';
+
+  const sub = document.createElement('div');
+  sub.style.cssText = 'font-size: 12px; line-height: 1.45; color: #a1a1aa;';
+  sub.textContent =
+    'Open the Guardian extension from the toolbar and sign in to save or update passwords on this site.';
+
+  wrap.appendChild(title);
+  wrap.appendChild(sub);
+  root.appendChild(wrap);
+
+  window.setTimeout(() => {
+    try {
+      hideSaveBanner();
+    } catch {
+      /* ignore */
+    }
+  }, 12_000);
+}
+
 // Ask the background if we should prompt, and if so, show the banner.
 async function attemptPromptSave(cred: CapturedCredential | null) {
   if (!cred || !cred.password || cred.password.length < 4) return;
@@ -685,7 +775,7 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
 
   try {
     const response = await safeSendMessage<{
-      prompt: 'none' | 'save' | 'update';
+      prompt: 'none' | 'save' | 'update' | 'needs_login';
       entryId?: string;
       entryTitle?: string;
     }>({
@@ -695,6 +785,14 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
       password: cred.password,
     });
     if (!response) return;
+
+    if (response.prompt === 'needs_login') {
+      const now = Date.now();
+      if (now - lastNeedsLoginSaveBannerAt < 25_000) return;
+      lastNeedsLoginSaveBannerAt = now;
+      showNeedsLoginSaveBanner();
+      return;
+    }
 
     if (response.prompt === 'save') {
       showSaveBanner({ mode: 'save', credential: cred });

@@ -50,17 +50,17 @@ const DEFAULT_SERVER_SESSION_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * High-value session fields (tokens + key material) must not live in
- * chrome.storage.local: it is persisted to disk under the browser profile.
- * chrome.storage.session keeps data in memory for the lifetime of the
- * browser session (still visible to profile-level attackers, but not idle
- * disk theft of a closed browser in many setups).
+ * Session secrets (tokens + key material) must use **only**
+ * `chrome.storage.session`: they survive popup close and service worker
+ * restarts while the browser stays open, and are cleared when the browser
+ * exits — so the user is not asked to log in on every popup open, but is
+ * after a full browser quit. We intentionally never fall back to
+ * `chrome.storage.local` for this blob (that would persist across browser
+ * sessions on disk).
  */
 function getSessionPersistenceArea(): chrome.storage.StorageArea | null {
   const storage = chrome.storage as any;
-  if (storage.session) return storage.session as chrome.storage.StorageArea;
-  if (storage.local) return storage.local as chrome.storage.StorageArea;
-  return null;
+  return storage.session ? (storage.session as chrome.storage.StorageArea) : null;
 }
 
 function clearInMemorySession() {
@@ -82,28 +82,23 @@ function isSessionExpired(mode?: 'local' | 'server', expiresAt?: number): boolea
   return Date.now() >= expiresAt;
 }
 
-async function getServerSessionPolicy(): Promise<{ enabled: boolean; days: number }> {
+async function getServerSessionExpiryDays(): Promise<number> {
   try {
     const storage = chrome.storage as any;
     if (!storage.local) {
-      return { enabled: true, days: DEFAULT_SERVER_SESSION_DAYS };
+      return DEFAULT_SERVER_SESSION_DAYS;
     }
     const result = await storage.local.get([SETTINGS_STORAGE_KEY]);
     const settings = result[SETTINGS_STORAGE_KEY] || {};
-
-    const enabled =
-      typeof settings.serverSessionExpiryEnabled === 'boolean'
-        ? settings.serverSessionExpiryEnabled
-        : true;
 
     const rawDays = Number(settings.serverSessionExpiryDays);
     const days = Number.isFinite(rawDays) && rawDays >= 1
       ? Math.min(365, Math.floor(rawDays))
       : DEFAULT_SERVER_SESSION_DAYS;
 
-    return { enabled, days };
+    return days;
   } catch {
-    return { enabled: true, days: DEFAULT_SERVER_SESSION_DAYS };
+    return DEFAULT_SERVER_SESSION_DAYS;
   }
 }
 
@@ -129,26 +124,24 @@ async function loadSessionFromStorage() {
         const migrated = legacy[SESSION_STORAGE_KEY] as SessionData;
         if (sessionArea) {
           await sessionArea.set({ [SESSION_STORAGE_KEY]: migrated });
+          await storage.local.remove([SESSION_STORAGE_KEY]);
+          raw = { [SESSION_STORAGE_KEY]: migrated };
+        } else {
+          // No session API: keep legacy in local until the runtime supports migration.
+          raw = { [SESSION_STORAGE_KEY]: migrated };
         }
-        await storage.local.remove([SESSION_STORAGE_KEY]);
-        raw = { [SESSION_STORAGE_KEY]: migrated };
       }
     }
 
     if (raw?.[SESSION_STORAGE_KEY]) {
       const session = raw[SESSION_STORAGE_KEY] as SessionData;
-      const policy = await getServerSessionPolicy();
-      if (session.mode === 'server' && policy.enabled) {
+      const expiryDays = await getServerSessionExpiryDays();
+      if (session.mode === 'server') {
         if (isSessionExpired(session.mode, session.expiresAt)) {
           clearInMemorySession();
           await clearSessionFromStorage();
           return;
         }
-      } else if (session.mode === 'server' && !policy.enabled) {
-        // If forced re-login is disabled, drop expiration metadata so the
-        // session remains persistent until manual logout/token invalidation.
-        session.issuedAt = undefined;
-        session.expiresAt = undefined;
       }
       isLoggedIn = session.isLoggedIn || false;
       sessionLastModified = session.lastModified || 0;
@@ -161,15 +154,14 @@ async function loadSessionFromStorage() {
       cachedDerivedServerKey = session.derivedServerKey;
       cachedLocalKey = session.localKey;
 
-      // Backfill expiry metadata for active server sessions when policy is on.
+      // Backfill expiry metadata for active server sessions.
       if (
         isLoggedIn &&
         cachedMode === 'server' &&
-        policy.enabled &&
         (!sessionIssuedAt || !sessionExpiresAt)
       ) {
         sessionIssuedAt = Date.now();
-        sessionExpiresAt = sessionIssuedAt + policy.days * DAY_MS;
+        sessionExpiresAt = sessionIssuedAt + expiryDays * DAY_MS;
         await saveSessionToStorage();
       }
     }
@@ -590,17 +582,12 @@ async function classifyCapturedCredential(
       cachedLocalKey = message.localKey;
 
       if (isLoggedIn && cachedMode === 'server') {
-        const policy = await getServerSessionPolicy();
-        if (policy.enabled) {
-          const resetSessionTtl = Boolean(message.resetSessionTtl);
-          if (resetSessionTtl || !sessionIssuedAt) {
-            sessionIssuedAt = Date.now();
-          }
-          sessionExpiresAt = sessionIssuedAt + policy.days * DAY_MS;
-        } else {
-          sessionIssuedAt = undefined;
-          sessionExpiresAt = undefined;
+        const days = await getServerSessionExpiryDays();
+        const resetSessionTtl = Boolean(message.resetSessionTtl);
+        if (resetSessionTtl || !sessionIssuedAt) {
+          sessionIssuedAt = Date.now();
         }
+        sessionExpiresAt = sessionIssuedAt + days * DAY_MS;
       } else {
         sessionIssuedAt = undefined;
         sessionExpiresAt = undefined;
@@ -616,16 +603,24 @@ async function classifyCapturedCredential(
   }
 
   if (message.action === 'checkShouldPromptSave') {
-    classifyCapturedCredential(
-      String(message.url || ''),
-      String(message.username || ''),
-      String(message.password || ''),
-    )
-      .then((result) => sendResponse(result))
-      .catch((err) => {
+    (async () => {
+      try {
+        await loadSessionFromStorage();
+        if (!isLoggedIn || !cachedLocalKey) {
+          sendResponse({ prompt: 'needs_login' as const });
+          return;
+        }
+        const result = await classifyCapturedCredential(
+          String(message.url || ''),
+          String(message.username || ''),
+          String(message.password || ''),
+        );
+        sendResponse(result);
+      } catch (err) {
         console.warn('classifyCapturedCredential failed', err);
         sendResponse({ prompt: 'none' });
-      });
+      }
+    })();
     return true;
   }
 

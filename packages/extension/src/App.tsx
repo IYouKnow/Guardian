@@ -73,7 +73,6 @@ function App() {
   const [accentColor, setAccentColor] = useState<AccentColor>("yellow");
   const [clipboardClearSeconds, setClipboardClearSeconds] = useState(10);
   const [revealCensorSeconds, setRevealCensorSeconds] = useState(5);
-  const [serverSessionExpiryEnabled, setServerSessionExpiryEnabled] = useState(true);
   const [serverSessionExpiryDays, setServerSessionExpiryDays] = useState(7);
   const [loginMode, setLoginMode] = useState<"local" | "server">("local");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -110,9 +109,6 @@ function App() {
         if (settings.accentColor) setAccentColor(settings.accentColor as AccentColor);
         if (settings.clipboardClearSeconds) setClipboardClearSeconds(settings.clipboardClearSeconds);
         if (settings.revealCensorSeconds) setRevealCensorSeconds(settings.revealCensorSeconds);
-        if (typeof settings.serverSessionExpiryEnabled === "boolean") {
-          setServerSessionExpiryEnabled(settings.serverSessionExpiryEnabled);
-        }
         if (typeof settings.serverSessionExpiryDays === "number" && Number.isFinite(settings.serverSessionExpiryDays)) {
           setServerSessionExpiryDays(Math.max(1, Math.min(365, Math.floor(settings.serverSessionExpiryDays))));
         }
@@ -175,7 +171,6 @@ function App() {
           accentColor,
           clipboardClearSeconds,
           revealCensorSeconds,
-          serverSessionExpiryEnabled,
           serverSessionExpiryDays
         });
       } catch (e) {
@@ -183,7 +178,7 @@ function App() {
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [theme, accentColor, clipboardClearSeconds, revealCensorSeconds, serverSessionExpiryEnabled, serverSessionExpiryDays]);
+  }, [theme, accentColor, clipboardClearSeconds, revealCensorSeconds, serverSessionExpiryDays]);
 
   // Cleanup polling
   useEffect(() => {
@@ -519,8 +514,6 @@ function App() {
           onClipboardClearSecondsChange={setClipboardClearSeconds}
           revealCensorSeconds={revealCensorSeconds}
           onRevealCensorSecondsChange={setRevealCensorSeconds}
-          serverSessionExpiryEnabled={serverSessionExpiryEnabled}
-          onServerSessionExpiryEnabledChange={setServerSessionExpiryEnabled}
           serverSessionExpiryDays={serverSessionExpiryDays}
           onServerSessionExpiryDaysChange={setServerSessionExpiryDays}
           onBack={() => setActiveTab("vault")}
