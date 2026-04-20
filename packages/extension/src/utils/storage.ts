@@ -11,6 +11,7 @@ const SETTINGS_STORAGE_KEY = "guardian_settings";
 const SESSION_STORAGE_KEY = "guardian_session";
 const FILE_HANDLE_STORAGE_KEY = "guardian_file_handle";
 const MASTER_SALT_STORAGE_KEY = "guardian_master_salt";
+const LOGIN_PREFS_STORAGE_KEY = "guardian_login_prefs";
 
 export interface ExtensionSettings {
   theme?: "dark" | "slate" | "light" | "editor" | "violet";
@@ -31,6 +32,41 @@ export interface FileHandleMetadata {
   lastModified: number;
   name: string;
   kind: string;
+}
+
+/**
+ * Non-secret preferences that survive between launches so the user
+ * doesn't have to re-type their server URL / username every time.
+ * Passwords are NEVER stored here.
+ */
+export interface LoginPrefs {
+  lastMode?: "local" | "server";
+  serverUrl?: string;
+  username?: string;
+}
+
+export async function loadLoginPrefs(): Promise<LoginPrefs> {
+  try {
+    const storage = getStorage();
+    const result = await storage.get(LOGIN_PREFS_STORAGE_KEY);
+    const prefs = result[LOGIN_PREFS_STORAGE_KEY];
+    if (prefs && typeof prefs === "object") {
+      return prefs as LoginPrefs;
+    }
+  } catch (err) {
+    console.warn("Failed to load login prefs:", err);
+  }
+  return {};
+}
+
+export async function saveLoginPrefs(prefs: LoginPrefs): Promise<void> {
+  try {
+    const storage = getStorage();
+    const existing = (await storage.get(LOGIN_PREFS_STORAGE_KEY))[LOGIN_PREFS_STORAGE_KEY] || {};
+    await storage.set({ [LOGIN_PREFS_STORAGE_KEY]: { ...existing, ...prefs } });
+  } catch (err) {
+    console.warn("Failed to save login prefs:", err);
+  }
 }
 
 /**
