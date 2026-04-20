@@ -747,7 +747,7 @@ function showNeedsLoginSaveBanner() {
   const sub = document.createElement('div');
   sub.style.cssText = 'font-size: 12px; line-height: 1.45; color: #a1a1aa;';
   sub.textContent =
-    'Open the Guardian extension from the toolbar and sign in to save or update passwords on this site.';
+    'Open the Guardian extension from the toolbar and sign in. After you unlock, we will ask again here if you can save this login.';
 
   wrap.appendChild(title);
   wrap.appendChild(sub);
@@ -763,15 +763,17 @@ function showNeedsLoginSaveBanner() {
 }
 
 // Ask the background if we should prompt, and if so, show the banner.
-async function attemptPromptSave(cred: CapturedCredential | null) {
+async function attemptPromptSave(
+  cred: CapturedCredential | null,
+  options?: { afterLoginRetry?: boolean },
+) {
   if (!cred || !cred.password || cred.password.length < 4) return;
 
-  // De-duplicate: don't re-prompt for the same credential within 10s.
   const key = `${cred.url}|${cred.username}|${cred.password}`;
   const now = Date.now();
-  if (key === lastPromptKey && now - lastPromptAt < 10_000) return;
-  lastPromptKey = key;
-  lastPromptAt = now;
+  if (!options?.afterLoginRetry) {
+    if (key === lastPromptKey && now - lastPromptAt < 10_000) return;
+  }
 
   try {
     const response = await safeSendMessage<{
@@ -787,10 +789,12 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
     if (!response) return;
 
     if (response.prompt === 'needs_login') {
-      const now = Date.now();
-      if (now - lastNeedsLoginSaveBannerAt < 25_000) return;
-      lastNeedsLoginSaveBannerAt = now;
-      showNeedsLoginSaveBanner();
+      void safeSendMessage({ action: 'deferSavePrompt', credential: cred });
+      const t = Date.now();
+      if (t - lastNeedsLoginSaveBannerAt >= 25_000) {
+        lastNeedsLoginSaveBannerAt = t;
+        showNeedsLoginSaveBanner();
+      }
       return;
     }
 
@@ -804,6 +808,9 @@ async function attemptPromptSave(cred: CapturedCredential | null) {
         entryTitle: response.entryTitle,
       });
     }
+
+    lastPromptKey = key;
+    lastPromptAt = Date.now();
   } catch (err) {
     // Stale content script (extension reloaded) or SW unavailable — stay quiet.
     if (!extensionContextInvalid) {
@@ -1190,4 +1197,21 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+// After toolbar login, background re-sends the deferred credential so we can show Save/Update.
+chrome.runtime.onMessage.addListener((msg: { action?: string; credential?: CapturedCredential }, _sender, sendResponse) => {
+  if (msg?.action === 'guardianRetryPendingSave' && msg.credential) {
+    void attemptPromptSave(
+      {
+        url: String(msg.credential.url || ''),
+        username: String(msg.credential.username || ''),
+        password: String(msg.credential.password || ''),
+      },
+      { afterLoginRetry: true },
+    );
+    sendResponse?.({ ok: true });
+    return true;
+  }
+  return false;
+});
 

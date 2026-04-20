@@ -49,6 +49,13 @@ const NEVER_ASK_KEY = 'guardian_autofill_never';
 const DEFAULT_SERVER_SESSION_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Save prompt deferred while vault was locked; retried after login on this tab. */
+interface DeferredSavePrompt {
+  tabId: number;
+  credential: { url: string; username: string; password: string };
+}
+let deferredSavePrompt: DeferredSavePrompt | null = null;
+
 /**
  * Session secrets (tokens + key material) must use **only**
  * `chrome.storage.session`: they survive popup close and service worker
@@ -570,6 +577,43 @@ async function classifyCapturedCredential(
     return true;
   }
 
+  if (message.action === 'deferSavePrompt') {
+    const tabId = sender.tab?.id;
+    const c = message.credential as { url?: string; username?: string; password?: string } | undefined;
+    if (
+      tabId != null &&
+      c &&
+      typeof c.password === 'string' &&
+      c.password.length >= 4
+    ) {
+      deferredSavePrompt = {
+        tabId,
+        credential: {
+          url: String(c.url || ''),
+          username: String(c.username || ''),
+          password: String(c.password || ''),
+        },
+      };
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.action === 'sessionUnlockedAfterLogin') {
+    const d = deferredSavePrompt;
+    deferredSavePrompt = null;
+    if (d) {
+      chrome.tabs.sendMessage(d.tabId, {
+        action: 'guardianRetryPendingSave',
+        credential: d.credential,
+      }).catch(() => {
+        /* tab closed or no receiver */
+      });
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message.action === 'updatePasswords') {
     (async () => {
       isLoggedIn = message.isLoggedIn || false;
@@ -717,6 +761,7 @@ async function classifyCapturedCredential(
   }
 
   if (message.action === 'clearPasswords') {
+    deferredSavePrompt = null;
     clearInMemorySession();
     // Clear from session storage
     clearSessionFromStorage().then(() => {

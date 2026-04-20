@@ -260,6 +260,8 @@ function App() {
         resetSessionTtl: mode === "server",
       });
 
+      await chrome.runtime.sendMessage({ action: 'sessionUnlockedAfterLogin' });
+
     } catch (err) {
       console.error("Failed to login:", err);
       throw err;
