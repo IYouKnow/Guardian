@@ -474,6 +474,43 @@ async function addToNeverAskList(domain: string): Promise<void> {
   }
 }
 
+type PasswordDiffPreview = {
+  oldLength: number;
+  newLength: number;
+  kind: 'extended' | 'truncated' | 'replaced';
+  // An approximate count of changed characters that does not reveal the
+  // characters themselves.
+  changedChars: number;
+};
+
+function buildPasswordDiffPreview(oldPassword: string, newPassword: string): PasswordDiffPreview {
+  const oldLength = oldPassword.length;
+  const newLength = newPassword.length;
+
+  let commonPrefix = 0;
+  const minLen = Math.min(oldLength, newLength);
+  while (commonPrefix < minLen && oldPassword[commonPrefix] === newPassword[commonPrefix]) {
+    commonPrefix++;
+  }
+
+  let commonSuffix = 0;
+  while (
+    commonSuffix < (minLen - commonPrefix) &&
+    oldPassword[oldLength - 1 - commonSuffix] === newPassword[newLength - 1 - commonSuffix]
+  ) {
+    commonSuffix++;
+  }
+
+  const maxLen = Math.max(oldLength, newLength);
+  const changedChars = Math.max(0, maxLen - commonPrefix - commonSuffix);
+
+  let kind: PasswordDiffPreview['kind'] = 'replaced';
+  if (commonPrefix === oldLength && newLength > oldLength) kind = 'extended';
+  else if (commonPrefix === newLength && oldLength > newLength) kind = 'truncated';
+
+  return { oldLength, newLength, kind, changedChars };
+}
+
 // Decide whether a captured credential should trigger a save/update prompt.
 async function classifyCapturedCredential(
   url: string,
@@ -482,7 +519,7 @@ async function classifyCapturedCredential(
 ): Promise<
   | { prompt: 'none' }
   | { prompt: 'save' }
-  | { prompt: 'update'; entryId: string; entryTitle: string }
+  | { prompt: 'update'; entryId: string; entryTitle: string; diff: PasswordDiffPreview }
 > {
   if (!password || password.length < 4) return { prompt: 'none' };
   if (!isLoggedIn) return { prompt: 'none' };
@@ -510,7 +547,12 @@ async function classifyCapturedCredential(
       (e) => (e.username || '').toLowerCase() === username.toLowerCase(),
     );
     if (sameUser) {
-      return { prompt: 'update', entryId: sameUser.id, entryTitle: sameUser.name };
+      return {
+        prompt: 'update',
+        entryId: sameUser.id,
+        entryTitle: sameUser.name,
+        diff: buildPasswordDiffPreview(sameUser.password || '', password),
+      };
     }
   }
 

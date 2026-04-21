@@ -563,6 +563,23 @@ function App() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </button>
+                {/* Quick generator shortcut (only once the vault has at least one item) */}
+                {passwords.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedPassword(null);
+                      setIsAddingPassword(false);
+                      setActiveTab("generator");
+                    }}
+                    className={`p-1 rounded-md transition-all ${themeClasses.hoverBg} ${accentClasses.textClass} hover:opacity-80`}
+                    title="Generate Password"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M15 4l5 5M13 6l5 5M4 20l9-9M6 18l9-9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M17 2l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2z" />
+                    </svg>
+                  </button>
+                )}
                 {/* Add password button */}
                 <button
                   onClick={() => {

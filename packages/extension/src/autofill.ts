@@ -79,6 +79,13 @@ const lockSvg = `
   </svg>
 `;
 
+const wandSvg = `
+  <svg width="16" height="16" fill="none" stroke="rgb(250, 204, 21)" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 4l5 5M13 6l5 5M4 20l9-9M6 18l9-9" />
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 2l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2z" />
+  </svg>
+`;
+
 // Create autofill dropdown UI (outer shell only — the header/search and
 // list are added by buildDropdownChrome on each show).
 function createAutofillDropdown(): HTMLElement {
@@ -144,7 +151,7 @@ function buildDropdownChrome() {
   search.spellcheck = false;
   search.style.cssText = `
     width: 100%;
-    padding: 6px 10px 6px 28px;
+    padding: 6px 36px 6px 28px;
     background: #111111;
     border: 1px solid #262626;
     border-radius: 6px;
@@ -185,6 +192,51 @@ function buildDropdownChrome() {
 
   searchWrap.appendChild(searchIcon);
   searchWrap.appendChild(search);
+
+  // Generator shortcut inside the dropdown header (shows whenever the
+  // dropdown is open on a password field).
+  if (currentInput?.type === 'password') {
+    const genBtn = document.createElement('button');
+    genBtn.type = 'button';
+    genBtn.title = 'Generate password';
+    genBtn.style.cssText = `
+      position: absolute;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: rgb(250, 204, 21);
+      cursor: pointer;
+      padding: 0;
+    `;
+    genBtn.innerHTML = wandSvg;
+    genBtn.onmouseenter = () => {
+      genBtn.style.background = 'rgba(250, 204, 21, 0.12)';
+      genBtn.style.borderColor = 'rgba(250, 204, 21, 0.25)';
+    };
+    genBtn.onmouseleave = () => {
+      genBtn.style.background = 'transparent';
+      genBtn.style.borderColor = 'transparent';
+    };
+    // Use mousedown to avoid the search input blur / click-outside path.
+    genBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!currentInput) return;
+      const pwd = generatePassword(20);
+      fillGeneratedPassword(currentInput, pwd);
+      const scope = currentInput.closest('form') || document;
+      captureFrom(scope);
+      hideDropdown();
+    });
+    searchWrap.appendChild(genBtn);
+  }
+
   header.appendChild(searchWrap);
   autofillDropdown.appendChild(header);
 
@@ -218,7 +270,91 @@ function renderMatchList(list: AutofillMatch[]) {
 
   dropdownListEl.innerHTML = '';
 
+  const input = currentInput;
+  const isNewPassword =
+    !!input &&
+    input.type === 'password' &&
+    (input.autocomplete === 'new-password' || input.getAttribute('autocomplete') === 'new-password');
+  const query = (dropdownSearchEl?.value || '').trim();
+
+  const offerGenerator =
+    !!input && input.type === 'password' && (isNewPassword || list.length === 0) && query.length === 0;
+
+  if (offerGenerator) {
+    const item = document.createElement('div');
+    item.style.cssText = `
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background 0.15s;
+      ${list.length > 0 ? 'border-bottom: 1px solid #1a1a1a;' : ''}
+    `;
+    item.onmouseenter = () => {
+      item.style.background = '#171717';
+    };
+    item.onmouseleave = () => {
+      item.style.background = 'transparent';
+    };
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (!currentInput) return;
+      const pwd = generatePassword(20);
+      fillGeneratedPassword(currentInput, pwd);
+      // Stage a save by updating the cached credential snapshot.
+      const scope = currentInput.closest('form') || document;
+      captureFrom(scope);
+      hideDropdown();
+    });
+
+    const icon = document.createElement('div');
+    icon.style.cssText = `
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(250, 204, 21, 0.2), rgba(250, 204, 21, 0.1));
+      border: 1px solid rgba(250, 204, 21, 0.3);
+    `;
+    icon.innerHTML = wandSvg;
+
+    const content = document.createElement('div');
+    content.style.cssText = 'flex:1;min-width:0;';
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = `
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    `;
+    titleEl.textContent = 'Use a generated password';
+    const subEl = document.createElement('div');
+    subEl.style.cssText = `
+      color: #9ca3af;
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    `;
+    subEl.textContent = isNewPassword ? 'Fills new + confirm fields' : 'Fills this password field';
+    content.appendChild(titleEl);
+    content.appendChild(subEl);
+
+    item.appendChild(icon);
+    item.appendChild(content);
+    dropdownListEl.appendChild(item);
+  }
+
   if (list.length === 0) {
+    dropdownEmptyEl.textContent = offerGenerator ? 'No saved logins' : 'No matches';
     dropdownEmptyEl.style.display = 'block';
     return;
   }
@@ -393,8 +529,40 @@ function showLoginRequiredDropdown(input: HTMLInputElement) {
   desc.textContent =
     'Click the Guardian icon in the toolbar and sign in to use autofill. Your vault stays unlocked while this browser is open.';
 
+  const genBtn = document.createElement('button');
+  genBtn.type = 'button';
+  genBtn.style.cssText = `
+    margin-top: 12px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(250, 204, 21, 0.35);
+    background: rgba(250, 204, 21, 0.12);
+    color: #fafafa;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+  `;
+  genBtn.innerHTML = `${wandSvg}<span>Generate a password</span>`;
+  genBtn.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (input.type !== 'password') return;
+    const pwd = generatePassword(20);
+    fillGeneratedPassword(input, pwd);
+    const scope = input.closest('form') || document;
+    captureFrom(scope);
+    hideDropdown();
+  });
+
   wrap.appendChild(titleRow);
   wrap.appendChild(desc);
+  if (input.type === 'password') {
+    wrap.appendChild(genBtn);
+  }
   autofillDropdown.appendChild(wrap);
 
   dropdownListEl = null;
@@ -442,6 +610,112 @@ function setInputValueNative(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event('change', { bubbles: true }));
   input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
   input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+}
+
+function generatePassword(length: number): string {
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const digits = '0123456789';
+  const symbols = '!@#$%^&*()-_=+[]{};:,.?';
+  const all = lower + upper + digits + symbols;
+
+  const rand = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  const pick = (set: string) => set[rand() % set.length];
+  const buf = new Uint32Array(Math.max(length, 8));
+  crypto.getRandomValues(buf);
+
+  const chars: string[] = [];
+  for (let i = 0; i < length; i++) {
+    chars.push(all[buf[i] % all.length]);
+  }
+
+  // Ensure a mix of character classes.
+  const ensure = (re: RegExp, set: string) => {
+    if (re.test(chars.join(''))) return;
+    const idx = buf[(chars.length + set.length) % buf.length] % chars.length;
+    chars[idx] = pick(set);
+  };
+  ensure(/[a-z]/, lower);
+  ensure(/[A-Z]/, upper);
+  ensure(/[0-9]/, digits);
+  ensure(/[^a-zA-Z0-9]/, symbols);
+
+  return chars.join('');
+}
+
+function inputTextTokens(input: HTMLInputElement): string {
+  return [
+    input.getAttribute('name') || '',
+    input.id || '',
+    input.getAttribute('aria-label') || '',
+    input.getAttribute('placeholder') || '',
+    input.autocomplete || '',
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+function isLikelyCurrentPasswordField(input: HTMLInputElement): boolean {
+  const t = inputTextTokens(input);
+  return input.autocomplete === 'current-password' || /\b(current|old)\b/.test(t);
+}
+
+function isLikelyNewPasswordField(input: HTMLInputElement): boolean {
+  const t = inputTextTokens(input);
+  return input.autocomplete === 'new-password' || /\b(new)\b/.test(t);
+}
+
+function isLikelyConfirmPasswordField(input: HTMLInputElement): boolean {
+  const t = inputTextTokens(input);
+  return /\b(confirm|repeat|verify|again)\b/.test(t);
+}
+
+function fillGeneratedPassword(startFrom: HTMLInputElement, password: string) {
+  const scope = startFrom.closest('form') || document;
+  const inputs = Array.from(scope.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
+  const candidates = inputs.filter((i) => !i.disabled && !i.readOnly);
+
+  const startIsNewish = isLikelyNewPasswordField(startFrom) || isLikelyConfirmPasswordField(startFrom);
+
+  // Always fill the focused field.
+  setInputValueNative(startFrom, password);
+
+  if (candidates.length <= 1) {
+    startFrom.focus();
+    return;
+  }
+
+  if (startIsNewish) {
+    // Change-password / sign-up flow: fill new + confirm, but avoid current/old.
+    const fillables = candidates.filter((i) => {
+      if (i === startFrom) return false;
+      if (isLikelyCurrentPasswordField(i)) return false;
+      return isLikelyNewPasswordField(i) || isLikelyConfirmPasswordField(i);
+    });
+
+    if (fillables.length > 0) {
+      fillables.forEach((i) => setInputValueNative(i, password));
+    } else if (candidates.length === 2) {
+      // Common case: only "new" + "confirm" exist but labels don't match our heuristics.
+      const other = candidates.find((i) => i !== startFrom);
+      if (other) setInputValueNative(other, password);
+    } else {
+      // Conservative fallback: fill the first password input that appears *after*
+      // the focused input and doesn't look like "current/old".
+      const after = candidates.find((i) => {
+        if (i === startFrom) return false;
+        if (isLikelyCurrentPasswordField(i)) return false;
+        return (startFrom.compareDocumentPosition(i) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+      });
+      if (after) setInputValueNative(after, password);
+    }
+  } else {
+    // Login-ish password field: only fill a confirmation field if it exists.
+    const confirm = candidates.find((i) => i !== startFrom && isLikelyConfirmPasswordField(i));
+    if (confirm) setInputValueNative(confirm, password);
+  }
+
+  startFrom.focus();
 }
 
 // Locate username + password fields starting from the current input.
@@ -622,11 +896,12 @@ async function handleInputFocus(event: FocusEvent) {
         return;
       }
       const pwdMatches: AutofillMatch[] = Array.isArray(response.matches) ? response.matches : [];
-      // Only show the dropdown when we have real credentials to offer.
-      // The save-on-submit banner already handles "no match yet → save this"
-      // after the form is submitted, so an empty dropdown on every focus
-      // would just be noise.
-      if (pwdMatches.length > 0) {
+      // For password fields we also show the dropdown when there are no matches,
+      // so the generator row (2.3) can appear.
+      if (input.type === 'password') {
+        showDropdown(input, pwdMatches);
+      } else if (pwdMatches.length > 0) {
+        // Non-password fields: only show when we have credentials to offer.
         showDropdown(input, pwdMatches);
       }
     }
@@ -780,6 +1055,12 @@ async function attemptPromptSave(
       prompt: 'none' | 'save' | 'update' | 'needs_login';
       entryId?: string;
       entryTitle?: string;
+      diff?: {
+        oldLength: number;
+        newLength: number;
+        kind: 'extended' | 'truncated' | 'replaced';
+        changedChars: number;
+      };
     }>({
       action: 'checkShouldPromptSave',
       url: cred.url,
@@ -806,6 +1087,7 @@ async function attemptPromptSave(
         credential: cred,
         entryId: response.entryId,
         entryTitle: response.entryTitle,
+        diff: response.diff,
       });
     }
 
@@ -851,6 +1133,12 @@ interface BannerOptions {
   credential: CapturedCredential;
   entryId?: string;
   entryTitle?: string;
+  diff?: {
+    oldLength: number;
+    newLength: number;
+    kind: 'extended' | 'truncated' | 'replaced';
+    changedChars: number;
+  };
 }
 
 function showSaveBanner(options: BannerOptions) {
@@ -922,11 +1210,74 @@ function showSaveBanner(options: BannerOptions) {
   const userRow = document.createElement('div');
   userRow.style.cssText = 'color:#d4d4d8;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
   userRow.textContent = options.credential.username || '(no username)';
-  const passRow = document.createElement('div');
-  passRow.style.cssText = 'color:#71717a;font-family:monospace;letter-spacing:2px;';
-  passRow.textContent = '•'.repeat(Math.min(12, options.credential.password.length));
   credsBox.appendChild(userRow);
-  credsBox.appendChild(passRow);
+
+  const masked = (len: number) => '•'.repeat(Math.min(12, Math.max(0, len)));
+
+  if (isUpdate) {
+    const oldRow = document.createElement('div');
+    oldRow.style.cssText =
+      'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px;';
+    const oldLeft = document.createElement('div');
+    oldLeft.style.cssText = 'display:flex;gap:6px;align-items:center;min-width:0;';
+    const oldLabel = document.createElement('div');
+    oldLabel.style.cssText = 'color:#a1a1aa;';
+    oldLabel.textContent = 'Saved:';
+    const oldValue = document.createElement('div');
+    oldValue.style.cssText = 'color:#71717a;font-family:monospace;letter-spacing:2px;';
+    oldValue.textContent = masked(options.diff?.oldLength ?? 0);
+    oldLeft.appendChild(oldLabel);
+    oldLeft.appendChild(oldValue);
+    const oldMeta = document.createElement('div');
+    oldMeta.style.cssText = 'color:#52525b;font-size:11px;';
+    oldMeta.textContent =
+      typeof options.diff?.oldLength === 'number' ? `(${options.diff.oldLength} chars)` : '';
+    oldRow.appendChild(oldLeft);
+    oldRow.appendChild(oldMeta);
+
+    const newRow = document.createElement('div');
+    newRow.style.cssText =
+      'display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;';
+    const newLeft = document.createElement('div');
+    newLeft.style.cssText = 'display:flex;gap:6px;align-items:center;min-width:0;';
+    const newLabel = document.createElement('div');
+    newLabel.style.cssText = 'color:#a1a1aa;';
+    newLabel.textContent = 'New:';
+    const newValue = document.createElement('div');
+    newValue.style.cssText = 'color:#e5e7eb;font-family:monospace;letter-spacing:2px;';
+    newValue.textContent = masked(options.credential.password.length);
+    newLeft.appendChild(newLabel);
+    newLeft.appendChild(newValue);
+    const newMeta = document.createElement('div');
+    newMeta.style.cssText = 'color:#52525b;font-size:11px;';
+    newMeta.textContent = `(${options.credential.password.length} chars)`;
+    newRow.appendChild(newLeft);
+    newRow.appendChild(newMeta);
+
+    const summary = document.createElement('div');
+    summary.style.cssText = 'margin-top:6px;font-size:11px;color:#71717a;line-height:1.35;';
+    const d = options.diff;
+    if (d) {
+      if (d.kind === 'extended') {
+        summary.textContent = `Looks like you added ${Math.max(1, d.newLength - d.oldLength)} character(s).`;
+      } else if (d.kind === 'truncated') {
+        summary.textContent = `Looks like you removed ${Math.max(1, d.oldLength - d.newLength)} character(s).`;
+      } else {
+        summary.textContent = `Looks like ~${Math.max(1, d.changedChars)} character(s) changed.`;
+      }
+    } else {
+      summary.textContent = 'Saved password differs from what you just used.';
+    }
+
+    credsBox.appendChild(oldRow);
+    credsBox.appendChild(newRow);
+    credsBox.appendChild(summary);
+  } else {
+    const passRow = document.createElement('div');
+    passRow.style.cssText = 'color:#71717a;font-family:monospace;letter-spacing:2px;';
+    passRow.textContent = masked(options.credential.password.length);
+    credsBox.appendChild(passRow);
+  }
 
   const actions = document.createElement('div');
   actions.style.cssText = 'display:flex;gap:8px;align-items:center;';
