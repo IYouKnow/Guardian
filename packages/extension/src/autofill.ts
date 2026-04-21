@@ -670,8 +670,58 @@ function isLikelyConfirmPasswordField(input: HTMLInputElement): boolean {
   return /\b(confirm|repeat|verify|again)\b/.test(t);
 }
 
+function isVisibleInput(el: HTMLInputElement): boolean {
+  if (el.disabled || el.readOnly) return false;
+  if ((el.type || '').toLowerCase() === 'hidden') return false;
+  return el.offsetParent !== null;
+}
+
+// SPAs frequently don't use <form>. This tries to find the smallest ancestor
+// that "looks like" a login/register widget by containing a visible password
+// input and not having too many inputs overall.
+function getLikelyLoginScope(startFrom: HTMLElement): Document | HTMLElement {
+  const form = startFrom.closest('form');
+  if (form) return form;
+
+  const roleForm = startFrom.closest('[role="form"]');
+  if (roleForm) return roleForm as HTMLElement;
+
+  let el: HTMLElement | null = startFrom as HTMLElement;
+  for (let i = 0; i < 7 && el; i++) {
+    const inputs = Array.from(el.querySelectorAll('input')) as HTMLInputElement[];
+    if (inputs.length > 0 && inputs.length <= 10) {
+      const hasPwd = inputs.some((n) => (n.type || '').toLowerCase() === 'password' && isVisibleInput(n));
+      if (hasPwd) return el;
+    }
+    el = el.parentElement;
+  }
+  return document;
+}
+
+function hasNearbyVisiblePasswordField(input: HTMLInputElement): boolean {
+  // Container-based detection first.
+  const scope = getLikelyLoginScope(input);
+  if (scope !== document) return true;
+
+  // Spatial fallback: find a visible password field near this input.
+  const r = input.getBoundingClientRect();
+  const cx = (r.left + r.right) / 2;
+  const cy = (r.top + r.bottom) / 2;
+  const pwds = Array.from(document.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
+  for (const p of pwds) {
+    if (!isVisibleInput(p)) continue;
+    const pr = p.getBoundingClientRect();
+    const pcx = (pr.left + pr.right) / 2;
+    const pcy = (pr.top + pr.bottom) / 2;
+    const dx = Math.abs(pcx - cx);
+    const dy = Math.abs(pcy - cy);
+    if (dy <= 260 && dx <= 420) return true;
+  }
+  return false;
+}
+
 function fillGeneratedPassword(startFrom: HTMLInputElement, password: string) {
-  const scope = startFrom.closest('form') || document;
+  const scope = getLikelyLoginScope(startFrom);
   const inputs = Array.from(scope.querySelectorAll('input[type="password"]')) as HTMLInputElement[];
   const candidates = inputs.filter((i) => !i.disabled && !i.readOnly);
 
@@ -726,7 +776,7 @@ function findLoginFields(startFrom: HTMLInputElement): {
   password: HTMLInputElement | null;
 } {
   // Search scope: nearest form if any, else the whole document.
-  const scope: Document | HTMLElement = startFrom.closest('form') || document;
+  const scope: Document | HTMLElement = getLikelyLoginScope(startFrom);
 
   const isVisible = (el: HTMLInputElement) =>
     !el.disabled && !el.readOnly && el.offsetParent !== null;
@@ -864,8 +914,7 @@ function isLoginLikeField(input: HTMLInputElement): boolean {
 
   // Fallback: the page has a visible password field somewhere → this
   // text/email field is probably its companion username.
-  const pwdNearby = document.querySelector<HTMLInputElement>('input[type="password"]');
-  if (pwdNearby && pwdNearby.offsetParent !== null) return true;
+  if (hasNearbyVisiblePasswordField(input)) return true;
 
   return false;
 }
@@ -1286,12 +1335,18 @@ function showSaveBanner(options: BannerOptions) {
     const btn = document.createElement('button');
     btn.textContent = label;
     btn.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid ${primary ? 'rgb(250, 204, 21)' : '#27272a'};
       background: ${primary ? 'rgb(250, 204, 21)' : 'transparent'};
       color: ${primary ? '#000000' : '#d4d4d8'};
-      padding: 6px 12px;
+      padding: 6px 0;
       border-radius: 8px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       cursor: pointer;
       font-family: inherit;
@@ -1300,9 +1355,10 @@ function showSaveBanner(options: BannerOptions) {
   };
 
   const primaryBtn = makeBtn(primaryLabel, true);
+  const saveNewBtn = isUpdate ? makeBtn('Save', false) : null;
   const neverBtn = makeBtn('Never', false);
-  const laterBtn = makeBtn('Not now', false);
-  laterBtn.style.marginLeft = 'auto';
+  const laterBtn = makeBtn('Later', false);
+  laterBtn.title = 'Not now';
 
   const status = document.createElement('div');
   status.style.cssText = 'font-size:11px;margin-top:10px;line-height:1.4;display:none;';
@@ -1314,14 +1370,25 @@ function showSaveBanner(options: BannerOptions) {
     status.textContent = text;
   };
 
-  primaryBtn.onclick = async () => {
-    primaryBtn.disabled = true;
-    neverBtn.disabled = true;
-    laterBtn.disabled = true;
-    primaryBtn.textContent = 'Saving...';
+  const setDisabled = (disabled: boolean) => {
+    primaryBtn.disabled = disabled;
+    if (saveNewBtn) saveNewBtn.disabled = disabled;
+    neverBtn.disabled = disabled;
+    laterBtn.disabled = disabled;
+  };
+
+  const perform = async (intent: 'save' | 'update' | 'save_new') => {
+    setDisabled(true);
+    if (intent === 'update') primaryBtn.textContent = 'Updating...';
+    else if (intent === 'save_new') {
+      if (saveNewBtn) saveNewBtn.textContent = 'Saving...';
+    } else {
+      primaryBtn.textContent = 'Saving...';
+    }
+
     let response: any = null;
     try {
-      if (isUpdate && options.entryId) {
+      if (intent === 'update' && options.entryId) {
         response = await safeSendMessage({
           action: 'updatePassword',
           entryId: options.entryId,
@@ -1388,9 +1455,25 @@ function showSaveBanner(options: BannerOptions) {
       return;
     }
 
-    showStatus(isUpdate ? 'Password updated.' : 'Password saved.', 'ok');
+    if (intent === 'update') showStatus('Password updated.', 'ok');
+    else if (intent === 'save_new') showStatus('Password saved.', 'ok');
+    else showStatus('Password saved.', 'ok');
     window.setTimeout(() => hideSaveBanner(), 1500);
   };
+
+  primaryBtn.onclick = async () => {
+    if (isUpdate) {
+      await perform('update');
+    } else {
+      await perform('save');
+    }
+  };
+
+  if (saveNewBtn) {
+    saveNewBtn.onclick = async () => {
+      await perform('save_new');
+    };
+  }
 
   neverBtn.onclick = async () => {
     try {
@@ -1406,9 +1489,35 @@ function showSaveBanner(options: BannerOptions) {
 
   laterBtn.onclick = () => hideSaveBanner();
 
-  actions.appendChild(neverBtn);
-  actions.appendChild(laterBtn);
-  actions.appendChild(primaryBtn);
+  // Update banner: show all four actions side-by-side, equal size.
+  // Save banner: keep the original three actions.
+  if (saveNewBtn) {
+    actions.appendChild(neverBtn);
+    actions.appendChild(laterBtn);
+    const spacer = document.createElement('div');
+    spacer.style.cssText = 'width: 10px; flex: 0 0 10px;';
+    actions.appendChild(spacer);
+    actions.appendChild(saveNewBtn);
+    actions.appendChild(primaryBtn);
+  } else {
+    // Save mode: keep "Not now" aligned as the subtle escape hatch.
+    laterBtn.textContent = 'Not now';
+    laterBtn.title = '';
+    laterBtn.style.marginLeft = 'auto';
+    laterBtn.style.flex = '0 0 auto';
+    neverBtn.style.flex = '0 0 auto';
+    primaryBtn.style.flex = '0 0 auto';
+    primaryBtn.style.paddingLeft = '12px';
+    primaryBtn.style.paddingRight = '12px';
+    neverBtn.style.paddingLeft = '12px';
+    neverBtn.style.paddingRight = '12px';
+    laterBtn.style.paddingLeft = '12px';
+    laterBtn.style.paddingRight = '12px';
+
+    actions.appendChild(neverBtn);
+    actions.appendChild(laterBtn);
+    actions.appendChild(primaryBtn);
+  }
 
   wrap.appendChild(header);
   wrap.appendChild(subtitleEl);
