@@ -56,6 +56,24 @@ interface DeferredSavePrompt {
 }
 let deferredSavePrompt: DeferredSavePrompt | null = null;
 
+type PendingSaveBanner = {
+  mode: 'save' | 'update';
+  credential: { url: string; username: string; password: string };
+  entryId?: string;
+  entryTitle?: string;
+  diff?: PasswordDiffPreview;
+  at: number;
+};
+
+type SeededCapturedCredential = {
+  credential: { url: string; username: string; password: string };
+  at: number;
+};
+
+const PENDING_SAVE_TTL_MS = 90_000;
+const pendingSaveBannerByTab = new Map<number, PendingSaveBanner>();
+const seededCapturedCredentialByTab = new Map<number, SeededCapturedCredential>();
+
 /**
  * Session secrets (tokens + key material) must use **only**
  * `chrome.storage.session`: they survive popup close and service worker
@@ -474,6 +492,16 @@ async function addToNeverAskList(domain: string): Promise<void> {
   }
 }
 
+function purgeExpiredPendingSaveState() {
+  const cutoff = Date.now() - PENDING_SAVE_TTL_MS;
+  for (const [tabId, v] of pendingSaveBannerByTab.entries()) {
+    if (v.at < cutoff) pendingSaveBannerByTab.delete(tabId);
+  }
+  for (const [tabId, v] of seededCapturedCredentialByTab.entries()) {
+    if (v.at < cutoff) seededCapturedCredentialByTab.delete(tabId);
+  }
+}
+
 type PasswordDiffPreview = {
   oldLength: number;
   newLength: number;
@@ -638,6 +666,124 @@ async function classifyCapturedCredential(
       };
     }
     sendResponse({ ok: true });
+    return true;
+  }
+
+  // Best-effort seed so a fast navigation/reload doesn't lose the ability to prompt.
+  if (message.action === 'seedPendingCapturedCredential') {
+    const tabId = sender.tab?.id;
+    const c = message.credential as { url?: string; username?: string; password?: string } | undefined;
+    purgeExpiredPendingSaveState();
+    if (
+      tabId != null &&
+      c &&
+      typeof c.password === 'string' &&
+      c.password.length >= 4
+    ) {
+      seededCapturedCredentialByTab.set(tabId, {
+        credential: {
+          url: String(c.url || ''),
+          username: String(c.username || ''),
+          password: String(c.password || ''),
+        },
+        at: Date.now(),
+      });
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // Persist the currently displayed save/update banner so a full page reload
+  // can re-request it from the next content-script instance.
+  if (message.action === 'setPendingSaveBanner') {
+    const tabId = sender.tab?.id;
+    const b = message.banner as Omit<PendingSaveBanner, 'at'> | undefined;
+    purgeExpiredPendingSaveState();
+    if (tabId != null && b && b.credential && typeof b.credential.password === 'string') {
+      pendingSaveBannerByTab.set(tabId, { ...b, at: Date.now() });
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.action === 'clearPendingSaveBanner') {
+    const tabId = sender.tab?.id;
+    purgeExpiredPendingSaveState();
+    if (tabId != null) pendingSaveBannerByTab.delete(tabId);
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // Called by a fresh content script after a full reload.
+  if (message.action === 'getPendingSaveBanner') {
+    (async () => {
+      purgeExpiredPendingSaveState();
+      const tabId = sender.tab?.id;
+      if (tabId == null) {
+        sendResponse({ state: 'none' as const });
+        return;
+      }
+
+      const existing = pendingSaveBannerByTab.get(tabId);
+      if (existing) {
+        sendResponse({ state: 'banner' as const, banner: existing });
+        return;
+      }
+
+      const seeded = seededCapturedCredentialByTab.get(tabId);
+      if (!seeded) {
+        sendResponse({ state: 'none' as const });
+        return;
+      }
+
+      await loadSessionFromStorage();
+      if (!isLoggedIn || !cachedLocalKey) {
+        deferredSavePrompt = { tabId, credential: seeded.credential };
+        sendResponse({ state: 'needs_login' as const });
+        return;
+      }
+
+      const urlToUse = String(message.currentUrl || seeded.credential.url || '');
+      const result = await classifyCapturedCredential(
+        urlToUse,
+        seeded.credential.username,
+        seeded.credential.password,
+      );
+
+      if (result.prompt === 'save') {
+        const banner: PendingSaveBanner = {
+          mode: 'save',
+          credential: { ...seeded.credential, url: urlToUse },
+          at: Date.now(),
+        };
+        seededCapturedCredentialByTab.delete(tabId);
+        pendingSaveBannerByTab.set(tabId, banner);
+        sendResponse({ state: 'banner' as const, banner });
+        return;
+      }
+
+      if (result.prompt === 'update') {
+        const banner: PendingSaveBanner = {
+          mode: 'update',
+          credential: { ...seeded.credential, url: urlToUse },
+          entryId: result.entryId,
+          entryTitle: result.entryTitle,
+          diff: result.diff,
+          at: Date.now(),
+        };
+        seededCapturedCredentialByTab.delete(tabId);
+        pendingSaveBannerByTab.set(tabId, banner);
+        sendResponse({ state: 'banner' as const, banner });
+        return;
+      }
+
+      // No longer relevant.
+      seededCapturedCredentialByTab.delete(tabId);
+      sendResponse({ state: 'none' as const });
+    })().catch((err) => {
+      console.warn('getPendingSaveBanner failed', err);
+      sendResponse({ state: 'none' as const });
+    });
     return true;
   }
 

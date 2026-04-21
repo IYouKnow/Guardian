@@ -1170,6 +1170,14 @@ function ensureSaveBannerHost(): ShadowRoot {
 }
 
 function hideSaveBanner() {
+  // If the page reloads, the next content-script instance will ask the SW
+  // for any pending banner. Clearing here prevents resurrecting a banner
+  // the user already dismissed.
+  try {
+    void safeSendMessage({ action: 'clearPendingSaveBanner' });
+  } catch {
+    // ignore
+  }
   if (saveBannerHost && saveBannerHost.parentNode) {
     saveBannerHost.parentNode.removeChild(saveBannerHost);
   }
@@ -1191,6 +1199,14 @@ interface BannerOptions {
 }
 
 function showSaveBanner(options: BannerOptions) {
+  // Persist banner state in the service worker so a full navigation/reload
+  // doesn't remove the user's ability to click Save/Update.
+  try {
+    void safeSendMessage({ action: 'setPendingSaveBanner', banner: options });
+  } catch {
+    // ignore
+  }
+
   const root = ensureSaveBannerHost();
   root.innerHTML = '';
 
@@ -1455,6 +1471,13 @@ function showSaveBanner(options: BannerOptions) {
       return;
     }
 
+    // Successfully persisted: don't resurrect this banner on a reload.
+    try {
+      void safeSendMessage({ action: 'clearPendingSaveBanner' });
+    } catch {
+      // ignore
+    }
+
     if (intent === 'update') showStatus('Password updated.', 'ok');
     else if (intent === 'save_new') showStatus('Password saved.', 'ok');
     else showStatus('Password saved.', 'ok');
@@ -1540,7 +1563,10 @@ function attachCaptureListeners() {
     (event) => {
       const form = event.target as HTMLElement | null;
       const cred = captureFrom(form);
-      if (cred) attemptPromptSave(cred);
+      if (cred) {
+        void safeSendMessage({ action: 'seedPendingCapturedCredential', credential: cred });
+        attemptPromptSave(cred);
+      }
     },
     true,
   );
@@ -1555,7 +1581,10 @@ function attachCaptureListeners() {
       if (!target.value) return;
       const scope = target.closest('form') || document;
       const cred = captureFrom(scope);
-      if (cred) window.setTimeout(() => attemptPromptSave(cred), 200);
+      if (cred) {
+        void safeSendMessage({ action: 'seedPendingCapturedCredential', credential: cred });
+        window.setTimeout(() => attemptPromptSave(cred), 200);
+      }
     },
     true,
   );
@@ -1585,7 +1614,10 @@ function attachCaptureListeners() {
       if (!looksLikeSubmit) return;
       const scope = el.closest('form') || document;
       const cred = captureFrom(scope);
-      if (cred) window.setTimeout(() => attemptPromptSave(cred), 400);
+      if (cred) {
+        void safeSendMessage({ action: 'seedPendingCapturedCredential', credential: cred });
+        window.setTimeout(() => attemptPromptSave(cred), 400);
+      }
     },
     true,
   );
@@ -1649,6 +1681,40 @@ function init() {
 
   // Save-on-submit capture + prompt.
   attachCaptureListeners();
+
+  // If we navigated away quickly after a submit, the previous page's banner
+  // would be destroyed. Ask the SW if it has a pending save/update banner
+  // for this tab and restore it.
+  void (async () => {
+    try {
+      const response = await safeSendMessage<{
+        state: 'none' | 'needs_login' | 'banner';
+        banner?: BannerOptions;
+      }>({
+        action: 'getPendingSaveBanner',
+        currentUrl: window.location.href,
+      });
+      if (!response) return;
+      if (response.state === 'needs_login') {
+        const t = Date.now();
+        if (t - lastNeedsLoginSaveBannerAt >= 25_000) {
+          lastNeedsLoginSaveBannerAt = t;
+          showNeedsLoginSaveBanner();
+        }
+        return;
+      }
+      if (response.state === 'banner' && response.banner) {
+        // Use the *current* page URL for display/matching, but keep the
+        // captured username/password for save/update.
+        showSaveBanner({
+          ...response.banner,
+          credential: { ...response.banner.credential, url: window.location.href },
+        });
+      }
+    } catch {
+      // ignore
+    }
+  })();
 }
 
 // Start when DOM is ready
