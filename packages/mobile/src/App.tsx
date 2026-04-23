@@ -8,6 +8,10 @@ import type { VaultEntry } from "../../shared/crypto";
 import { loadVault, createVault } from "../../shared/crypto";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as CapacitorApp } from "@capacitor/app";
+import { clearServerSession } from "./api/serverAuth";
+import { loginToServerAndFetchVault, type ServerSession } from "./api/serverAuth";
+import { deleteEntryFromServer } from "./api/serverSync";
+import type { VaultData } from "../../shared/crypto/vault";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -43,6 +47,7 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginMode, setLoginMode] = useState<"local" | "server">("local");
   const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [masterPassword, setMasterPassword] = useState<string>("");
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
@@ -50,6 +55,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<"dark" | "half-dark" | "light">("dark");
+  const [serverSession, setServerSession] = useState<ServerSession | null>(null);
 
   const filteredPasswords = passwords.filter((p) => {
     const matchesSearch =
@@ -92,6 +98,17 @@ function App() {
       console.error("Error loading passwords from vault:", err);
       throw err;
     }
+  };
+
+  const loadPasswordsFromVaultData = (vaultData: VaultData) => {
+    const loadedPasswords = vaultData.entries.map(vaultEntryToPasswordEntry);
+    const createdAtMap = new Map<string, string>();
+    vaultData.entries.forEach((entry) => {
+      createdAtMap.set(entry.id, entry.createdAt);
+    });
+
+    setEntryCreatedAtMap(createdAtMap);
+    setPasswords(loadedPasswords);
   };
 
   const savePasswordsToVault = async (updatedPasswords: PasswordEntry[]) => {
@@ -141,30 +158,71 @@ function App() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setLoginMode("local");
     setVaultPath(null);
     setMasterPassword("");
     setPasswords([]);
     setEntryCreatedAtMap(new Map());
+    setServerSession(null);
+    clearServerSession();
   };
 
-  const handleLogin = async (path: string, password: string, vaultBytes: Uint8Array) => {
-    setVaultPath(path);
-    setMasterPassword(password);
-    
-    // Load passwords from vault using the bytes directly
-    try {
+  const handleLogin = async (mode: "local" | "server", credentials: any) => {
+    if (mode === "local") {
+      const { vaultFileName, vaultBytes, password } = credentials as {
+        vaultFileName: string;
+        vaultBytes: Uint8Array;
+        password: string;
+      };
+
+      setLoginMode("local");
+      setServerSession(null);
+      setVaultPath(vaultFileName);
+      setMasterPassword(password);
+
       await loadPasswordsFromVault(vaultBytes, password);
+
+      // Save vault to app's data directory for future use
+      const fileName = vaultFileName.endsWith(".guardian") ? vaultFileName : `${vaultFileName}.guardian`;
+
+      let binaryString = "";
+      for (let i = 0; i < vaultBytes.length; i++) {
+        binaryString += String.fromCharCode(vaultBytes[i]);
+      }
+      const base64Data = btoa(binaryString);
+
+      await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Data,
+      });
+
+      setVaultPath(fileName);
       setIsLoggedIn(true);
-    } catch (err) {
-      console.error("Failed to load vault:", err);
+      return;
     }
+
+    const { url, username, password } = credentials as {
+      url: string;
+      username: string;
+      password: string;
+    };
+
+    setLoginMode("server");
+    setVaultPath(null);
+    setMasterPassword("");
+
+    const { vault, session } = await loginToServerAndFetchVault(url, username, password);
+    setServerSession(session);
+    loadPasswordsFromVaultData(vault);
+    setIsLoggedIn(true);
   };
 
   // Handle Android back button
   useEffect(() => {
     if (!isLoggedIn) return;
 
-    const backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+    const backButtonListener = CapacitorApp.addListener('backButton', () => {
       if (showSettings) {
         // If on settings page, go back to main app
         setShowSettings(false);
@@ -306,7 +364,12 @@ function App() {
                 onDelete={(id) => {
                   const updatedPasswords = passwords.filter(p => p.id !== id);
                   setPasswords(updatedPasswords);
-                  savePasswordsToVault(updatedPasswords).catch(console.error);
+                  if (loginMode === "server" && serverSession) {
+                    deleteEntryFromServer(serverSession.serverUrl, serverSession.authToken, id)
+                      .catch(console.error);
+                  } else {
+                    savePasswordsToVault(updatedPasswords).catch(console.error);
+                  }
                 }}
                 theme={theme}
               />

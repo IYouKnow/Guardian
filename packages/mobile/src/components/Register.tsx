@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { createVault, createEmptyVault } from "../../../shared/crypto";
 
