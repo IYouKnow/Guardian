@@ -1,5 +1,6 @@
 import type { VaultEntry } from "@guardian/shared/crypto/vault";
 import { encrypt, generateNonce } from "@guardian/shared/crypto/chacha20";
+import { httpRequest } from "./http";
 
 interface ServerItem {
   id: string;
@@ -41,18 +42,14 @@ export async function pushEntriesToServer(
     items.push(await encryptEntry(serverKey, entry));
   }
 
-  const resp = await fetch(`${cleanUrl(serverUrl)}/vault/items`, {
+  const resp = await httpRequest(`${cleanUrl(serverUrl)}/vault/items`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${authToken}`,
-    },
-    body: JSON.stringify(items),
+    headers: { Authorization: `Bearer ${authToken}` },
+    json: items,
   });
 
   if (!resp.ok) {
-    const body = await resp.text().catch(() => "");
-    throw new Error(`Server push failed (${resp.status}): ${body}`);
+    throw new Error(`Server push failed (${resp.status}): ${resp.text}`);
   }
 }
 
@@ -61,13 +58,12 @@ export async function deleteEntryFromServer(
   authToken: string,
   id: string,
 ): Promise<void> {
-  const resp = await fetch(`${cleanUrl(serverUrl)}/vault/items/${encodeURIComponent(id)}`, {
+  const resp = await httpRequest(`${cleanUrl(serverUrl)}/vault/items/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${authToken}` },
   });
 
   if (!resp.ok && resp.status !== 404) {
-    const body = await resp.text().catch(() => "");
-    throw new Error(`Server delete failed (${resp.status}): ${body}`);
+    throw new Error(`Server delete failed (${resp.status}): ${resp.text}`);
   }
 }

@@ -36,6 +36,28 @@ export default function Login({ onLogin }: LoginProps) {
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  const friendlyError = (raw: string) => {
+    const msg = (raw || "").trim();
+    if (!msg) return "Login failed.";
+
+    const lower = msg.toLowerCase();
+    const looksLikeNetwork =
+      lower.includes("failed to fetch") ||
+      lower.includes("network request failed") ||
+      lower.includes("network") ||
+      lower.includes("timeout") ||
+      lower.includes("connection");
+
+    if (!looksLikeNetwork) return msg;
+
+    const urlLower = serverUrl.trim().toLowerCase();
+    if (urlLower.includes("localhost") || urlLower.includes("127.0.0.1")) {
+      return "Can't reach localhost from Android. Use your LAN IP (e.g. 192.168.x.x) or (on Android emulator) 10.0.2.2 instead.";
+    }
+
+    return "Failed to reach server. Check the address/port and that your device is on the same network.";
+  };
+
   const canSubmit = useMemo(() => {
     if (screen === "choose") return false;
     if (password.length < 8) return false;
@@ -121,7 +143,7 @@ export default function Login({ onLogin }: LoginProps) {
       setPassword("");
     } catch (err) {
       console.error("Login failed:", err);
-      setLoginError(err instanceof Error ? err.message : "Login failed.");
+      setLoginError(friendlyError(err instanceof Error ? err.message : "Login failed."));
       setIsLoading(false);
     }
   };
@@ -331,7 +353,7 @@ export default function Login({ onLogin }: LoginProps) {
             disabled={isLoading || !canSubmit}
             className="w-full rounded-2xl bg-yellow-400 text-black py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90"
           >
-            {isLoading ? (mode === "server" ? "Signing in…" : "Unlocking…") : mode === "server" ? "Sign in" : "Unlock"}
+            {isLoading ? (mode === "server" ? "Signing in..." : "Unlocking...") : mode === "server" ? "Sign in" : "Unlock"}
           </button>
           <p className="text-xs text-gray-500 text-center mt-3">
             {mode === "server"

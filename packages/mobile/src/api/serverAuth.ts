@@ -1,6 +1,8 @@
 import type { VaultEntry, VaultData } from "@guardian/shared/crypto/vault";
 import { deriveKey } from "@guardian/shared/crypto/argon2";
 import { decrypt } from "@guardian/shared/crypto/chacha20";
+import { httpRequest } from "./http";
+import { sha256 } from "./sha256";
 
 export interface ServerAuthResponse {
   token: string;
@@ -56,19 +58,71 @@ function ensureUrlHasScheme(input: string): string {
 }
 
 async function deriveServerKey(password: string, username: string): Promise<Uint8Array> {
-  const encoder = new TextEncoder();
-  const saltBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(username));
-  const salt = new Uint8Array(saltBuffer).slice(0, 16);
+  const salt = sha256(new TextEncoder().encode(username)).slice(0, 16);
   return deriveKey(password, salt);
 }
 
-async function readErrorBody(response: Response): Promise<string> {
+function errorMessageFromHttpResult(result: { status: number; text: string }): string {
+  const body = result.text.trim();
+  if (body) return body;
+  if (result.status === 401) return "Authentication failed";
+  return `Request failed (${result.status})`;
+}
+
+function isLocalhostUrl(input: string): boolean {
   try {
-    const text = await response.text();
-    return text.trim();
+    const u = new URL(input);
+    return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "::1";
   } catch {
-    return "";
+    return false;
   }
+}
+
+async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<VaultEntry[]> {
+  const entries: VaultEntry[] = [];
+
+  for (const item of items) {
+    const raw = Uint8Array.from(atob(item.encrypted_blob), (c) => c.charCodeAt(0));
+    const nonce = raw.slice(0, 12);
+    const ciphertext = raw.slice(12);
+
+    try {
+      const plaintext = await decrypt(key, nonce, ciphertext);
+      const entryStr = new TextDecoder().decode(plaintext);
+      entries.push(JSON.parse(entryStr));
+    } catch (err) {
+      console.warn(`Failed to decrypt server item ${item.id}`, err);
+    }
+  }
+
+  return entries;
+}
+
+export async function fetchVaultFromServer(session: ServerSession): Promise<VaultData> {
+  const itemsResp = await httpRequest(`${cleanUrl(session.serverUrl)}/vault/items`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${session.authToken}` },
+  });
+
+  if (!itemsResp.ok) {
+    throw new Error(itemsResp.text || "Failed to fetch vault items");
+  }
+
+  const items = (itemsResp.json ?? []) as VaultItem[];
+  const entries = await decryptVaultItems(items, session.serverKey);
+
+  if (items.length > 0 && entries.length === 0) {
+    throw new Error(
+      "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
+    );
+  }
+
+  return {
+    entries,
+    createdAt: new Date().toISOString(),
+    lastModified: new Date().toISOString(),
+    settings: { theme: "dark" },
+  };
 }
 
 export async function loginToServerAndFetchVault(
@@ -82,52 +136,49 @@ export async function loginToServerAndFetchVault(
   if (password.length < 8) throw new Error("Password must be at least 8 characters.");
 
   // 1) Auth
-  const authResp = await fetch(`${base}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
+  let auth: ServerAuthResponse;
+  try {
+    const authResp = await httpRequest(`${base}/auth/login`, {
+      method: "POST",
+      json: { username, password },
+    });
 
-  if (!authResp.ok) {
-    const body = await readErrorBody(authResp);
-    throw new Error(body || "Authentication failed");
+    if (!authResp.ok) {
+      throw new Error(errorMessageFromHttpResult(authResp));
+    }
+
+    auth = authResp.json as ServerAuthResponse;
+    if (!auth?.token) throw new Error("Authentication failed");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to reach server";
+    if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+      if (isLocalhostUrl(base)) {
+        throw new Error(
+          "Can't reach your server at localhost from Android. Use your LAN IP (e.g. 192.168.x.x) or (on Android emulator) 10.0.2.2 instead.",
+        );
+      }
+      throw new Error(`Failed to reach server. Check the address and that the device can access it. (${base})`);
+    }
+    throw err;
   }
 
-  const auth = (await authResp.json()) as ServerAuthResponse;
   const token = auth.token;
 
   // 2) Derive per-user server key
   const key = await deriveServerKey(password, username);
 
   // 3) Fetch items
-  const itemsResp = await fetch(`${base}/vault/items`, {
+  const itemsResp = await httpRequest(`${base}/vault/items`, {
+    method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!itemsResp.ok) {
-    const body = await readErrorBody(itemsResp);
-    throw new Error(body || "Failed to fetch vault items");
+    throw new Error(itemsResp.text || "Failed to fetch vault items");
   }
 
-  const items = (await itemsResp.json()) as VaultItem[];
-  const entries: VaultEntry[] = [];
-  let decryptFailures = 0;
-
-  // 4) Decrypt items
-  for (const item of items) {
-    const raw = Uint8Array.from(atob(item.encrypted_blob), (c) => c.charCodeAt(0));
-    const nonce = raw.slice(0, 12);
-    const ciphertext = raw.slice(12);
-
-    try {
-      const plaintext = await decrypt(key, nonce, ciphertext);
-      const entryStr = new TextDecoder().decode(plaintext);
-      entries.push(JSON.parse(entryStr));
-    } catch (err) {
-      decryptFailures++;
-      console.warn(`Failed to decrypt server item ${item.id}`, err);
-    }
-  }
+  const items = (itemsResp.json ?? []) as VaultItem[];
+  const entries = await decryptVaultItems(items, key);
 
   if (items.length > 0 && entries.length === 0) {
     throw new Error(
