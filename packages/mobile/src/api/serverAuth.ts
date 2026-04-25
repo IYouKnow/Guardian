@@ -78,10 +78,18 @@ function isLocalhostUrl(input: string): boolean {
   }
 }
 
+const warnedDecryptIds = new Set<string>();
+
 async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<VaultEntry[]> {
   const entries: VaultEntry[] = [];
 
   for (const item of items) {
+    // Desktop stores vault settings under a reserved id. Mobile currently doesn't use it,
+    // but if we don't skip it, it shows up as an "Untitled" password entry.
+    if (item.id === "settings") {
+      continue;
+    }
+
     const raw = Uint8Array.from(atob(item.encrypted_blob), (c) => c.charCodeAt(0));
     const nonce = raw.slice(0, 12);
     const ciphertext = raw.slice(12);
@@ -91,7 +99,11 @@ async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<V
       const entryStr = new TextDecoder().decode(plaintext);
       entries.push(JSON.parse(entryStr));
     } catch (err) {
-      console.warn(`Failed to decrypt server item ${item.id}`, err);
+      if (!warnedDecryptIds.has(item.id)) {
+        warnedDecryptIds.add(item.id);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`Failed to decrypt server item ${item.id}: ${msg}`);
+      }
     }
   }
 
@@ -99,7 +111,7 @@ async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<V
 }
 
 export async function fetchVaultFromServer(session: ServerSession): Promise<VaultData> {
-  const itemsResp = await httpRequest(`${cleanUrl(session.serverUrl)}/vault/items`, {
+  const itemsResp = await httpRequest(`${cleanUrl(session.serverUrl)}/vault/items?ts=${Date.now()}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${session.authToken}` },
   });
@@ -123,6 +135,22 @@ export async function fetchVaultFromServer(session: ServerSession): Promise<Vaul
     lastModified: new Date().toISOString(),
     settings: { theme: "dark" },
   };
+}
+
+export async function fetchVaultItemIdsFromServer(session: ServerSession): Promise<string[]> {
+  const itemsResp = await httpRequest(`${cleanUrl(session.serverUrl)}/vault/items?ts=${Date.now()}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${session.authToken}` },
+  });
+
+  if (!itemsResp.ok) {
+    throw new Error(itemsResp.text || "Failed to fetch vault items");
+  }
+
+  const items = (itemsResp.json ?? []) as Array<{ id?: string }>;
+  return items
+    .map((i) => i.id ?? "")
+    .filter((id) => id && id !== "settings");
 }
 
 export async function loginToServerAndFetchVault(

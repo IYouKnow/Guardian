@@ -897,6 +897,17 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 	defer stmt.Close()
 
 	for _, item := range items {
+		// Allow clients to delete items via the same PUT endpoint (useful when DELETE is blocked).
+		// Convention: revision <= 0 OR empty encrypted_blob indicates a tombstone delete.
+		if item.Revision <= 0 || strings.TrimSpace(item.EncryptedBlob) == "" {
+			if _, err := tx.Exec("DELETE FROM vault_items WHERE id = ?", item.ID); err != nil {
+				tx.Rollback()
+				http.Error(w, "Delete failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			continue
+		}
+
 		_, err := stmt.Exec(item.ID, item.EncryptedBlob, item.Revision)
 		if err != nil {
 			tx.Rollback()

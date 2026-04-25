@@ -4,13 +4,15 @@ import type { PasswordEntry } from "./types";
 import Login from "./components/Login";
 import PasswordGrid from "./components/PasswordGrid";
 import Settings from "./components/Settings";
+import PasswordDetail from "./components/PasswordDetail";
+import PasswordForm from "./components/PasswordForm";
 import type { VaultEntry } from "@guardian/shared/crypto";
 import { loadVault, createVault } from "@guardian/shared/crypto";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as CapacitorApp } from "@capacitor/app";
 import { clearServerSession } from "./api/serverAuth";
-import { fetchVaultFromServer, loginToServerAndFetchVault, type ServerSession } from "./api/serverAuth";
-import { deleteEntryFromServer } from "./api/serverSync";
+import { fetchVaultFromServer, fetchVaultItemIdsFromServer, loginToServerAndFetchVault, type ServerSession } from "./api/serverAuth";
+import { deleteEntryFromServer, deleteEntryViaUpsertToServer, pushEntriesToServer } from "./api/serverSync";
 import type { VaultData } from "@guardian/shared/crypto/vault";
 import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
 import { getThemeClasses, toSharedTheme } from "./utils/theme";
@@ -76,6 +78,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<"dark" | "half-dark" | "light">("dark");
   const [serverSession, setServerSession] = useState<ServerSession | null>(null);
+  const [activeView, setActiveView] = useState<"list" | "detail" | "add" | "edit">("list");
+  const [activePasswordId, setActivePasswordId] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const { lastEvent } = useSSE(
     loginMode === "server" ? serverSession?.serverUrl ?? null : null,
     loginMode === "server" ? serverSession?.authToken ?? null : null,
@@ -188,18 +193,25 @@ function App() {
     setPasswords([]);
     setEntryCreatedAtMap(new Map());
     setServerSession(null);
+    setActiveView("list");
+    setActivePasswordId(null);
     clearServerSession();
   };
 
+  const activePassword = activePasswordId ? passwords.find((p) => p.id === activePasswordId) : undefined;
+
   const syncInFlightRef = useRef(false);
   const lastSyncAtRef = useRef(0);
+  const mutationInFlightRef = useRef(false);
+  const suppressServerVaultUpdatedUntilRef = useRef(0);
 
-  const syncFromServer = useCallback(async () => {
+  const syncFromServer = useCallback(async (opts?: { force?: boolean; bypassDebounce?: boolean }) => {
     if (loginMode !== "server" || !serverSession) return;
+    if (!opts?.force && mutationInFlightRef.current) return;
     if (syncInFlightRef.current) return;
 
     const now = Date.now();
-    if (now - lastSyncAtRef.current < 1000) return; // debounce bursts
+    if (!opts?.bypassDebounce && now - lastSyncAtRef.current < 1000) return; // debounce bursts
 
     syncInFlightRef.current = true;
     try {
@@ -216,6 +228,96 @@ function App() {
       syncInFlightRef.current = false;
     }
   }, [loginMode, serverSession]);
+
+  const persistPasswords = async (updatedPasswords: PasswordEntry[], changed?: PasswordEntry) => {
+    setMutationError(null);
+    if (loginMode === "server" && serverSession && changed) {
+      const baseEntry = passwordEntryToVaultEntry(changed);
+      const originalCreatedAt = entryCreatedAtMap.get(changed.id);
+      if (originalCreatedAt) baseEntry.createdAt = originalCreatedAt;
+
+      try {
+        mutationInFlightRef.current = true;
+        await pushEntriesToServer(serverSession.serverUrl, serverSession.authToken, serverSession.serverKey, [baseEntry]);
+        suppressServerVaultUpdatedUntilRef.current = Date.now() + 2500;
+      } catch (err) {
+        console.warn("[sync] Push failed, reloading vault...", err);
+        syncFromServer({ force: true }).catch(() => undefined);
+        setMutationError(err instanceof Error ? err.message : "Save failed");
+        throw err;
+      } finally {
+        mutationInFlightRef.current = false;
+      }
+
+      // No immediate reload here: the server broadcasts `vault_updated` via SSE, and we also have polling fallback.
+      return;
+    }
+
+    await savePasswordsToVault(updatedPasswords);
+  };
+
+  const deletePassword = async (id: string) => {
+    setMutationError(null);
+    const prevPasswords = passwords;
+    const updatedPasswords = passwords.filter((p) => p.id !== id);
+    setPasswords(updatedPasswords);
+
+    if (loginMode === "server" && serverSession) {
+      try {
+        mutationInFlightRef.current = true;
+        // Prefer delete-via-upsert (PUT tombstone) since some environments block DELETE requests.
+        await deleteEntryViaUpsertToServer(serverSession.serverUrl, serverSession.authToken, id);
+        suppressServerVaultUpdatedUntilRef.current = Date.now() + 2500;
+      } catch (err) {
+        console.warn("[sync] Delete failed, reloading vault...", err);
+        syncFromServer({ force: true }).catch(() => undefined);
+        setPasswords(prevPasswords);
+        setMutationError(err instanceof Error ? err.message : "Delete failed");
+        throw err;
+      } finally {
+        mutationInFlightRef.current = false;
+      }
+
+      // Force a post-delete pull so the item can't reappear due to polling/SSE timing.
+      await syncFromServer({ force: true, bypassDebounce: true });
+
+      // Verify deletion applied on the server, but don't hard-fail the UX.
+      // Some network stacks can return stale cached GETs briefly.
+      const verifyAndRetry = async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const ids = await fetchVaultItemIdsFromServer(serverSession);
+          if (!ids.includes(id)) return true;
+
+          await deleteEntryViaUpsertToServer(serverSession.serverUrl, serverSession.authToken, id);
+          await new Promise((r) => window.setTimeout(r, 400));
+        }
+
+        // Last resort: try plain DELETE once.
+        try {
+          await deleteEntryFromServer(serverSession.serverUrl, serverSession.authToken, id);
+        } catch {
+          // ignore
+        }
+
+        const idsFinal = await fetchVaultItemIdsFromServer(serverSession);
+        return !idsFinal.includes(id);
+      };
+
+      try {
+        const ok = await verifyAndRetry();
+        if (!ok) {
+          // Don't surface as an error unless it actually reappears.
+          console.warn(`[sync] Delete verification inconclusive for item ${id} (may be cached GET).`);
+        }
+      } catch (err) {
+        console.warn("[sync] Delete verification failed", err);
+      }
+
+      // No immediate reload here: the server broadcasts `vault_updated` via SSE, and we also have polling fallback.
+    } else {
+      savePasswordsToVault(updatedPasswords).catch(console.error);
+    }
+  };
 
   const handleLogin = async (
     mode: "local" | "server",
@@ -248,6 +350,8 @@ function App() {
 
       setVaultPath(fileName);
       setIsLoggedIn(true);
+      setActiveView("list");
+      setActivePasswordId(null);
       return;
     }
 
@@ -261,6 +365,8 @@ function App() {
     setServerSession(session);
     loadPasswordsFromVaultData(vault);
     setIsLoggedIn(true);
+    setActiveView("list");
+    setActivePasswordId(null);
   };
 
   // Background sync (server mode): SSE-triggered + periodic polling fallback.
@@ -277,6 +383,7 @@ function App() {
   useEffect(() => {
     if (!isLoggedIn || loginMode !== "server" || !serverSession || !lastEvent) return;
     if (lastEvent.type === "vault_updated") {
+      if (Date.now() < suppressServerVaultUpdatedUntilRef.current) return;
       syncFromServer().catch(() => undefined);
     }
   }, [lastEvent, isLoggedIn, loginMode, serverSession, syncFromServer]);
@@ -289,6 +396,9 @@ function App() {
       if (showSettings) {
         // If on settings page, go back to main app
         setShowSettings(false);
+      } else if (activeView !== "list") {
+        setActiveView("list");
+        setActivePasswordId(null);
       } else {
         // If on main app, exit the app
         CapacitorApp.exitApp();
@@ -298,7 +408,7 @@ function App() {
     return () => {
       backButtonListener.then(listener => listener.remove());
     };
-  }, [isLoggedIn, showSettings]);
+  }, [isLoggedIn, showSettings, activeView]);
 
   // Login Page
   if (!isLoggedIn) {
@@ -333,6 +443,81 @@ function App() {
           onLogout={handleLogout}
           theme={theme}
           onThemeChange={setTheme}
+        />
+      ) : activeView === "detail" && activePassword ? (
+        <PasswordDetail
+          password={activePassword}
+          theme={theme}
+          onBack={() => {
+            setActiveView("list");
+            setActivePasswordId(null);
+          }}
+          onEdit={() => setActiveView("edit")}
+          onDelete={async () => {
+            try {
+              await deletePassword(activePassword.id);
+              setActiveView("list");
+              setActivePasswordId(null);
+            } catch (err) {
+              console.error(err);
+            }
+          }}
+          onCopyUsername={() => copyToClipboard(activePassword.username)}
+          onCopyPassword={() => copyToClipboard(activePassword.password)}
+        />
+      ) : activeView === "add" ? (
+        <PasswordForm
+          mode="add"
+          theme={theme}
+          onCancel={() => setActiveView("list")}
+          onSave={(draft) => {
+            const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+            const nowIso = new Date().toISOString();
+            const newEntry: PasswordEntry = {
+              id,
+              title: draft.title,
+              website: draft.website,
+              username: draft.username,
+              password: draft.password,
+              notes: draft.notes,
+              category: undefined,
+              favorite: false,
+              passwordStrength: undefined,
+              lastModified: nowIso,
+              tags: undefined,
+              breached: false,
+            };
+
+            const updatedPasswords = [newEntry, ...passwords];
+            setPasswords(updatedPasswords);
+            setActivePasswordId(newEntry.id);
+            setActiveView("detail");
+            persistPasswords(updatedPasswords, newEntry).catch(console.error);
+          }}
+        />
+      ) : activeView === "edit" && activePassword ? (
+        <PasswordForm
+          mode="edit"
+          theme={theme}
+          initial={activePassword}
+          onCancel={() => setActiveView("detail")}
+          onSave={(draft) => {
+            const nowIso = new Date().toISOString();
+            const updatedEntry: PasswordEntry = {
+              ...activePassword,
+              title: draft.title,
+              website: draft.website,
+              username: draft.username,
+              password: draft.password,
+              notes: draft.notes,
+              lastModified: nowIso,
+            };
+
+            const updatedPasswords = passwords.map((p) => (p.id === activePassword.id ? updatedEntry : p));
+            setPasswords(updatedPasswords);
+            setActiveView("detail");
+            persistPasswords(updatedPasswords, updatedEntry).catch(console.error);
+          }}
         />
       ) : (
         <>
@@ -407,6 +592,11 @@ function App() {
                   </p>
                 )}
               </div>
+              {mutationError && (
+                <p className="mt-2 text-xs text-red-400 px-1">
+                  {mutationError}
+                </p>
+              )}
             </div>
           </header>
 
@@ -429,26 +619,34 @@ function App() {
             ) : (
               <PasswordGrid
                 passwords={filteredPasswords}
+                onCardClick={(id) => {
+                  setActivePasswordId(id);
+                  setActiveView("detail");
+                }}
                 onCopyUsername={handleCopyUsername}
                 onCopyPassword={handleCopyPassword}
                 onDelete={(id) => {
-                  const updatedPasswords = passwords.filter(p => p.id !== id);
-                  setPasswords(updatedPasswords);
-                  if (loginMode === "server" && serverSession) {
-                    deleteEntryFromServer(serverSession.serverUrl, serverSession.authToken, id)
-                      .catch(console.error);
-                  } else {
-                    savePasswordsToVault(updatedPasswords).catch(console.error);
-                  }
+                  deletePassword(id).catch(console.error);
                 }}
                 theme={theme}
               />
             )}
           </main>
+
+          <button
+            onClick={() => setActiveView("add")}
+            className={`fixed right-4 bottom-[84px] w-14 h-14 rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-xl flex items-center justify-center z-30 active:scale-95 transition-all`}
+            title="Add"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </>
       )}
 
       {/* Bottom Navigation Bar */}
+      {activeView === "list" && !showSettings && (
       <nav className={`fixed bottom-0 left-0 right-0 ${themeClasses.navBg} border-t ${themeClasses.border} px-4 py-2 flex items-center justify-around safe-area-inset-bottom z-20`}>
           <button
             onClick={() => setShowSettings(false)}
@@ -485,6 +683,7 @@ function App() {
             <span className="text-xs">Logout</span>
           </button>
         </nav>
+      )}
     </div>
   );
 }

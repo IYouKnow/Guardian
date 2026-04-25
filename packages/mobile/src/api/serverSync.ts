@@ -53,6 +53,22 @@ export async function pushEntriesToServer(
   }
 }
 
+export async function deleteEntryViaUpsertToServer(
+  serverUrl: string,
+  authToken: string,
+  id: string,
+): Promise<void> {
+  const resp = await httpRequest(`${cleanUrl(serverUrl)}/vault/items`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${authToken}` },
+    json: [{ id, encrypted_blob: "", revision: 0 } satisfies ServerItem],
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Server delete (via upsert) failed (${resp.status}): ${resp.text}`);
+  }
+}
+
 export async function deleteEntryFromServer(
   serverUrl: string,
   authToken: string,
@@ -63,7 +79,9 @@ export async function deleteEntryFromServer(
     headers: { Authorization: `Bearer ${authToken}` },
   });
 
-  if (!resp.ok && resp.status !== 404) {
+  // The server delete endpoint is idempotent and returns 200 even if the item is missing.
+  // A 404 here usually means the route wasn't found (wrong base URL / proxy), so treat it as an error.
+  if (!resp.ok) {
     throw new Error(`Server delete failed (${resp.status}): ${resp.text}`);
   }
 }

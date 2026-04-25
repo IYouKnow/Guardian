@@ -4,6 +4,7 @@ import { getThemeClasses, toSharedTheme, type MobileTheme } from "../utils/theme
 
 interface PasswordCardProps {
   password: PasswordEntry;
+  onCardClick: () => void;
   onCopyUsername: () => void;
   onCopyPassword: () => void;
   onDelete: () => void;
@@ -12,6 +13,7 @@ interface PasswordCardProps {
 
 export default function PasswordCard({
   password,
+  onCardClick,
   onCopyUsername,
   onCopyPassword,
   onDelete,
@@ -22,7 +24,8 @@ export default function PasswordCard({
 
   return (
     <div
-      className={`group ${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl transition-all shadow-sm active:scale-[0.99]`}
+      onClick={onCardClick}
+      className={`group ${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl transition-all shadow-sm active:scale-[0.99] cursor-pointer`}
     >
       <div className="p-3 flex items-start gap-3">
         <div className="relative flex-shrink-0">

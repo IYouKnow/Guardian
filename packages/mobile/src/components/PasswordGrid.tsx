@@ -4,6 +4,7 @@ import type { MobileTheme } from "../utils/theme";
 
 interface PasswordGridProps {
   passwords: PasswordEntry[];
+  onCardClick: (id: string) => void;
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
@@ -12,6 +13,7 @@ interface PasswordGridProps {
 
 export default function PasswordGrid({
   passwords,
+  onCardClick,
   onCopyUsername,
   onCopyPassword,
   onDelete,
@@ -23,6 +25,7 @@ export default function PasswordGrid({
         <PasswordCard
           key={password.id}
           password={password}
+          onCardClick={() => onCardClick(password.id)}
           onCopyUsername={() => onCopyUsername(password.username)}
           onCopyPassword={() => onCopyPassword(password.password)}
           onDelete={() => onDelete(password.id)}
