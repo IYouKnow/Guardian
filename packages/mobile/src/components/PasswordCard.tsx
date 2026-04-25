@@ -1,6 +1,7 @@
 import type { PasswordEntry } from "../types";
 import { getAccentColorClasses } from "@guardian/shared/themes";
-import { getThemeClasses, toSharedTheme, type MobileTheme } from "../utils/theme";
+import { getThemeClasses, type MobileTheme } from "../utils/theme";
+import type { AccentColor } from "@guardian/shared/themes";
 
 interface PasswordCardProps {
   password: PasswordEntry;
@@ -9,6 +10,7 @@ interface PasswordCardProps {
   onCopyPassword: () => void;
   onDelete: () => void;
   theme?: MobileTheme;
+  accentColor: AccentColor;
 }
 
 export default function PasswordCard({
@@ -18,9 +20,10 @@ export default function PasswordCard({
   onCopyPassword,
   onDelete,
   theme = "dark",
+  accentColor,
 }: PasswordCardProps) {
   const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses("yellow", toSharedTheme(theme));
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   return (
     <div

@@ -1,18 +1,15 @@
-import type { Theme as SharedTheme } from "@guardian/shared/themes";
-import { getThemeClasses as getSharedThemeClasses } from "@guardian/shared/themes";
+import type { Theme } from "@guardian/shared/themes";
+import { getThemeClasses as getSharedThemeClasses, resolveTheme } from "@guardian/shared/themes";
 
-export type MobileTheme = "dark" | "half-dark" | "light";
+export type MobileTheme = Theme;
 
-export function toSharedTheme(theme: MobileTheme): SharedTheme {
-  if (theme === "half-dark") return "slate";
-  return theme;
-}
-
-export function getThemeClasses(theme: MobileTheme) {
-  const shared = getSharedThemeClasses(toSharedTheme(theme));
+export function getThemeClasses(theme: Theme) {
+  const resolved = resolveTheme(theme);
+  const shared = getSharedThemeClasses(resolved);
 
   return {
     ...shared,
+    // Mobile-specific aliases used by existing components/layout.
     headerBg: shared.sectionBg,
     navBg: shared.card,
   };

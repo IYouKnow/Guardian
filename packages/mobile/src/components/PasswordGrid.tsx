@@ -1,6 +1,7 @@
 import type { PasswordEntry } from "../types";
 import PasswordCard from "./PasswordCard";
 import type { MobileTheme } from "../utils/theme";
+import type { AccentColor } from "@guardian/shared/themes";
 
 interface PasswordGridProps {
   passwords: PasswordEntry[];
@@ -9,6 +10,7 @@ interface PasswordGridProps {
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
   theme?: MobileTheme;
+  accentColor: AccentColor;
 }
 
 export default function PasswordGrid({
@@ -18,6 +20,7 @@ export default function PasswordGrid({
   onCopyPassword,
   onDelete,
   theme = "dark",
+  accentColor,
 }: PasswordGridProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -30,6 +33,7 @@ export default function PasswordGrid({
           onCopyPassword={() => onCopyPassword(password.password)}
           onDelete={() => onDelete(password.id)}
           theme={theme}
+          accentColor={accentColor}
         />
       ))}
     </div>

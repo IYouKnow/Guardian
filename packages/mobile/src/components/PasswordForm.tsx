@@ -1,22 +1,23 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { PasswordEntry } from "../types";
 import type { MobileTheme } from "../utils/theme";
-import { getThemeClasses, toSharedTheme } from "../utils/theme";
-import { getAccentColorClasses } from "@guardian/shared/themes";
+import { getThemeClasses } from "../utils/theme";
+import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
 
 type Draft = Pick<PasswordEntry, "title" | "website" | "username" | "password" | "notes">;
 
 type Props = {
   mode: "add" | "edit";
   theme: MobileTheme;
+  accentColor: AccentColor;
   initial?: PasswordEntry;
   onCancel: () => void;
   onSave: (draft: Draft) => void;
 };
 
-export default function PasswordForm({ mode, theme, initial, onCancel, onSave }: Props) {
+export default function PasswordForm({ mode, theme, accentColor, initial, onCancel, onSave }: Props) {
   const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses("yellow", toSharedTheme(theme));
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   const defaultDraft = useMemo<Draft>(
     () => ({
@@ -135,4 +136,3 @@ export default function PasswordForm({ mode, theme, initial, onCancel, onSave }:
     </div>
   );
 }
-

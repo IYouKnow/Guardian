@@ -1,194 +1,160 @@
+import type { Theme, AccentColor } from "@guardian/shared/themes";
+import { getAccentColorClasses } from "@guardian/shared/themes";
+import { getThemeClasses } from "../utils/theme";
+
 interface SettingsProps {
   onBack: () => void;
   onLogout: () => void;
-  theme: "dark" | "half-dark" | "light";
-  onThemeChange: (theme: "dark" | "half-dark" | "light") => void;
+  connectionMode: "local" | "server";
+  theme: Theme;
+  accentColor: AccentColor;
+  themeSyncMode: "off" | "follow" | "sync";
+  onThemeChange: (theme: Theme) => void;
+  onAccentColorChange: (color: AccentColor) => void;
+  onThemeSyncModeChange: (mode: "off" | "follow" | "sync") => void;
 }
 
-export default function Settings({ onBack, onLogout, theme, onThemeChange }: SettingsProps) {
-  const getThemeClasses = () => {
-    if (theme === "light") {
-      return {
-        bg: "bg-white",
-        text: "text-gray-900",
-        cardBg: "bg-gray-50",
-        border: "border-gray-200",
-        textSecondary: "text-gray-600",
-        textTertiary: "text-gray-500",
-      };
-    } else if (theme === "half-dark") {
-      return {
-        bg: "bg-gray-900",
-        text: "text-gray-100",
-        cardBg: "bg-gray-800",
-        border: "border-gray-700",
-        textSecondary: "text-gray-400",
-        textTertiary: "text-gray-500",
-      };
-    } else {
-      return {
-        bg: "bg-black",
-        text: "text-white",
-        cardBg: "bg-[#0a0a0a]",
-        border: "border-[#1a1a1a]",
-        textSecondary: "text-gray-400",
-        textTertiary: "text-gray-500",
-      };
-    }
-  };
+const THEMES: Theme[] = ["system", "dark", "slate", "light", "editor", "violet"];
+const ACCENTS: AccentColor[] = ["yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red", "black"];
 
-  const themeClasses = getThemeClasses();
+export default function Settings({
+  onBack,
+  onLogout,
+  connectionMode,
+  theme,
+  accentColor,
+  themeSyncMode,
+  onThemeChange,
+  onAccentColorChange,
+  onThemeSyncModeChange,
+}: SettingsProps) {
+  const themeClasses = getThemeClasses(theme);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
+  const themeLocked = connectionMode === "server" && themeSyncMode === "follow";
 
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
       <div className={`flex items-center gap-4 px-4 pb-4 pt-12 border-b ${themeClasses.border}`}>
         <button
           onClick={onBack}
-          className={`p-2 transition-colors ${
-            theme === "light" 
-              ? "text-gray-600 hover:text-gray-900" 
-              : theme === "half-dark"
-              ? "text-gray-400 hover:text-gray-100"
-              : "text-gray-400 hover:text-white"
-          }`}
+          className={`p-2 rounded-xl ${themeClasses.hoverBg} ${themeClasses.textSecondary} active:scale-95 transition-all`}
+          title="Back"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
         </button>
-        <h2 className={`text-xl font-bold ${
-          theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-        }`}>Settings</h2>
+        <h2 className="text-xl font-bold">Settings</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-20">
         <div className="space-y-4">
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-lg p-4`}>
-            <h3 className={`font-semibold mb-3 ${
-              theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-            }`}>Theme</h3>
+          <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm ${themeLocked ? "opacity-60" : ""}`}>
+            <h3 className="font-semibold mb-3">Theme</h3>
             <div className="space-y-2">
-              <button
-                onClick={() => onThemeChange("dark")}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  theme === "dark"
-                    ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                    : theme === "light"
-                    ? "border border-gray-200 text-gray-600 hover:text-gray-900"
-                    : "border border-gray-700 text-gray-400 hover:text-gray-100"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Dark Mode</span>
-                  {theme === "dark" && (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("half-dark")}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  theme === "half-dark"
-                    ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                    : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Half Dark Mode</span>
-                  {theme === "half-dark" && (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </button>
-              <button
-                onClick={() => onThemeChange("light")}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  theme === "light"
-                    ? "bg-yellow-400/20 border-2 border-yellow-400 text-yellow-400"
-                    : `${themeClasses.border} border ${themeClasses.textSecondary} hover:${themeClasses.text}`
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Light Mode</span>
-                  {theme === "light" && (
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </button>
+              {THEMES.map((t) => {
+                const selected = t === theme;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => onThemeChange(t)}
+                    disabled={themeLocked}
+                    className={`w-full text-left px-3 py-2 rounded-xl transition-all border ${
+                      selected
+                        ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                        : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">
+                        {t === "system" ? "System" : t.charAt(0).toUpperCase() + t.slice(1)}
+                      </span>
+                      {selected && (
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-lg p-4`}>
-            <h3 className={`font-semibold mb-2 ${
-              theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-            }`}>About</h3>
-            <p className={`text-sm ${
-              theme === "light" ? "text-gray-600" : theme === "half-dark" ? "text-gray-400" : "text-gray-400"
-            }`}>
-              Guardian Password Manager
-            </p>
-            <p className={`text-xs mt-1 ${
-              theme === "light" ? "text-gray-500" : theme === "half-dark" ? "text-gray-500" : "text-gray-500"
-            }`}>
-              Version 1.0.0
-            </p>
+          <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm ${themeLocked ? "opacity-60" : ""}`}>
+            <h3 className="font-semibold mb-3">Accent</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {ACCENTS.map((c) => {
+                const a = getAccentColorClasses(c, theme);
+                const selected = c === accentColor;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => onAccentColorChange(c)}
+                    disabled={themeLocked}
+                    className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
+                      selected ? `${a.borderClass} ring-2 ${a.focusRingClass}` : themeClasses.border
+                    } ${themeClasses.hoverBg}`}
+                    title={c}
+                  >
+                    <span className="text-sm font-semibold">{c.charAt(0).toUpperCase() + c.slice(1)}</span>
+                    <span className={`w-4 h-4 rounded-md ${a.bgClass}`} />
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-lg p-4`}>
-            <h3 className={`font-semibold mb-3 ${
-              theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-            }`}>Security</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className={`text-sm ${
-                  theme === "light" ? "text-gray-600" : theme === "half-dark" ? "text-gray-400" : "text-gray-400"
-                }`}>Auto-lock</span>
-                <button className="text-yellow-400 text-sm">Off</button>
+          {connectionMode === "server" && (
+            <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm`}>
+              <h3 className="font-semibold mb-3">Sync</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={() => onThemeSyncModeChange("off")}
+                  className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                    themeSyncMode === "off"
+                      ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                      : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                  }`}
+                >
+                  <p className="text-sm font-semibold">Off</p>
+                  <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>Keep theme local to this device.</p>
+                </button>
+
+                <button
+                  onClick={() => onThemeSyncModeChange("follow")}
+                  className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                    themeSyncMode === "follow"
+                      ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                      : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                  }`}
+                >
+                  <p className="text-sm font-semibold">Follow server (locked)</p>
+                  <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>Always use server theme + accent; disable edits here.</p>
+                </button>
+
+                <button
+                  onClick={() => onThemeSyncModeChange("sync")}
+                  className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                    themeSyncMode === "sync"
+                      ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                      : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                  }`}
+                >
+                  <p className="text-sm font-semibold">Sync (two-way)</p>
+                  <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>Edits here update the server and other devices.</p>
+                </button>
               </div>
-              <div className="flex items-center justify-between">
-                <span className={`text-sm ${
-                  theme === "light" ? "text-gray-600" : theme === "half-dark" ? "text-gray-400" : "text-gray-400"
-                }`}>Biometric unlock</span>
-                <button className="text-yellow-400 text-sm">Off</button>
-              </div>
             </div>
-          </div>
-
-          <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-lg p-4`}>
-            <h3 className={`font-semibold mb-3 ${
-              theme === "light" ? "text-gray-900" : theme === "half-dark" ? "text-gray-100" : "text-white"
-            }`}>Data</h3>
-            <div className="space-y-3">
-              <button className={`w-full text-left text-sm transition-colors ${
-                theme === "light" 
-                  ? "text-gray-600 hover:text-gray-900" 
-                  : theme === "half-dark"
-                  ? "text-gray-400 hover:text-gray-100"
-                  : "text-gray-400 hover:text-white"
-              }`}>
-                Export vault
-              </button>
-              <button className={`w-full text-left text-sm transition-colors ${
-                theme === "light" 
-                  ? "text-gray-600 hover:text-gray-900" 
-                  : theme === "half-dark"
-                  ? "text-gray-400 hover:text-gray-100"
-                  : "text-gray-400 hover:text-white"
-              }`}>
-                Backup vault
-              </button>
-            </div>
-          </div>
+          )}
 
           <button
             onClick={onLogout}
-            className="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg py-3 px-4 font-medium transition-all"
+            className="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-2xl py-3 px-4 font-semibold transition-all active:scale-[0.99]"
           >
             Logout
           </button>

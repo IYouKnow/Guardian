@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import type { PasswordEntry } from "./types";
 import Login from "./components/Login";
@@ -11,11 +11,11 @@ import { loadVault, createVault } from "@guardian/shared/crypto";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as CapacitorApp } from "@capacitor/app";
 import { clearServerSession } from "./api/serverAuth";
-import { fetchVaultFromServer, fetchVaultItemIdsFromServer, loginToServerAndFetchVault, type ServerSession } from "./api/serverAuth";
+import { fetchPreferencesFromServer, fetchVaultFromServer, fetchVaultItemIdsFromServer, loginToServerAndFetchVault, savePreferencesToServer, type ServerSession } from "./api/serverAuth";
 import { deleteEntryFromServer, deleteEntryViaUpsertToServer, pushEntriesToServer } from "./api/serverSync";
-import type { VaultData } from "@guardian/shared/crypto/vault";
-import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
-import { getThemeClasses, toSharedTheme } from "./utils/theme";
+import type { VaultData, VaultSettings } from "@guardian/shared/crypto/vault";
+import { getAccentColorClasses, type AccentColor, type Theme } from "@guardian/shared/themes";
+import { getThemeClasses } from "./utils/theme";
 import { useSSE } from "./hooks/useSSE";
 
 // Helper function to convert VaultEntry to PasswordEntry
@@ -68,6 +68,17 @@ type ServerLoginCredentials = {
 };
 
 function App() {
+  type ThemeSyncMode = "off" | "follow" | "sync";
+
+  const PREF_KEYS = useMemo(
+    () => ({
+      theme: "guardian_theme",
+      accent: "guardian_accent_color",
+      themeSyncMode: "guardian_theme_sync_mode",
+    }),
+    [],
+  );
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginMode, setLoginMode] = useState<"local" | "server">("local");
   const [vaultPath, setVaultPath] = useState<string | null>(null);
@@ -76,7 +87,18 @@ function App() {
   const [entryCreatedAtMap, setEntryCreatedAtMap] = useState<Map<string, string>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const [showSettings, setShowSettings] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "half-dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>(() => {
+    const raw = localStorage.getItem("guardian_theme");
+    return (raw as Theme) || "dark";
+  });
+  const [accentColor, setAccentColor] = useState<AccentColor>(() => {
+    const raw = localStorage.getItem("guardian_accent_color");
+    return (raw as AccentColor) || "yellow";
+  });
+  const [themeSyncMode, setThemeSyncMode] = useState<ThemeSyncMode>(() => {
+    const raw = localStorage.getItem("guardian_theme_sync_mode") as ThemeSyncMode | null;
+    return raw || "off";
+  });
   const [serverSession, setServerSession] = useState<ServerSession | null>(null);
   const [activeView, setActiveView] = useState<"list" | "detail" | "add" | "edit">("list");
   const [activePasswordId, setActivePasswordId] = useState<string | null>(null);
@@ -123,9 +145,24 @@ function App() {
       
       setEntryCreatedAtMap(createdAtMap);
       setPasswords(loadedPasswords);
+      applyVaultSettings(decryptedVault.settings);
     } catch (err) {
       console.error("Error loading passwords from vault:", err);
       throw err;
+    }
+  };
+
+  const applyVaultSettings = (settings?: VaultSettings) => {
+    if (!settings) return;
+
+    if (typeof settings.theme === "string") {
+      const t = settings.theme as Theme;
+      if (loginMode === "local") setTheme(t);
+    }
+
+    if (typeof settings.accentColor === "string") {
+      const c = settings.accentColor as AccentColor;
+      if (loginMode === "local") setAccentColor(c);
     }
   };
 
@@ -138,9 +175,18 @@ function App() {
 
     setEntryCreatedAtMap(createdAtMap);
     setPasswords(loadedPasswords);
+    applyVaultSettings(vaultData.settings);
   };
 
-  const savePasswordsToVault = async (updatedPasswords: PasswordEntry[]) => {
+  const computedVaultSettings = useMemo<VaultSettings>(
+    () => ({
+      theme,
+      accentColor,
+    }),
+    [theme, accentColor],
+  );
+
+  const savePasswordsToVault = async (updatedPasswords: PasswordEntry[], overrideSettings?: VaultSettings) => {
     if (!vaultPath || !masterPassword) return;
 
     try {
@@ -156,7 +202,7 @@ function App() {
       });
       
       // Encrypt and save
-      const encryptedVault = await createVault(masterPassword, vaultEntries);
+      const encryptedVault = await createVault(masterPassword, vaultEntries, overrideSettings ?? computedVaultSettings);
       
       // Convert Uint8Array to base64 for storage
       let binaryString = '';
@@ -204,6 +250,22 @@ function App() {
   const lastSyncAtRef = useRef(0);
   const mutationInFlightRef = useRef(false);
   const suppressServerVaultUpdatedUntilRef = useRef(0);
+  const prefsPersistSigRef = useRef<string>("");
+  const prefsPersistTimerRef = useRef<number | null>(null);
+
+  const serverThemeEnabled = loginMode === "server" && themeSyncMode !== "off";
+  const serverThemeWritable = loginMode === "server" && themeSyncMode === "sync";
+  const canEditTheme = loginMode === "local" || themeSyncMode !== "follow";
+
+  const handleThemeChange = (next: Theme) => {
+    if (!canEditTheme) return;
+    setTheme(next);
+  };
+
+  const handleAccentColorChange = (next: AccentColor) => {
+    if (!canEditTheme) return;
+    setAccentColor(next);
+  };
 
   const syncFromServer = useCallback(async (opts?: { force?: boolean; bypassDebounce?: boolean }) => {
     if (loginMode !== "server" || !serverSession) return;
@@ -386,7 +448,91 @@ function App() {
       if (Date.now() < suppressServerVaultUpdatedUntilRef.current) return;
       syncFromServer().catch(() => undefined);
     }
-  }, [lastEvent, isLoggedIn, loginMode, serverSession, syncFromServer]);
+    if (lastEvent.type === "prefs_updated") {
+      if (!serverThemeEnabled) return;
+      fetchPreferencesFromServer(serverSession)
+        .then((prefs) => {
+          // Apply server prefs only when following or syncing.
+          if (!serverThemeEnabled) return;
+          if (typeof prefs.theme === "string") setTheme(prefs.theme as Theme);
+          if (typeof prefs.accentColor === "string") setAccentColor(prefs.accentColor as AccentColor);
+        })
+        .catch(() => undefined);
+    }
+  }, [lastEvent, isLoggedIn, loginMode, serverSession, syncFromServer, serverThemeEnabled]);
+
+  // Persist theme + accent changes (local vault settings or server preferences).
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const sig = `${loginMode}|${serverSession?.serverUrl ?? ""}|${theme}|${accentColor}|${themeSyncMode}|${vaultPath ?? ""}`;
+    if (sig === prefsPersistSigRef.current) return;
+
+    if (prefsPersistTimerRef.current) {
+      window.clearTimeout(prefsPersistTimerRef.current);
+    }
+
+    prefsPersistTimerRef.current = window.setTimeout(() => {
+      if (loginMode === "local") {
+        savePasswordsToVault(passwords, computedVaultSettings).catch(() => undefined);
+      } else if (loginMode === "server" && serverSession && serverThemeWritable) {
+        savePreferencesToServer(serverSession, { theme, accentColor }).catch(() => undefined);
+      }
+
+      prefsPersistSigRef.current = sig;
+    }, 400);
+
+    return () => {
+      if (prefsPersistTimerRef.current) {
+        window.clearTimeout(prefsPersistTimerRef.current);
+        prefsPersistTimerRef.current = null;
+      }
+    };
+  }, [
+    isLoggedIn,
+    loginMode,
+    serverSession,
+    theme,
+    accentColor,
+    themeSyncMode,
+    vaultPath,
+    computedVaultSettings,
+    passwords,
+    serverThemeWritable,
+  ]);
+
+  // Persist per-device theme preferences locally (even in server mode).
+  useEffect(() => {
+    localStorage.setItem(PREF_KEYS.theme, theme);
+    localStorage.setItem(PREF_KEYS.accent, accentColor);
+    localStorage.setItem(PREF_KEYS.themeSyncMode, themeSyncMode);
+  }, [PREF_KEYS, theme, accentColor, themeSyncMode]);
+
+  // When toggling Sync Theme ON in server mode, immediately pull server preferences.
+  useEffect(() => {
+    if (!isLoggedIn || loginMode !== "server" || !serverSession) return;
+    if (!serverThemeEnabled) return;
+    fetchPreferencesFromServer(serverSession)
+      .then((prefs) => {
+        if (typeof prefs.theme === "string") setTheme(prefs.theme as Theme);
+        if (typeof prefs.accentColor === "string") setAccentColor(prefs.accentColor as AccentColor);
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverThemeEnabled, isLoggedIn, loginMode, serverSession?.serverUrl, serverSession?.authToken]);
+
+  // If we enter follow mode, immediately align to server preferences and keep them locked.
+  useEffect(() => {
+    if (!isLoggedIn || loginMode !== "server" || !serverSession) return;
+    if (themeSyncMode !== "follow") return;
+
+    fetchPreferencesFromServer(serverSession)
+      .then((prefs) => {
+        if (typeof prefs.theme === "string") setTheme(prefs.theme as Theme);
+        if (typeof prefs.accentColor === "string") setAccentColor(prefs.accentColor as AccentColor);
+      })
+      .catch(() => undefined);
+  }, [themeSyncMode, isLoggedIn, loginMode, serverSession]);
 
   // Handle Android back button
   useEffect(() => {
@@ -420,8 +566,7 @@ function App() {
   }
 
   const themeClasses = getThemeClasses(theme);
-  const accentColor: AccentColor = "yellow";
-  const accentClasses = getAccentColorClasses(accentColor, toSharedTheme(theme));
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   const vaultName =
     loginMode === "server"
@@ -441,13 +586,19 @@ function App() {
         <Settings 
           onBack={() => setShowSettings(false)} 
           onLogout={handleLogout}
+          connectionMode={loginMode}
           theme={theme}
-          onThemeChange={setTheme}
+          onThemeChange={handleThemeChange}
+          accentColor={accentColor}
+          onAccentColorChange={handleAccentColorChange}
+          themeSyncMode={themeSyncMode}
+          onThemeSyncModeChange={setThemeSyncMode}
         />
       ) : activeView === "detail" && activePassword ? (
         <PasswordDetail
           password={activePassword}
           theme={theme}
+          accentColor={accentColor}
           onBack={() => {
             setActiveView("list");
             setActivePasswordId(null);
@@ -469,6 +620,7 @@ function App() {
         <PasswordForm
           mode="add"
           theme={theme}
+          accentColor={accentColor}
           onCancel={() => setActiveView("list")}
           onSave={(draft) => {
             const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -499,6 +651,7 @@ function App() {
         <PasswordForm
           mode="edit"
           theme={theme}
+          accentColor={accentColor}
           initial={activePassword}
           onCancel={() => setActiveView("detail")}
           onSave={(draft) => {
@@ -629,6 +782,7 @@ function App() {
                   deletePassword(id).catch(console.error);
                 }}
                 theme={theme}
+                accentColor={accentColor}
               />
             )}
           </main>

@@ -1,11 +1,12 @@
 import type { PasswordEntry } from "../types";
 import type { MobileTheme } from "../utils/theme";
-import { getThemeClasses, toSharedTheme } from "../utils/theme";
-import { getAccentColorClasses } from "@guardian/shared/themes";
+import { getThemeClasses } from "../utils/theme";
+import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
 
 type Props = {
   password: PasswordEntry;
   theme: MobileTheme;
+  accentColor: AccentColor;
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -16,6 +17,7 @@ type Props = {
 export default function PasswordDetail({
   password,
   theme,
+  accentColor,
   onBack,
   onEdit,
   onDelete,
@@ -23,7 +25,7 @@ export default function PasswordDetail({
   onCopyPassword,
 }: Props) {
   const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses("yellow", toSharedTheme(theme));
+  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
@@ -121,4 +123,3 @@ export default function PasswordDetail({
     </div>
   );
 }
-

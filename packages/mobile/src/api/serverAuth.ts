@@ -1,4 +1,4 @@
-import type { VaultEntry, VaultData } from "@guardian/shared/crypto/vault";
+import type { VaultEntry, VaultData, VaultSettings } from "@guardian/shared/crypto/vault";
 import { deriveKey } from "@guardian/shared/crypto/argon2";
 import { decrypt } from "@guardian/shared/crypto/chacha20";
 import { httpRequest } from "./http";
@@ -80,16 +80,14 @@ function isLocalhostUrl(input: string): boolean {
 
 const warnedDecryptIds = new Set<string>();
 
-async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<VaultEntry[]> {
+async function decryptVaultItems(
+  items: VaultItem[],
+  key: Uint8Array,
+): Promise<{ entries: VaultEntry[]; settings?: VaultSettings }> {
   const entries: VaultEntry[] = [];
+  let settings: VaultSettings | undefined;
 
   for (const item of items) {
-    // Desktop stores vault settings under a reserved id. Mobile currently doesn't use it,
-    // but if we don't skip it, it shows up as an "Untitled" password entry.
-    if (item.id === "settings") {
-      continue;
-    }
-
     const raw = Uint8Array.from(atob(item.encrypted_blob), (c) => c.charCodeAt(0));
     const nonce = raw.slice(0, 12);
     const ciphertext = raw.slice(12);
@@ -97,7 +95,11 @@ async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<V
     try {
       const plaintext = await decrypt(key, nonce, ciphertext);
       const entryStr = new TextDecoder().decode(plaintext);
-      entries.push(JSON.parse(entryStr));
+      if (item.id === "settings") {
+        settings = JSON.parse(entryStr) as VaultSettings;
+      } else {
+        entries.push(JSON.parse(entryStr));
+      }
     } catch (err) {
       if (!warnedDecryptIds.has(item.id)) {
         warnedDecryptIds.add(item.id);
@@ -107,7 +109,7 @@ async function decryptVaultItems(items: VaultItem[], key: Uint8Array): Promise<V
     }
   }
 
-  return entries;
+  return { entries, settings };
 }
 
 export async function fetchVaultFromServer(session: ServerSession): Promise<VaultData> {
@@ -121,19 +123,21 @@ export async function fetchVaultFromServer(session: ServerSession): Promise<Vaul
   }
 
   const items = (itemsResp.json ?? []) as VaultItem[];
-  const entries = await decryptVaultItems(items, session.serverKey);
+  const decrypted = await decryptVaultItems(items, session.serverKey);
+  const prefs = await fetchPreferencesFromServer(session).catch(() => ({} as VaultSettings));
+  const mergedSettings = { ...(decrypted.settings ?? {}), ...(prefs ?? {}) } as VaultSettings;
 
-  if (items.length > 0 && entries.length === 0) {
+  if (items.length > 0 && decrypted.entries.length === 0) {
     throw new Error(
       "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
     );
   }
 
   return {
-    entries,
+    entries: decrypted.entries,
     createdAt: new Date().toISOString(),
     lastModified: new Date().toISOString(),
-    settings: { theme: "dark" },
+    settings: mergedSettings,
   };
 }
 
@@ -151,6 +155,34 @@ export async function fetchVaultItemIdsFromServer(session: ServerSession): Promi
   return items
     .map((i) => i.id ?? "")
     .filter((id) => id && id !== "settings");
+}
+
+export async function fetchPreferencesFromServer(session: ServerSession): Promise<VaultSettings> {
+  const resp = await httpRequest(`${cleanUrl(session.serverUrl)}/api/preferences?ts=${Date.now()}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${session.authToken}` },
+  });
+
+  if (!resp.ok) {
+    throw new Error(resp.text || `Failed to fetch preferences (${resp.status})`);
+  }
+
+  return (resp.json ?? {}) as VaultSettings;
+}
+
+export async function savePreferencesToServer(
+  session: ServerSession,
+  prefs: Pick<VaultSettings, "theme" | "accentColor">,
+): Promise<void> {
+  const resp = await httpRequest(`${cleanUrl(session.serverUrl)}/api/preferences`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${session.authToken}` },
+    json: prefs,
+  });
+
+  if (!resp.ok) {
+    throw new Error(resp.text || `Failed to save preferences (${resp.status})`);
+  }
 }
 
 export async function loginToServerAndFetchVault(
@@ -206,9 +238,9 @@ export async function loginToServerAndFetchVault(
   }
 
   const items = (itemsResp.json ?? []) as VaultItem[];
-  const entries = await decryptVaultItems(items, key);
+  const decrypted = await decryptVaultItems(items, key);
 
-  if (items.length > 0 && entries.length === 0) {
+  if (items.length > 0 && decrypted.entries.length === 0) {
     throw new Error(
       "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
     );
@@ -223,18 +255,30 @@ export async function loginToServerAndFetchVault(
     JSON.stringify({ username: auth.username, is_admin: auth.is_admin }),
   );
 
+  const session: ServerSession = {
+    serverUrl: base,
+    authToken: token,
+    serverKey: key,
+    username,
+  };
+
+  let prefs: VaultSettings | undefined;
+  try {
+    prefs = await fetchPreferencesFromServer(session);
+  } catch {
+    prefs = undefined;
+  }
+
   return {
     vault: {
-      entries,
+      entries: decrypted.entries,
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
-      settings: { theme: "dark" },
+      settings: {
+        ...(decrypted.settings ?? {}),
+        ...(prefs ?? {}),
+      },
     },
-    session: {
-      serverUrl: base,
-      authToken: token,
-      serverKey: key,
-      username,
-    },
+    session,
   };
 }
