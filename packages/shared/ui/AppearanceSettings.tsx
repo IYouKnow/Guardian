@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import type { Theme, AccentColor } from "../themes/index";
+import type { Theme, AccentColor, ThemeSyncMode } from "../themes/index";
 import { getAccentColorClasses, getThemeClasses } from "../themes/index";
 
 interface AppearanceSettingsProps {
@@ -8,8 +8,12 @@ interface AppearanceSettingsProps {
     onThemeChange: (theme: Theme) => void;
     onAccentColorChange: (color: AccentColor) => void;
     showTitle?: boolean;
+    // Legacy (boolean) sync toggle: treated as "follow".
     syncTheme?: boolean;
     onSyncThemeChange?: (sync: boolean) => void;
+    // New: tri-state sync system (off/follow/sync).
+    themeSyncMode?: ThemeSyncMode;
+    onThemeSyncModeChange?: (mode: ThemeSyncMode) => void;
 }
 
 export const AppearanceSettings = ({
@@ -19,13 +23,22 @@ export const AppearanceSettings = ({
     onAccentColorChange,
     showTitle = true,
     syncTheme,
-    onSyncThemeChange
+    onSyncThemeChange,
+    themeSyncMode,
+    onThemeSyncModeChange,
 }: AppearanceSettingsProps) => {
     const themeClasses = getThemeClasses(theme);
     const accentClasses = getAccentColorClasses(accentColor, theme);
 
     const themes: Theme[] = ["system", "light", "dark", "slate", "editor", "violet"];
     const accents: AccentColor[] = ["black", "yellow", "blue", "green", "purple", "pink", "orange", "cyan", "red"];
+
+    const effectiveMode: ThemeSyncMode | null =
+        themeSyncMode ?? (typeof syncTheme === "boolean" ? (syncTheme ? "follow" : "off") : null);
+
+    const locked = effectiveMode === "follow";
+    const showModeControl =
+        typeof onThemeSyncModeChange === "function" && themeSyncMode !== undefined;
 
 
 
@@ -40,8 +53,8 @@ export const AppearanceSettings = ({
                 </header>
             )}
 
-            {/* Sync Theme Option */}
-            {onSyncThemeChange && typeof syncTheme !== 'undefined' && (
+            {/* Legacy Sync Theme Option */}
+            {!showModeControl && onSyncThemeChange && typeof syncTheme !== 'undefined' && (
                 <div className={`flex items-center justify-between p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border}`}>
                     <div>
                         <h3 className={`text-sm font-bold ${themeClasses.text}`}>Sync with Server</h3>
@@ -53,6 +66,41 @@ export const AppearanceSettings = ({
                     >
                         <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${syncTheme ? 'translate-x-6' : 'translate-x-0'}`} />
                     </button>
+                </div>
+            )}
+
+            {/* New tri-state Sync Mode */}
+            {showModeControl && effectiveMode && (
+                <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border} space-y-3`}>
+                    <div>
+                        <h3 className={`text-sm font-bold ${themeClasses.text}`}>Theme Sync</h3>
+                        <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
+                            Choose how this device uses server appearance preferences.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {[
+                            { id: "off" as const, title: "Off", desc: "Keep theme local to this device." },
+                            { id: "follow" as const, title: "Follow (locked)", desc: "Use server theme + accent; disable edits." },
+                            { id: "sync" as const, title: "Sync (two-way)", desc: "Edits update the server and other devices." },
+                        ].map((opt) => {
+                            const selected = effectiveMode === opt.id;
+                            return (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => onThemeSyncModeChange?.(opt.id)}
+                                    className={`text-left px-3 py-3 rounded-xl border transition-all ${selected
+                                        ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                                        : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                                        }`}
+                                >
+                                    <p className="text-sm font-bold">{opt.title}</p>
+                                    <p className={`text-xs mt-1 ${themeClasses.textMuted}`}>{opt.desc}</p>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 
@@ -68,15 +116,15 @@ export const AppearanceSettings = ({
                         return (
                             <button
                                 key={t}
-                                disabled={syncTheme}
-                                onClick={() => !syncTheme && onThemeChange(t)}
-                                className={`group flex flex-col items-center gap-3 ${syncTheme ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
+                                disabled={locked}
+                                onClick={() => !locked && onThemeChange(t)}
+                                className={`group flex flex-col items-center gap-3 ${locked ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
                             >
                                 <div className={`
                                     w-full aspect-[4/3] rounded-xl md:rounded-2xl border-2 transition-all duration-500 overflow-hidden relative
                                     ${theme === t
                                         ? `border-transparent ring-2 ${accentClasses.focusRingClass.replace('focus:', '')} shadow-xl scale-105`
-                                        : `${themeClasses.border} opacity-80 ${syncTheme ? '' : 'hover:opacity-100'}`
+                                        : `${themeClasses.border} opacity-80 ${locked ? '' : 'hover:opacity-100'}`
                                     }
                                 `}>
                                     {t === 'system' ? (
@@ -119,16 +167,16 @@ export const AppearanceSettings = ({
                         return (
                             <button
                                 key={color}
-                                disabled={syncTheme}
-                                onClick={() => !syncTheme && onAccentColorChange(color)}
+                                disabled={locked}
+                                onClick={() => !locked && onAccentColorChange(color)}
                                 className={`
                                     relative w-10 h-10 md:w-11 md:h-11 rounded-xl md:rounded-2xl transition-all duration-500 group
                                     ${isActive
                                         ? `ring-2 ring-offset-4 ring-offset-transparent ${colorClasses.focusRingClass.replace('focus:', '')} scale-110 shadow-lg`
-                                        : `${syncTheme ? '' : 'hover:scale-110 hover:opacity-100'} opacity-70`
+                                        : `${locked ? '' : 'hover:scale-110 hover:opacity-100'} opacity-70`
                                     }
                                     ${colorClasses.bgClass}
-                                    ${syncTheme ? 'opacity-30 cursor-not-allowed' : ''}
+                                    ${locked ? 'opacity-30 cursor-not-allowed' : ''}
                                 `}
                             >
                                 {isActive && (

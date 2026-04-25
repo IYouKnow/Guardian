@@ -1,5 +1,11 @@
 export type Theme = "dark" | "slate" | "light" | "editor" | "violet" | "system";
 
+// How a client should treat server-stored appearance preferences.
+// - off: ignore server preferences (local only)
+// - follow: apply server preferences and lock local edits
+// - sync: apply server preferences and allow edits that push back to server
+export type ThemeSyncMode = "off" | "follow" | "sync";
+
 export const resolveTheme = (theme: Theme): Exclude<Theme, "system"> => {
     if (theme === "system") {
         if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {

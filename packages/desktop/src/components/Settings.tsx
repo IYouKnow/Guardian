@@ -21,8 +21,8 @@ interface SettingsProps {
   onLinkAccount?: () => void;
   showNotifications: boolean;
   onShowNotificationsChange: (show: boolean) => void;
-  syncTheme: boolean;
-  onSyncThemeChange: (sync: boolean) => void;
+  themeSyncMode: "off" | "follow" | "sync";
+  onThemeSyncModeChange: (mode: "off" | "follow" | "sync") => void;
   connectionMode: "local" | "server";
 }
 
@@ -63,8 +63,8 @@ export default function Settings({
   onLinkAccount,
   showNotifications,
   onShowNotificationsChange,
-  syncTheme,
-  onSyncThemeChange,
+  themeSyncMode,
+  onThemeSyncModeChange,
   connectionMode
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
@@ -175,8 +175,8 @@ export default function Settings({
               accentColor={accentColor}
               onThemeChange={onThemeChange}
               onAccentColorChange={onAccentColorChange}
-              syncTheme={connectionMode === "server" ? syncTheme : undefined}
-              onSyncThemeChange={connectionMode === "server" ? onSyncThemeChange : undefined}
+              themeSyncMode={connectionMode === "server" ? (themeSyncMode as any) : undefined}
+              onThemeSyncModeChange={connectionMode === "server" ? onThemeSyncModeChange : undefined}
             />
 
             <div className={`h-px w-full ${themeClasses.divider} opacity-40`} />

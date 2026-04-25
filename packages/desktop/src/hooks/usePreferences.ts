@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { load, Store } from "@tauri-apps/plugin-store";
 import { Theme, AccentColor } from "../types";
+import type { ThemeSyncMode } from "@guardian/shared";
 
 
 interface Preferences {
@@ -13,7 +14,7 @@ interface Preferences {
   clipboardClearSeconds: number;
   revealCensorSeconds: number;
   showNotifications: boolean;
-  syncTheme: boolean;
+  themeSyncMode: ThemeSyncMode;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -26,7 +27,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   clipboardClearSeconds: 10,
   revealCensorSeconds: 5,
   showNotifications: true,
-  syncTheme: false,
+  themeSyncMode: "off",
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -79,7 +80,11 @@ export function usePreferences() {
         const savedClipboardClearSeconds = await store.get<number>("clipboardClearSeconds");
         const savedRevealCensorSeconds = await store.get<number>("revealCensorSeconds");
         const savedShowNotifications = await store.get<boolean>("showNotifications");
-        const savedSyncTheme = await store.get<boolean>("syncTheme");
+        const savedSyncTheme = await store.get<boolean>("syncTheme"); // legacy
+        const savedThemeSyncMode = await store.get<ThemeSyncMode>("themeSyncMode");
+
+        const resolvedThemeSyncMode =
+          savedThemeSyncMode ?? (savedSyncTheme ? "follow" : DEFAULT_PREFERENCES.themeSyncMode);
 
         setPreferences({
           theme: savedTheme ?? DEFAULT_PREFERENCES.theme,
@@ -91,7 +96,7 @@ export function usePreferences() {
           clipboardClearSeconds: savedClipboardClearSeconds ?? DEFAULT_PREFERENCES.clipboardClearSeconds,
           revealCensorSeconds: savedRevealCensorSeconds ?? DEFAULT_PREFERENCES.revealCensorSeconds,
           showNotifications: savedShowNotifications ?? DEFAULT_PREFERENCES.showNotifications,
-          syncTheme: savedSyncTheme ?? DEFAULT_PREFERENCES.syncTheme,
+          themeSyncMode: resolvedThemeSyncMode,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -164,8 +169,8 @@ export function usePreferences() {
     [updatePreference]
   );
 
-  const setSyncTheme = useCallback(
-    (sync: boolean) => updatePreference("syncTheme", sync),
+  const setThemeSyncMode = useCallback(
+    (mode: ThemeSyncMode) => updatePreference("themeSyncMode", mode),
     [updatePreference]
   );
 
@@ -179,9 +184,9 @@ export function usePreferences() {
     } catch (e) { console.error("Failed to save settings", e); }
   }, []);
 
-  // When syncTheme or serverSettings change, apply server settings if sync is ON
+  // When server settings change, apply them if theme sync is enabled.
   useEffect(() => {
-    if (!serverSettings || !preferences.syncTheme) return;
+    if (!serverSettings || preferences.themeSyncMode === "off") return;
 
     const { theme, accentColor } = serverSettings;
     const hasThemeChange = theme && theme !== preferences.theme;
@@ -189,7 +194,7 @@ export function usePreferences() {
 
     if (!hasThemeChange && !hasAccentChange) return;
 
-    console.log("[usePreferences] Sync check. Enabled:", preferences.syncTheme, "ServerSettings:", serverSettings);
+    console.log("[usePreferences] Sync check. Mode:", preferences.themeSyncMode, "ServerSettings:", serverSettings);
     if (hasThemeChange) {
       console.log("[usePreferences] Theme mismatch. Local:", preferences.theme, "Server:", theme);
     }
@@ -204,7 +209,7 @@ export function usePreferences() {
     console.log("[usePreferences] Applying updates:", updates);
     setPreferences(prev => ({ ...prev, ...updates }));
     persistSettings(updates);
-  }, [serverSettings, preferences.syncTheme, preferences.theme, preferences.accentColor, persistSettings]);
+  }, [serverSettings, preferences.themeSyncMode, preferences.theme, preferences.accentColor, persistSettings]);
 
   const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
     console.log("[usePreferences] loadFromVault called with:", vaultSettings);
@@ -229,7 +234,7 @@ export function usePreferences() {
     setClipboardClearSeconds,
     setRevealCensorSeconds,
     setShowNotifications,
-    setSyncTheme,
+    setThemeSyncMode,
     loadFromVault,
   };
 }

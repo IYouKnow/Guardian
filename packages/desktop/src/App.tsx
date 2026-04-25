@@ -20,6 +20,7 @@ import { useToast } from "./hooks/useToast";
 import { useSSE } from "./hooks/useSSE";
 import { SyncIndicator } from "@guardian/shared";
 import { motion, AnimatePresence } from "framer-motion";
+import type { Theme, AccentColor, ThemeSyncMode } from "@guardian/shared";
 
 function App() {
   const [showRegister, setShowRegister] = useState(false);
@@ -53,7 +54,7 @@ function App() {
     setClipboardClearSeconds,
     setRevealCensorSeconds,
     setShowNotifications,
-    setSyncTheme,
+    setThemeSyncMode,
     loadFromVault,
   } = usePreferences();
 
@@ -84,9 +85,8 @@ function App() {
         if (vaultData.settings) {
           await loadFromVault(vaultData.settings as any);
         }
-        setTimeout(() => {
+          setTimeout(() => {
           setIsSyncing(false);
-          setSyncedAt(Date.now());
         }, 1500);
       }
     } catch (err) {
@@ -95,12 +95,10 @@ function App() {
     }
   };
 
-  const [syncedAt, setSyncedAt] = useState<number>(0);
+  const handleThemeSyncModeChange = async (mode: ThemeSyncMode) => {
+    setThemeSyncMode(mode);
 
-  // When toggling Sync Theme ON, immediately fetch server preferences
-  const handleSyncThemeChange = async (sync: boolean) => {
-    setSyncTheme(sync);
-    if (sync && connectionMode === 'server') {
+    if (mode !== "off" && connectionMode === "server") {
       try {
         const vaultData = await syncVault();
         if (vaultData.settings) {
@@ -110,6 +108,43 @@ function App() {
         console.error("Failed to sync theme:", err);
         showError("Failed to sync theme from server");
       }
+    }
+  };
+
+  const savePrefsToServer = async (partial: { theme?: Theme; accentColor?: AccentColor }) => {
+    if (connectionMode !== "server" || !serverUrl || !authToken) return;
+
+    try {
+      await fetch(`${serverUrl}/api/preferences`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          theme: partial.theme ?? preferences.theme,
+          accentColor: partial.accentColor ?? preferences.accentColor,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save preferences to server:", err);
+      showError("Failed to sync appearance to server");
+    }
+  };
+
+  const handleThemeChange = async (nextTheme: Theme) => {
+    if (connectionMode === "server" && preferences.themeSyncMode === "follow") return;
+    setTheme(nextTheme);
+    if (connectionMode === "server" && preferences.themeSyncMode === "sync") {
+      await savePrefsToServer({ theme: nextTheme });
+    }
+  };
+
+  const handleAccentColorChange = async (nextAccent: AccentColor) => {
+    if (connectionMode === "server" && preferences.themeSyncMode === "follow") return;
+    setAccentColor(nextAccent);
+    if (connectionMode === "server" && preferences.themeSyncMode === "sync") {
+      await savePrefsToServer({ accentColor: nextAccent });
     }
   };
 
@@ -455,26 +490,26 @@ function App() {
                 exit={{ opacity: 0, x: -20 }}
                 className="flex-1 overflow-y-auto"
               >
-                <Settings
-                  viewMode={preferences.viewMode}
-                  theme={preferences.theme}
-                  itemSize={preferences.itemSize}
-                  accentColor={preferences.accentColor}
-                  onAccentColorChange={setAccentColor}
-                  onThemeChange={setTheme}
-                  onViewModeChange={setViewMode}
-                  onItemSizeChange={setItemSize}
-                  clipboardClearSeconds={preferences.clipboardClearSeconds}
-                  onClipboardClearSecondsChange={setClipboardClearSeconds}
-                  revealCensorSeconds={preferences.revealCensorSeconds}
-                  onRevealCensorSecondsChange={setRevealCensorSeconds}
-                  showNotifications={preferences.showNotifications}
-                  onShowNotificationsChange={setShowNotifications}
-                  syncTheme={preferences.syncTheme}
-                  onSyncThemeChange={handleSyncThemeChange}
-                  onSync={handleSync}
-                  connectionMode={connectionMode}
-                />
+                  <Settings
+                    viewMode={preferences.viewMode}
+                    theme={preferences.theme}
+                    itemSize={preferences.itemSize}
+                    accentColor={preferences.accentColor}
+                    onAccentColorChange={handleAccentColorChange}
+                    onThemeChange={handleThemeChange}
+                    onViewModeChange={setViewMode}
+                    onItemSizeChange={setItemSize}
+                    clipboardClearSeconds={preferences.clipboardClearSeconds}
+                    onClipboardClearSecondsChange={setClipboardClearSeconds}
+                    revealCensorSeconds={preferences.revealCensorSeconds}
+                    onRevealCensorSecondsChange={setRevealCensorSeconds}
+                    showNotifications={preferences.showNotifications}
+                    onShowNotificationsChange={setShowNotifications}
+                    themeSyncMode={preferences.themeSyncMode as any}
+                    onThemeSyncModeChange={handleThemeSyncModeChange}
+                    onSync={handleSync}
+                    connectionMode={connectionMode}
+                  />
               </motion.div>
             ) : (
               <motion.div
