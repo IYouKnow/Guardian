@@ -265,7 +265,7 @@ export default function Login({ onLogin }: LoginProps) {
                   setServerUrl(e.target.value);
                   setLoginError("");
                 }}
-                placeholder="http://192.168.1.10:8080"
+                placeholder="http://<your-lan-ip>:8080"
                 className="mt-2 w-full bg-transparent text-white placeholder-gray-600 outline-none text-base"
                 inputMode="url"
                 autoCapitalize="none"

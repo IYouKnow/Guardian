@@ -4,14 +4,14 @@ import type { PasswordEntry } from "./types";
 import Login from "./components/Login";
 import PasswordGrid from "./components/PasswordGrid";
 import Settings from "./components/Settings";
-import type { VaultEntry } from "../../shared/crypto";
-import { loadVault, createVault } from "../../shared/crypto";
+import type { VaultEntry } from "@guardian/shared/crypto";
+import { loadVault, createVault } from "@guardian/shared/crypto";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as CapacitorApp } from "@capacitor/app";
 import { clearServerSession } from "./api/serverAuth";
 import { loginToServerAndFetchVault, type ServerSession } from "./api/serverAuth";
 import { deleteEntryFromServer } from "./api/serverSync";
-import type { VaultData } from "../../shared/crypto/vault";
+import type { VaultData } from "@guardian/shared/crypto/vault";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {

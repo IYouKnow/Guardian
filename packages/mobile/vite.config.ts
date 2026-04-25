@@ -25,7 +25,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@shared': path.resolve(__dirname, '../shared'),
+      '@guardian/shared': path.resolve(__dirname, '../shared'),
     },
   },
 })

@@ -1,5 +1,5 @@
-import type { VaultEntry } from "../../../shared/crypto/vault";
-import { encrypt, generateNonce } from "../../../shared/crypto/chacha20";
+import type { VaultEntry } from "@guardian/shared/crypto/vault";
+import { encrypt, generateNonce } from "@guardian/shared/crypto/chacha20";
 
 interface ServerItem {
   id: string;
@@ -71,4 +71,3 @@ export async function deleteEntryFromServer(
     throw new Error(`Server delete failed (${resp.status}): ${body}`);
   }
 }
-

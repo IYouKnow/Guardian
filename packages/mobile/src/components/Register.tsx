@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Filesystem, Directory } from "@capacitor/filesystem";
-import { createVault, createEmptyVault } from "../../../shared/crypto";
+import { createVault, createEmptyVault } from "@guardian/shared/crypto";
 
 interface RegisterProps {
   onRegister: (vaultPath: string, masterPassword: string) => void;

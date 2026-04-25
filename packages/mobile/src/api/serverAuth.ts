@@ -1,6 +1,6 @@
-import type { VaultEntry, VaultData } from "../../../shared/crypto/vault";
-import { deriveKey } from "../../../shared/crypto/argon2";
-import { decrypt } from "../../../shared/crypto/chacha20";
+import type { VaultEntry, VaultData } from "@guardian/shared/crypto/vault";
+import { deriveKey } from "@guardian/shared/crypto/argon2";
+import { decrypt } from "@guardian/shared/crypto/chacha20";
 
 export interface ServerAuthResponse {
   token: string;
