@@ -18,6 +18,8 @@ import type { VaultData, VaultSettings } from "@guardian/shared/crypto/vault";
 import { getAccentColorClasses, type AccentColor, type Theme } from "@guardian/shared/themes";
 import { getThemeClasses } from "./utils/theme";
 import { useSSE } from "./hooks/useSSE";
+import { SensitiveClipboard } from "./plugins/SensitiveClipboard";
+import { AutofillBridge, type PendingAutofillSave } from "./plugins/AutofillBridge";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -72,6 +74,7 @@ const BIOMETRIC_LOCAL_PREF_KEY = "guardian_biometric_local_enabled";
 const BIOMETRIC_SERVER_PREF_KEY = "guardian_biometric_server_enabled";
 const BIOMETRIC_LOCAL_SERVER_ID = "guardian-app-local-vault";
 const BIOMETRIC_SERVER_PREFIX = "guardian-app-server:";
+const INTERFACE_DENSITY_KEY = "guardian_interface_density";
 
 function biometryLabel(type: BiometryType): string {
   if (type === BiometryType.FACE_ID || type === BiometryType.FACE_AUTHENTICATION) return "Face ID";
@@ -97,6 +100,7 @@ function base64ToBytes(base64: string): Uint8Array {
 
 function App() {
   type ThemeSyncMode = "off" | "follow" | "sync";
+  type InterfaceDensity = "small" | "medium" | "large";
 
   const PREF_KEYS = useMemo(
     () => ({
@@ -112,6 +116,11 @@ function App() {
   const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [masterPassword, setMasterPassword] = useState<string>("");
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
+  const [autofillInitialEntry, setAutofillInitialEntry] = useState<PasswordEntry | null>(null);
+  const [pendingAutofillSave, setPendingAutofillSave] = useState<PendingAutofillSave | null>(null);
+  const savingPendingAutofillRef = useRef(false);
+  const pendingAutofillRetryRef = useRef<number | null>(null);
+  const autoBiometricAttemptedRef = useRef(false);
   const [entryCreatedAtMap, setEntryCreatedAtMap] = useState<Map<string, string>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -126,6 +135,10 @@ function App() {
   const [themeSyncMode, setThemeSyncMode] = useState<ThemeSyncMode>(() => {
     const raw = localStorage.getItem("guardian_theme_sync_mode") as ThemeSyncMode | null;
     return raw || "off";
+  });
+  const [interfaceDensity, setInterfaceDensity] = useState<InterfaceDensity>(() => {
+    const raw = localStorage.getItem(INTERFACE_DENSITY_KEY);
+    return raw === "small" || raw === "medium" || raw === "large" ? raw : "medium";
   });
   const [biometricLocalEnabled, setBiometricLocalEnabled] = useState<boolean>(() => localStorage.getItem(BIOMETRIC_LOCAL_PREF_KEY) === "1");
   const [biometricServerEnabled, setBiometricServerEnabled] = useState<boolean>(() => localStorage.getItem(BIOMETRIC_SERVER_PREF_KEY) === "1");
@@ -245,21 +258,63 @@ function App() {
     return title.includes(q) || username.includes(q) || website.includes(q);
   });
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (
+    text: string,
+    opts?: { sensitive?: boolean; clearAfterMs?: number },
+  ): Promise<boolean> => {
+    const value = `${text ?? ""}`;
+    if (!value) return false;
+
+    if (opts?.sensitive) {
+      try {
+        const res = await SensitiveClipboard.copy({
+          text: value,
+          label: "Guardian",
+          sensitive: true,
+          clearAfterMs: opts.clearAfterMs ?? 30_000,
+        });
+        if (res?.ok) return true;
+      } catch (err) {
+        console.warn("SensitiveClipboard copy failed, falling back:", err);
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(text);
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
     } catch (err) {
-      console.error("Failed to copy:", err);
+      console.warn("Clipboard API copy failed, falling back:", err);
+    }
+
+    // Fallback for WebViews / non-secure contexts.
+    try {
+      const el = document.createElement("textarea");
+      el.value = value;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.top = "0";
+      el.style.left = "0";
+      el.style.opacity = "0";
+      el.style.pointerEvents = "none";
+      el.style.width = "1px";
+      el.style.height = "1px";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(el);
+      return ok;
+    } catch (err) {
+      console.error("Fallback copy failed:", err);
+      return false;
     }
   };
 
-  const handleCopyUsername = (username: string) => {
-    copyToClipboard(username);
-  };
+  const handleCopyUsername = (username: string) => copyToClipboard(username);
 
-  const handleCopyPassword = (password: string) => {
-    copyToClipboard(password);
-  };
+  const handleCopyPassword = (password: string) => copyToClipboard(password, { sensitive: true });
 
   const loadPasswordsFromVault = async (vaultBytes: Uint8Array, password: string) => {
     try {
@@ -669,6 +724,7 @@ function App() {
       setIsLoggedIn(true);
       setActiveView("list");
       setActivePasswordId(null);
+      refreshPendingAutofillSave().catch(() => undefined);
 
       if (biometricLocalEnabled && biometricAvailable) {
         try {
@@ -696,6 +752,7 @@ function App() {
     setIsLoggedIn(true);
     setActiveView("list");
     setActivePasswordId(null);
+    refreshPendingAutofillSave().catch(() => undefined);
 
     if (biometricServerEnabled && biometricAvailable) {
       try {
@@ -787,6 +844,10 @@ function App() {
     localStorage.setItem(PREF_KEYS.themeSyncMode, themeSyncMode);
   }, [PREF_KEYS, theme, accentColor, themeSyncMode]);
 
+  useEffect(() => {
+    localStorage.setItem(INTERFACE_DENSITY_KEY, interfaceDensity);
+  }, [interfaceDensity]);
+
   // When toggling Sync Theme ON in server mode, immediately pull server preferences.
   useEffect(() => {
     if (!isLoggedIn || loginMode !== "server" || !serverSession) return;
@@ -834,6 +895,156 @@ function App() {
       backButtonListener.then(listener => listener.remove());
     };
   }, [isLoggedIn, showSettings, activeView]);
+
+  const refreshPendingAutofillSave = useCallback(async (): Promise<PendingAutofillSave | null> => {
+    try {
+      const res = await AutofillBridge.getPendingSave();
+      const pending = res?.pending ?? null;
+      if (pending && (!pendingAutofillSave || pending.password !== pendingAutofillSave.password)) {
+        setPendingAutofillSave(pending);
+      }
+      return pending;
+    } catch {
+      // Ignore: plugin not available on this platform/build.
+      return null;
+    }
+  }, [pendingAutofillSave]);
+
+  useEffect(() => {
+    // On launch, consume any pending Android Autofill save.
+    refreshPendingAutofillSave().catch(() => undefined);
+
+    const listener = CapacitorApp.addListener("appStateChange", (state) => {
+      if (state.isActive) refreshPendingAutofillSave().catch(() => undefined);
+    });
+
+    const onVisibility = () => {
+      if (!document.hidden) refreshPendingAutofillSave().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      listener.then((l) => l.remove());
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refreshPendingAutofillSave]);
+
+  useEffect(() => {
+    // On some cold starts, plugins aren’t ready immediately; retry a few times.
+    if (pendingAutofillSave) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const retry = async () => {
+      attempts += 1;
+      const pending = await refreshPendingAutofillSave().catch(() => null);
+      if (cancelled) return;
+      if (pending) return;
+      if (attempts >= 10) return;
+      pendingAutofillRetryRef.current = window.setTimeout(retry, 800);
+    };
+
+    pendingAutofillRetryRef.current = window.setTimeout(retry, 200);
+
+    return () => {
+      cancelled = true;
+      if (pendingAutofillRetryRef.current != null) {
+        window.clearTimeout(pendingAutofillRetryRef.current);
+        pendingAutofillRetryRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshPendingAutofillSave, pendingAutofillSave]);
+
+  const buildAutofillDraft = useCallback((pending: PendingAutofillSave) => {
+    const packageName = (pending.packageName ?? "").trim();
+    const appLabel = (pending.appLabel ?? "").trim();
+    const title = appLabel || (packageName ? packageName.split(".").slice(-1)[0] : "") || "Saved Login";
+    const website = packageName ? `androidapp://${packageName}` : "";
+    const username = (pending.username ?? "").trim();
+    const password = pending.password ?? "";
+    const notes = packageName ? `Saved from Android app: ${packageName}` : undefined;
+    return { title, website, username, password, notes };
+  }, []);
+
+  const clearPendingAutofill = useCallback(() => {
+    setPendingAutofillSave(null);
+    setAutofillInitialEntry(null);
+  }, []);
+
+  const savePendingAutofill = useCallback(async () => {
+    if (!pendingAutofillSave) return;
+    if (!isLoggedIn) return;
+    if (loginMode === "server" && !serverSession) return;
+    if (savingPendingAutofillRef.current) return;
+
+    const draft = buildAutofillDraft(pendingAutofillSave);
+    if (!draft.password.trim()) return;
+
+    savingPendingAutofillRef.current = true;
+
+    const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const nowIso = new Date().toISOString();
+    const newEntry: PasswordEntry = {
+      id,
+      title: draft.title,
+      website: draft.website,
+      username: draft.username,
+      password: draft.password,
+      notes: draft.notes,
+      category: undefined,
+      favorite: false,
+      passwordStrength: undefined,
+      lastModified: nowIso,
+      tags: undefined,
+      breached: false,
+    };
+
+    setEntryCreatedAtMap((m) => {
+      const next = new Map(m);
+      next.set(id, nowIso);
+      return next;
+    });
+
+    const updatedPasswords = [newEntry, ...passwords];
+    setPasswords(updatedPasswords);
+    setActivePasswordId(id);
+    setActiveView("detail");
+
+    try {
+      await persistPasswords(updatedPasswords, newEntry);
+      await AutofillBridge.clearPendingSave().catch(() => undefined);
+      clearPendingAutofill();
+    } catch (err) {
+      console.error(err);
+      // Keep pending around for a retry.
+      setMutationError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      savingPendingAutofillRef.current = false;
+    }
+  }, [buildAutofillDraft, clearPendingAutofill, isLoggedIn, loginMode, passwords, pendingAutofillSave, serverSession]);
+
+  useEffect(() => {
+    // The user already confirmed "Save" in the system prompt; save immediately when possible.
+    if (!isLoggedIn) return;
+    if (!pendingAutofillSave) return;
+    void savePendingAutofill();
+  }, [isLoggedIn, pendingAutofillSave, savePendingAutofill]);
+
+  useEffect(() => {
+    // Server mode can’t restore the encryption key on cold start without re-auth.
+    // If biometrics are enabled, prompt immediately so we can complete the pending save.
+    if (isLoggedIn) return;
+    if (!pendingAutofillSave) return;
+    if (!biometricServerEnabled) return;
+    if (autoBiometricAttemptedRef.current) return;
+    autoBiometricAttemptedRef.current = true;
+
+    handleBiometricUnlockServer().catch(() => {
+      // If user cancels, keep pending save around; they can log in manually.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [biometricServerEnabled, isLoggedIn, pendingAutofillSave]);
 
   // Login Page
   if (!isLoggedIn) {
@@ -899,6 +1110,8 @@ function App() {
           onAccentColorChange={handleAccentColorChange}
           themeSyncMode={themeSyncMode}
           onThemeSyncModeChange={setThemeSyncMode}
+          itemSize={interfaceDensity}
+          onItemSizeChange={setInterfaceDensity}
         />
       ) : activeView === "detail" && activePassword ? (
         <PasswordDetail
@@ -920,15 +1133,20 @@ function App() {
             }
           }}
           onCopyUsername={() => copyToClipboard(activePassword.username)}
-          onCopyPassword={() => copyToClipboard(activePassword.password)}
+          onCopyPassword={() => copyToClipboard(activePassword.password, { sensitive: true })}
         />
       ) : activeView === "add" ? (
         <PasswordForm
           mode="add"
           theme={theme}
           accentColor={accentColor}
-          onCancel={() => setActiveView("list")}
+          initial={autofillInitialEntry ?? undefined}
+          onCancel={() => {
+            setAutofillInitialEntry(null);
+            setActiveView("list");
+          }}
           onSave={(draft) => {
+            setAutofillInitialEntry(null);
             const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
             const nowIso = new Date().toISOString();
             const newEntry: PasswordEntry = {
@@ -945,6 +1163,12 @@ function App() {
               tags: undefined,
               breached: false,
             };
+
+            setEntryCreatedAtMap((m) => {
+              const next = new Map(m);
+              next.set(id, nowIso);
+              return next;
+            });
 
             const updatedPasswords = [newEntry, ...passwords];
             setPasswords(updatedPasswords);
@@ -1089,12 +1313,16 @@ function App() {
                 }}
                 theme={theme}
                 accentColor={accentColor}
+                itemSize={interfaceDensity}
               />
             )}
           </main>
 
           <button
-            onClick={() => setActiveView("add")}
+            onClick={() => {
+              setAutofillInitialEntry(null);
+              setActiveView("add");
+            }}
             className={`fixed right-4 bottom-[84px] w-14 h-14 rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-xl flex items-center justify-center z-30 active:scale-95 transition-all`}
             title="Add"
           >

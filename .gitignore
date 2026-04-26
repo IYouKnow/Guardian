@@ -36,3 +36,4 @@ Desktop.ini
 packages/extension/dist/
 packages/extension/.vite/
 packages/server/server.exe
+.gradle/

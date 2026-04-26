@@ -23,6 +23,8 @@ interface SettingsProps {
   onThemeChange: (theme: Theme) => void;
   onAccentColorChange: (color: AccentColor) => void;
   onThemeSyncModeChange: (mode: "off" | "follow" | "sync") => void;
+  itemSize: "small" | "medium" | "large";
+  onItemSizeChange: (size: "small" | "medium" | "large") => void;
 }
 
 const THEMES: Theme[] = ["system", "dark", "slate", "light", "editor", "violet"];
@@ -48,6 +50,8 @@ export default function Settings({
   onThemeChange,
   onAccentColorChange,
   onThemeSyncModeChange,
+  itemSize,
+  onItemSizeChange,
 }: SettingsProps) {
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
@@ -282,6 +286,30 @@ export default function Settings({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm`}>
+            <h3 className="font-semibold mb-3">Layout</h3>
+            <div className="space-y-2">
+              <p className={`text-xs ${themeClasses.textMuted} px-1`}>Interface density</p>
+              <div className={`flex p-1 rounded-xl ${themeClasses.inputBg} border ${themeClasses.border} shadow-inner overflow-hidden`}>
+                {(["small", "medium", "large"] as const).map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => onItemSizeChange(size)}
+                    className={`flex-1 py-2 px-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
+                      itemSize === size
+                        ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border shadow-sm`
+                        : `${themeClasses.textSecondary} opacity-70 hover:opacity-100`
+                    }`}
+                    aria-label={`Interface density: ${size}`}
+                    title={size}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
