@@ -19,7 +19,7 @@ import { getAccentColorClasses, type AccentColor, type Theme } from "@guardian/s
 import { getThemeClasses } from "./utils/theme";
 import { useSSE } from "./hooks/useSSE";
 import { SensitiveClipboard } from "./plugins/SensitiveClipboard";
-import { AutofillBridge, type PendingAutofillSave } from "./plugins/AutofillBridge";
+import { AutofillBridge, type AutofillLaunchContext, type PendingAutofillSave } from "./plugins/AutofillBridge";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -153,6 +153,9 @@ function App() {
   const [activePasswordId, setActivePasswordId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [autofillNotice, setAutofillNotice] = useState<string | null>(null);
+  const [autofillLaunchContext, setAutofillLaunchContext] = useState<AutofillLaunchContext>({ inlineAuth: false, activity: "" });
+  const [autofillLaunchContextResolved, setAutofillLaunchContextResolved] = useState(false);
+  const [inlineAutofillClosing, setInlineAutofillClosing] = useState(false);
   const { lastEvent } = useSSE(
     loginMode === "server" ? serverSession?.serverUrl ?? null : null,
     loginMode === "server" ? serverSession?.authToken ?? null : null,
@@ -167,6 +170,41 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    let timer: number | null = null;
+
+    const load = async () => {
+      attempts += 1;
+      try {
+        const context = await AutofillBridge.getLaunchContext();
+        if (cancelled) return;
+        setAutofillLaunchContext(context);
+        setAutofillLaunchContextResolved(true);
+        return;
+      } catch {
+        if (cancelled) return;
+        if (attempts >= 10) {
+          setAutofillLaunchContextResolved(true);
+          return;
+        }
+        timer = window.setTimeout(load, 250);
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    AutofillBridge.setInlineAutofillServerMode({ enabled: biometricServerEnabled }).catch(() => undefined);
+  }, [biometricServerEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1067,16 +1105,26 @@ function App() {
     const prevPasswords = passwords;
     const updatedPasswords = [newEntry, ...passwords.filter((p) => p.id !== id)];
     setPasswords(updatedPasswords);
-    setActivePasswordId(id);
-    setActiveView("detail");
+    if (!autofillLaunchContext.inlineAuth) {
+      setActivePasswordId(id);
+      setActiveView("detail");
+    }
 
     try {
       await persistPasswords(updatedPasswords, newEntry);
+      if (autofillLaunchContext.inlineAuth) {
+        setInlineAutofillClosing(true);
+      }
       await AutofillBridge.ackPendingSave({ id }).catch(() => undefined);
       clearPendingAutofill();
       const appName = (pendingAutofillSave.appLabel || pendingAutofillSave.packageName || "app").trim();
       setAutofillNotice(`Saved login from ${appName}.`);
       window.setTimeout(() => setAutofillNotice(null), 3000);
+      if (autofillLaunchContext.inlineAuth) {
+        window.setTimeout(() => {
+          AutofillBridge.finishHostActivity().catch(() => undefined);
+        }, 600);
+      }
       console.warn("[autofill] pending save persisted + acked", { id });
       if (localStorage.getItem("guardian_debug_autofill") === "1") {
         console.info("[autofill] savePendingAutofill ok", { id });
@@ -1089,18 +1137,21 @@ function App() {
       }
       // Keep pending around for a retry.
       setPasswords(prevPasswords);
-      setActiveView("list");
-      setActivePasswordId(null);
+      if (!autofillLaunchContext.inlineAuth) {
+        setActiveView("list");
+        setActivePasswordId(null);
+      }
       setEntryCreatedAtMap((m) => {
         const next = new Map(m);
         next.delete(id);
         return next;
       });
+      setInlineAutofillClosing(false);
       setMutationError(err instanceof Error ? err.message : "Save failed");
     } finally {
       savingPendingAutofillRef.current = false;
     }
-  }, [buildAutofillDraft, clearPendingAutofill, isLoggedIn, loginMode, passwords, pendingAutofillSave, serverSession]);
+  }, [autofillLaunchContext.inlineAuth, buildAutofillDraft, clearPendingAutofill, isLoggedIn, loginMode, passwords, pendingAutofillSave, serverSession]);
 
   useEffect(() => {
     // The user already confirmed "Save" in the system prompt; save immediately when possible.
@@ -1118,11 +1169,94 @@ function App() {
     if (autoBiometricAttemptedRef.current) return;
     autoBiometricAttemptedRef.current = true;
 
-    handleBiometricUnlockServer().catch(() => {
+    handleBiometricUnlockServer().catch((err) => {
       // If user cancels, keep pending save around; they can log in manually.
+      if (autofillLaunchContext.inlineAuth) {
+        setMutationError(err instanceof Error ? err.message : "Biometric unlock failed");
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [biometricServerEnabled, isLoggedIn, pendingAutofillSave]);
+  }, [autofillLaunchContext.inlineAuth, biometricServerEnabled, isLoggedIn, pendingAutofillSave]);
+
+  const themeClasses = getThemeClasses(theme);
+  const accentClasses = getAccentColorClasses(accentColor, theme);
+  const inlineAutofillFlow = autofillLaunchContext.inlineAuth && (inlineAutofillClosing || !!pendingAutofillSave || !isLoggedIn);
+
+  if (!autofillLaunchContextResolved && pendingAutofillSave && biometricServerEnabled && !isLoggedIn) {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} ${themeClasses.text} px-6 py-10 flex items-center justify-center`}>
+        <div className={`w-full max-w-sm rounded-3xl ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
+          <p className="text-base font-semibold">Preparing secure save...</p>
+          <p className={`text-sm mt-2 ${themeClasses.textSecondary}`}>Guardian is getting the biometric save screen ready.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (inlineAutofillFlow) {
+    const appName = pendingAutofillSave?.appLabel || pendingAutofillSave?.packageName || "app";
+    const statusText = inlineAutofillClosing
+      ? "Saved. Closing secure save..."
+      : !isLoggedIn
+      ? (autoBiometricAttemptedRef.current ? "Confirm your identity to save this login." : "Preparing secure save...")
+      : "Saving login to your Guardian Server...";
+
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} ${themeClasses.text} px-6 py-10 flex items-center justify-center`}>
+        <div className={`w-full max-w-sm rounded-3xl ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
+          <div className={`h-12 w-12 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center mb-4`}>
+            <svg className={`w-6 h-6 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight">Save to Guardian</h1>
+          <p className={`text-sm mt-1 ${themeClasses.textSecondary}`}>{`Login from ${appName}`}</p>
+          <p className={`text-sm mt-4 ${themeClasses.textSecondary}`}>{statusText}</p>
+          {mutationError && (
+            <p className="mt-4 text-sm text-red-400">{mutationError}</p>
+          )}
+          <div className="mt-6 flex flex-col gap-3">
+            {!inlineAutofillClosing && !isLoggedIn && biometricServerEnabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMutationError(null);
+                  handleBiometricUnlockServer().catch((err) => {
+                    setMutationError(err instanceof Error ? err.message : "Biometric unlock failed");
+                  });
+                }}
+                className={`rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-3 px-4 font-semibold active:scale-[0.99] transition-all`}
+              >
+                Retry fingerprint
+              </button>
+            )}
+            {!inlineAutofillClosing && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    AutofillBridge.openMainApp().catch(() => undefined);
+                  }}
+                  className={`rounded-2xl border ${themeClasses.border} py-3 px-4 font-semibold`}
+                >
+                  Open Guardian
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    AutofillBridge.finishHostActivity().catch(() => undefined);
+                  }}
+                  className={`rounded-2xl border ${themeClasses.border} py-3 px-4 font-semibold ${themeClasses.textSecondary}`}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Login Page
   if (!isLoggedIn) {
@@ -1155,9 +1289,6 @@ function App() {
       />
     );
   }
-
-  const themeClasses = getThemeClasses(theme);
-  const accentClasses = getAccentColorClasses(accentColor, theme);
 
   const vaultName =
     loginMode === "server"

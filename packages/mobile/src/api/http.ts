@@ -39,18 +39,24 @@ export async function httpRequest(url: string, options: HttpRequestOptions = {})
   const method = options.method ?? "GET";
   const headers = normalizeHeaders(options.headers);
   const jsonBody = options.json;
+  const hasJsonBody = jsonBody !== undefined;
 
   // Prefer native HTTP on iOS/Android to avoid WebView CORS + mixed-content constraints.
   if (Capacitor.isNativePlatform()) {
-    if (jsonBody && !headers["Content-Type"] && !headers["content-type"]) {
+    if (hasJsonBody && !headers["Content-Type"] && !headers["content-type"]) {
       headers["Content-Type"] = "application/json";
     }
+    if (!headers["Accept"] && !headers["accept"]) {
+      headers["Accept"] = "application/json, text/plain, */*";
+    }
+
+    const nativeData = hasJsonBody ? JSON.stringify(jsonBody) : undefined;
 
     const resp = await CapacitorHttp.request({
       url,
       method,
       headers,
-      data: jsonBody,
+      data: nativeData,
       // Use text and parse ourselves to avoid native JSON parsing failures on empty bodies (e.g. 204).
       responseType: "text",
     });

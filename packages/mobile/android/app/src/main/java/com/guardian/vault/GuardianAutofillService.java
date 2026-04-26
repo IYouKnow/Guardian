@@ -121,8 +121,21 @@ public class GuardianAutofillService extends AutofillService {
         }
 
         // Bring Guardian to foreground to prompt the user.
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        Class<?> targetActivity = AutofillBridgePlugin.isInlineAutofillServerModeEnabled(this)
+          ? AutofillAuthActivity.class
+          : MainActivity.class;
+        Intent intent = new Intent(this, targetActivity);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_INLINE_AUTH, targetActivity == AutofillAuthActivity.class);
+        if (targetActivity == AutofillAuthActivity.class) {
+          intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+              | Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+              | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+              | Intent.FLAG_ACTIVITY_NO_ANIMATION
+          );
+        } else {
+          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        }
         startActivity(intent);
       }
 

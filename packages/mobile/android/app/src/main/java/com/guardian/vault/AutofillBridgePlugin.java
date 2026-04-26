@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
@@ -17,7 +18,15 @@ import com.getcapacitor.PluginMethod;
 @CapacitorPlugin(name = "AutofillBridge")
 public class AutofillBridgePlugin extends Plugin {
   private static final String TAG = "AutofillBridge";
+  private static final String PREFS = "guardian_autofill_config";
+  private static final String KEY_INLINE_SERVER_MODE = "inline_server_mode";
+  public static final String EXTRA_INLINE_AUTH = "guardian.inline_auth";
   private BroadcastReceiver pendingReceiver;
+
+  static boolean isInlineAutofillServerModeEnabled(Context context) {
+    SharedPreferences prefs = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    return prefs.getBoolean(KEY_INLINE_SERVER_MODE, false);
+  }
 
   @Override
   public void load() {
@@ -124,6 +133,56 @@ public class AutofillBridgePlugin extends Plugin {
 
     PendingAutofillStore.clearAll(getContext());
     Log.i(TAG, "clearPendingSave(all) ok=true");
+    JSObject res = new JSObject();
+    res.put("ok", true);
+    call.resolve(res);
+  }
+
+  @PluginMethod
+  public void getLaunchContext(PluginCall call) {
+    JSObject res = new JSObject();
+    Intent intent = getActivity() != null ? getActivity().getIntent() : null;
+    boolean inlineAuth = intent != null && intent.getBooleanExtra(EXTRA_INLINE_AUTH, false);
+    String activity = getActivity() != null ? getActivity().getClass().getSimpleName() : "";
+    res.put("inlineAuth", inlineAuth);
+    res.put("activity", activity);
+    call.resolve(res);
+  }
+
+  @PluginMethod
+  public void finishHostActivity(PluginCall call) {
+    if (getActivity() != null) {
+      getActivity().runOnUiThread(() -> {
+        try {
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getActivity().finishAndRemoveTask();
+          } else {
+            getActivity().finish();
+          }
+        } catch (Exception ignored) {
+          getActivity().finish();
+        }
+      });
+    }
+    call.resolve();
+  }
+
+  @PluginMethod
+  public void openMainApp(PluginCall call) {
+    if (getActivity() != null) {
+      Intent intent = new Intent(getActivity(), MainActivity.class);
+      intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+      getActivity().startActivity(intent);
+      getActivity().finish();
+    }
+    call.resolve();
+  }
+
+  @PluginMethod
+  public void setInlineAutofillServerMode(PluginCall call) {
+    boolean enabled = call.getBoolean("enabled", false);
+    SharedPreferences prefs = getContext().getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    prefs.edit().putBoolean(KEY_INLINE_SERVER_MODE, enabled).apply();
     JSObject res = new JSObject();
     res.put("ok", true);
     call.resolve(res);

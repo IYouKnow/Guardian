@@ -10,10 +10,19 @@ export type PendingAutofillSave = {
   timestampMs?: number;
 };
 
+export type AutofillLaunchContext = {
+  inlineAuth: boolean;
+  activity: string;
+};
+
 export interface AutofillBridgePlugin {
   getPendingSave(): Promise<{ pending: PendingAutofillSave | null }>;
   ackPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
   clearPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
+  getLaunchContext(): Promise<AutofillLaunchContext>;
+  finishHostActivity(): Promise<void>;
+  openMainApp(): Promise<void>;
+  setInlineAutofillServerMode(options: { enabled: boolean }): Promise<{ ok: boolean }>;
   addListener(
     eventName: "pendingSave",
     listenerFunc: (data: { pending: PendingAutofillSave }) => void,

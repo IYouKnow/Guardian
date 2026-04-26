@@ -1,0 +1,15 @@
+package com.guardian.vault;
+
+import android.os.Bundle;
+
+import com.getcapacitor.BridgeActivity;
+
+public class AutofillAuthActivity extends BridgeActivity {
+  @Override
+  public void onCreate(Bundle savedInstanceState) {
+    registerPlugin(SensitiveClipboardPlugin.class);
+    registerPlugin(AutofillBridgePlugin.class);
+    super.onCreate(savedInstanceState);
+    setFinishOnTouchOutside(false);
+  }
+}
