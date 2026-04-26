@@ -89,87 +89,87 @@ export default function Settings({
                   </p>
                 </div>
               )}
-              <button
-                onClick={() => onBiometricLocalEnabledChange(!biometricLocalEnabled)}
-                disabled={localToggleDisabled}
-                className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
-                  biometricLocalEnabled
-                    ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
-                    : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
-                } ${localToggleDisabled ? "opacity-60 cursor-not-allowed" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">Local vault biometric unlock</p>
-                    <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
-                      {connectionMode !== "local"
-                        ? "Switch to Local mode to change this."
-                        : biometricAvailable
+              {connectionMode === "local" && (
+                <button
+                  onClick={() => onBiometricLocalEnabledChange(!biometricLocalEnabled)}
+                  disabled={localToggleDisabled}
+                  className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                    biometricLocalEnabled
+                      ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                      : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                  } ${localToggleDisabled ? "opacity-60 cursor-not-allowed" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">Biometric unlock</p>
+                      <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
+                        {biometricAvailable
                           ? `Unlock your local vault with ${biometricTypeLabel}.`
                           : "Biometrics not available on this device."}
-                    </p>
-                  </div>
-                  <div
-                    className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
-                      biometricLocalEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
-                    }`}
-                  >
+                      </p>
+                    </div>
                     <div
-                      className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                        biometricLocalEnabled ? "translate-x-[22px]" : "translate-x-0.5"
-                      } mt-0.5`}
-                    />
+                      className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
+                        biometricLocalEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
+                      }`}
+                    >
+                      <div
+                        className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                          biometricLocalEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                        } mt-0.5`}
+                      />
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              )}
 
-              <button
-                onClick={async () => {
-                  setServerBiometricError("");
-                  if (biometricServerEnabled) {
-                    try {
-                      setServerBiometricSaving(true);
-                      await onDisableBiometricServer();
-                    } catch (err) {
-                      setServerBiometricError(err instanceof Error ? err.message : "Failed to disable biometrics");
-                    } finally {
-                      setServerBiometricSaving(false);
+              {connectionMode === "server" && (
+                <button
+                  onClick={async () => {
+                    setServerBiometricError("");
+                    if (biometricServerEnabled) {
+                      try {
+                        setServerBiometricSaving(true);
+                        await onDisableBiometricServer();
+                      } catch (err) {
+                        setServerBiometricError(err instanceof Error ? err.message : "Failed to disable biometrics");
+                      } finally {
+                        setServerBiometricSaving(false);
+                      }
+                      return;
                     }
-                    return;
-                  }
-                  setServerBiometricPending(true);
-                }}
-                disabled={serverToggleDisabled || serverBiometricSaving}
-                className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
-                  biometricServerEnabled
-                    ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
-                    : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
-                } ${(serverToggleDisabled || serverBiometricSaving) ? "opacity-60 cursor-not-allowed" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">Server biometric sign-in</p>
-                    <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
-                      {connectionMode !== "server"
-                        ? "Switch to Server mode to change this."
-                        : biometricAvailable
+                    setServerBiometricPending(true);
+                  }}
+                  disabled={serverToggleDisabled || serverBiometricSaving}
+                  className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                    biometricServerEnabled
+                      ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                      : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                  } ${(serverToggleDisabled || serverBiometricSaving) ? "opacity-60 cursor-not-allowed" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">Biometric sign-in</p>
+                      <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
+                        {biometricAvailable
                           ? `Sign in to ${serverUrl.replace(/^https?:\/\//, "")} as ${serverUsername || "your account"} using ${biometricTypeLabel}.`
                           : "Biometrics not available on this device."}
-                    </p>
-                  </div>
-                  <div
-                    className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
-                      biometricServerEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
-                    }`}
-                  >
+                      </p>
+                    </div>
                     <div
-                      className={`h-5 w-5 rounded-full bg-white transition-transform ${
-                        biometricServerEnabled ? "translate-x-[22px]" : "translate-x-0.5"
-                      } mt-0.5`}
-                    />
+                      className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
+                        biometricServerEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
+                      }`}
+                    >
+                      <div
+                        className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                          biometricServerEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                        } mt-0.5`}
+                      />
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+              )}
 
               {connectionMode === "server" && serverBiometricPending && !biometricServerEnabled && (
                 <div className={`rounded-2xl border ${themeClasses.border} p-3`}>

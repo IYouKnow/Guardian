@@ -840,6 +840,8 @@ function App() {
     return (
       <Login
         onLogin={handleLogin}
+        theme={theme}
+        accentColor={accentColor}
         biometric={{
           available: biometricAvailable,
           label: biometricTypeLabel,
