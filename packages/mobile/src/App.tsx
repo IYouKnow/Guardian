@@ -1184,8 +1184,8 @@ function App() {
 
   if (!autofillLaunchContextResolved && pendingAutofillSave && biometricServerEnabled && !isLoggedIn) {
     return (
-      <div className={`min-h-screen ${themeClasses.bg} ${themeClasses.text} px-6 py-10 flex items-center justify-center`}>
-        <div className={`w-full max-w-sm rounded-3xl ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
+      <div className={`w-full ${themeClasses.text} px-4 pt-6 pb-4`}>
+        <div className={`w-full rounded-[28px] ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
           <p className="text-base font-semibold">Preparing secure save...</p>
           <p className={`text-sm mt-2 ${themeClasses.textSecondary}`}>Guardian is getting the biometric save screen ready.</p>
         </div>
@@ -1202,8 +1202,8 @@ function App() {
       : "Saving login to your Guardian Server...";
 
     return (
-      <div className={`min-h-screen ${themeClasses.bg} ${themeClasses.text} px-6 py-10 flex items-center justify-center`}>
-        <div className={`w-full max-w-sm rounded-3xl ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
+      <div className={`w-full ${themeClasses.text} px-4 pt-6 pb-4`}>
+        <div className={`w-full rounded-[28px] ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
           <div className={`h-12 w-12 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center mb-4`}>
             <svg className={`w-6 h-6 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
