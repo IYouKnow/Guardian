@@ -121,6 +121,7 @@ function App() {
   const savingPendingAutofillRef = useRef(false);
   const pendingAutofillRetryRef = useRef<number | null>(null);
   const autoBiometricAttemptedRef = useRef(false);
+  const autofillDebugOnceRef = useRef<{ checked: boolean; error: boolean }>({ checked: false, error: false });
   const [entryCreatedAtMap, setEntryCreatedAtMap] = useState<Map<string, string>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -151,6 +152,7 @@ function App() {
   const [activeView, setActiveView] = useState<"list" | "detail" | "add" | "edit">("list");
   const [activePasswordId, setActivePasswordId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [autofillNotice, setAutofillNotice] = useState<string | null>(null);
   const { lastEvent } = useSSE(
     loginMode === "server" ? serverSession?.serverUrl ?? null : null,
     loginMode === "server" ? serverSession?.authToken ?? null : null,
@@ -371,7 +373,12 @@ function App() {
   );
 
   const savePasswordsToVault = async (updatedPasswords: PasswordEntry[], overrideSettings?: VaultSettings) => {
-    if (!vaultPath || !masterPassword) return;
+    if (!vaultPath) {
+      throw new Error("No local vault is open, so Guardian can't save this login yet.");
+    }
+    if (!masterPassword) {
+      throw new Error("The local vault is locked, so Guardian can't save this login yet.");
+    }
 
     try {
       // Convert PasswordEntry[] to VaultEntry[], preserving createdAt where possible
@@ -900,11 +907,25 @@ function App() {
     try {
       const res = await AutofillBridge.getPendingSave();
       const pending = res?.pending ?? null;
-      if (pending && (!pendingAutofillSave || pending.password !== pendingAutofillSave.password)) {
+      if (pending && (!pendingAutofillSave || pending.id !== pendingAutofillSave.id)) {
         setPendingAutofillSave(pending);
+        console.warn("[autofill] pending save detected", { id: pending.id, pkg: pending.packageName, app: pending.appLabel });
+      } else if (!pending && !autofillDebugOnceRef.current.checked) {
+        autofillDebugOnceRef.current.checked = true;
+        console.warn("[autofill] getPendingSave() returned null (no pending save found)");
+      }
+      if (localStorage.getItem("guardian_debug_autofill") === "1") {
+        console.info("[autofill] getPendingSave()", pending ? { id: pending.id, pkg: pending.packageName, app: pending.appLabel } : null);
       }
       return pending;
-    } catch {
+    } catch (err) {
+      if (!autofillDebugOnceRef.current.error) {
+        autofillDebugOnceRef.current.error = true;
+        console.warn("[autofill] getPendingSave() threw", err instanceof Error ? err.message : err);
+      }
+      if (localStorage.getItem("guardian_debug_autofill") === "1") {
+        console.warn("[autofill] getPendingSave() failed", err);
+      }
       // Ignore: plugin not available on this platform/build.
       return null;
     }
@@ -928,6 +949,29 @@ function App() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [refreshPendingAutofillSave]);
+
+  useEffect(() => {
+    // Live event when a new pending save arrives while the app is running.
+    let removed = false;
+    let handle: { remove: () => Promise<void> } | null = null;
+
+    AutofillBridge.addListener("pendingSave", (data) => {
+      if (removed) return;
+      if (localStorage.getItem("guardian_debug_autofill") === "1") {
+        console.info("[autofill] event pendingSave", data?.pending ? { id: data.pending.id, pkg: data.pending.packageName } : data);
+      }
+      if (data?.pending) setPendingAutofillSave(data.pending);
+    })
+      .then((h) => {
+        handle = h;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      removed = true;
+      handle?.remove().catch(() => undefined);
+    };
+  }, []);
 
   useEffect(() => {
     // On some cold starts, plugins aren’t ready immediately; retry a few times.
@@ -982,8 +1026,22 @@ function App() {
     if (!draft.password.trim()) return;
 
     savingPendingAutofillRef.current = true;
+    console.warn("[autofill] attempting to persist pending save", {
+      id: pendingAutofillSave.id,
+      pkg: pendingAutofillSave.packageName,
+      app: pendingAutofillSave.appLabel,
+      mode: loginMode,
+    });
+    if (localStorage.getItem("guardian_debug_autofill") === "1") {
+      console.info("[autofill] savePendingAutofill start", {
+        id: pendingAutofillSave.id,
+        pkg: pendingAutofillSave.packageName,
+        app: pendingAutofillSave.appLabel,
+        mode: loginMode,
+      });
+    }
 
-    const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const id = pendingAutofillSave.id;
     const nowIso = new Date().toISOString();
     const newEntry: PasswordEntry = {
       id,
@@ -1006,18 +1064,38 @@ function App() {
       return next;
     });
 
-    const updatedPasswords = [newEntry, ...passwords];
+    const prevPasswords = passwords;
+    const updatedPasswords = [newEntry, ...passwords.filter((p) => p.id !== id)];
     setPasswords(updatedPasswords);
     setActivePasswordId(id);
     setActiveView("detail");
 
     try {
       await persistPasswords(updatedPasswords, newEntry);
-      await AutofillBridge.clearPendingSave().catch(() => undefined);
+      await AutofillBridge.ackPendingSave({ id }).catch(() => undefined);
       clearPendingAutofill();
+      const appName = (pendingAutofillSave.appLabel || pendingAutofillSave.packageName || "app").trim();
+      setAutofillNotice(`Saved login from ${appName}.`);
+      window.setTimeout(() => setAutofillNotice(null), 3000);
+      console.warn("[autofill] pending save persisted + acked", { id });
+      if (localStorage.getItem("guardian_debug_autofill") === "1") {
+        console.info("[autofill] savePendingAutofill ok", { id });
+      }
     } catch (err) {
       console.error(err);
+      console.warn("[autofill] pending save persist failed", err instanceof Error ? err.message : err);
+      if (localStorage.getItem("guardian_debug_autofill") === "1") {
+        console.warn("[autofill] savePendingAutofill failed", err);
+      }
       // Keep pending around for a retry.
+      setPasswords(prevPasswords);
+      setActiveView("list");
+      setActivePasswordId(null);
+      setEntryCreatedAtMap((m) => {
+        const next = new Map(m);
+        next.delete(id);
+        return next;
+      });
       setMutationError(err instanceof Error ? err.message : "Save failed");
     } finally {
       savingPendingAutofillRef.current = false;
@@ -1053,6 +1131,12 @@ function App() {
         onLogin={handleLogin}
         theme={theme}
         accentColor={accentColor}
+        autofillPrompt={
+          pendingAutofillSave ? pendingAutofillSave.appLabel || pendingAutofillSave.packageName || "an app" : undefined
+        }
+        initialScreen={
+          pendingAutofillSave && getStoredServerUrl() && getStoredServerUsername() ? "server" : undefined
+        }
         biometric={{
           available: biometricAvailable,
           label: biometricTypeLabel,
@@ -1278,6 +1362,11 @@ function App() {
               {mutationError && (
                 <p className="mt-2 text-xs text-red-400 px-1">
                   {mutationError}
+                </p>
+              )}
+              {autofillNotice && !mutationError && (
+                <p className="mt-2 text-xs text-green-400 px-1">
+                  {autofillNotice}
                 </p>
               )}
             </div>

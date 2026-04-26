@@ -7,8 +7,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
     registerPlugin(SensitiveClipboardPlugin.class);
     registerPlugin(AutofillBridgePlugin.class);
+    super.onCreate(savedInstanceState);
   }
 }

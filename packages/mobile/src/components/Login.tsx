@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Theme, AccentColor } from "@guardian/shared/themes";
 import { getAccentColorClasses } from "@guardian/shared/themes";
 import { getThemeClasses } from "../utils/theme";
@@ -21,6 +21,8 @@ interface LoginProps {
   onLogin: (mode: LoginMode, credentials: LocalCredentials | ServerCredentials) => Promise<void>;
   theme: Theme;
   accentColor: AccentColor;
+  autofillPrompt?: string;
+  initialScreen?: "choose" | "local" | "server";
   biometric?: {
     available: boolean;
     label: string;
@@ -38,12 +40,14 @@ export default function Login({
   onLogin,
   theme,
   accentColor,
+  autofillPrompt,
+  initialScreen,
   biometric,
   onBiometricUnlockLocal,
   onBiometricUnlockServer,
 }: LoginProps) {
   const [mode, setMode] = useState<LoginMode>("local");
-  const [screen, setScreen] = useState<"choose" | "local" | "server">("choose");
+  const [screen, setScreen] = useState<"choose" | "local" | "server">(() => initialScreen || "choose");
   const [password, setPassword] = useState("");
 
   const [vaultFileName, setVaultFileName] = useState("");
@@ -65,6 +69,13 @@ export default function Login({
 
   const canBiometricUnlockLocal = !!onBiometricUnlockLocal && !!biometric?.available && !!biometric?.localEnabled && !!biometric?.localReady;
   const canBiometricUnlockServer = !!onBiometricUnlockServer && !!biometric?.available && !!biometric?.serverEnabled && !!biometric?.serverReady;
+
+  useEffect(() => {
+    if (!initialScreen) return;
+    if (screen !== "choose") return;
+    if (initialScreen === "choose") return;
+    setScreen(initialScreen);
+  }, [initialScreen, screen]);
 
   const friendlyError = (raw: string) => {
     const msg = (raw || "").trim();
@@ -236,6 +247,13 @@ export default function Login({
           </>
         )}
       </header>
+
+      {!!autofillPrompt && (
+        <div className={`mb-5 px-4 py-3 rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border}`}>
+          <p className="text-sm font-semibold">Unlock to save login</p>
+          <p className={`text-xs mt-0.5 ${themeClasses.textSecondary}`}>Unlock to save login from {autofillPrompt}.</p>
+        </div>
+      )}
 
       {screen === "choose" ? (
         <div className="space-y-3">

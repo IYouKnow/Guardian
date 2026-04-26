@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Theme, AccentColor } from "@guardian/shared/themes";
 import { getAccentColorClasses } from "@guardian/shared/themes";
 import { getThemeClasses } from "../utils/theme";
+import { clearDebugLogs, formatDebugLogs, getDebugLogs, isDebugConsoleEnabled, setDebugConsoleEnabled } from "../utils/debugLog";
 
 interface SettingsProps {
   onBack: () => void;
@@ -60,10 +61,25 @@ export default function Settings({
   const [serverBiometricPending, setServerBiometricPending] = useState(false);
   const [serverBiometricError, setServerBiometricError] = useState("");
   const [serverBiometricSaving, setServerBiometricSaving] = useState(false);
+  const [debugConsoleEnabled, setDebugConsoleEnabledState] = useState(isDebugConsoleEnabled());
+  const [debugCopied, setDebugCopied] = useState("");
+  const [debugLogs, setDebugLogs] = useState(() => getDebugLogs());
 
   const canUseBiometrics = biometricAvailable;
   const localToggleDisabled = connectionMode !== "local" || !canUseBiometrics;
   const serverToggleDisabled = connectionMode !== "server" || !canUseBiometrics;
+
+  const refreshDebugLogs = () => setDebugLogs(getDebugLogs());
+
+  const copyDebugLogs = async () => {
+    const text = formatDebugLogs(getDebugLogs());
+    try {
+      await navigator.clipboard.writeText(text || "No logs captured.");
+      setDebugCopied("Copied logs.");
+    } catch {
+      setDebugCopied("Couldn't copy logs on this device.");
+    }
+  };
 
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
@@ -355,6 +371,91 @@ export default function Settings({
               </div>
             </div>
           )}
+
+          <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm`}>
+            <h3 className="font-semibold mb-3">Diagnostics</h3>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  const next = !debugConsoleEnabled;
+                  setDebugConsoleEnabled(next);
+                  setDebugConsoleEnabledState(next);
+                  setDebugCopied(next ? "In-app console enabled. Restart the app to load Eruda." : "In-app console disabled.");
+                }}
+                className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                  debugConsoleEnabled
+                    ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                    : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">In-app debug console</p>
+                    <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
+                      Captures recent autofill/server logs. Turn on before reproducing if you want the embedded console too.
+                    </p>
+                  </div>
+                  <div
+                    className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
+                      debugConsoleEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
+                    }`}
+                  >
+                    <div
+                      className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                        debugConsoleEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                      } mt-0.5`}
+                    />
+                  </div>
+                </div>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    refreshDebugLogs();
+                    setDebugCopied("Logs refreshed.");
+                  }}
+                  className={`flex-1 rounded-xl border ${themeClasses.border} py-2.5 font-semibold`}
+                >
+                  Refresh Logs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    copyDebugLogs().catch(() => undefined);
+                  }}
+                  className={`flex-1 rounded-xl border ${themeClasses.border} py-2.5 font-semibold`}
+                >
+                  Copy Logs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDebugLogs();
+                    refreshDebugLogs();
+                    setDebugCopied("Logs cleared.");
+                  }}
+                  className={`flex-1 rounded-xl border ${themeClasses.border} py-2.5 font-semibold`}
+                >
+                  Clear
+                </button>
+              </div>
+
+              {debugCopied && (
+                <p className={`text-xs ${themeClasses.textMuted}`}>{debugCopied}</p>
+              )}
+
+              <div className={`rounded-2xl border ${themeClasses.border} ${themeClasses.inputBg} p-3`}>
+                <p className={`text-xs mb-2 ${themeClasses.textMuted}`}>
+                  Recent logs
+                </p>
+                <pre className="text-[11px] leading-5 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+                  {debugLogs.length > 0 ? formatDebugLogs(debugLogs) : "No logs captured yet."}
+                </pre>
+              </div>
+            </div>
+          </div>
 
           <button
             onClick={onLogout}

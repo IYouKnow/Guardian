@@ -2,10 +2,9 @@ package com.guardian.vault;
 
 import android.app.assist.AssistStructure;
 import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Bundle;
 import android.os.Build;
 import android.service.autofill.AutofillService;
 import android.service.autofill.FillCallback;
@@ -16,6 +15,7 @@ import android.service.autofill.SaveInfo;
 import android.service.autofill.SaveRequest;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
@@ -29,12 +29,9 @@ import java.util.List;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
 public class GuardianAutofillService extends AutofillService {
-  static final String PREFS = "guardian_autofill_pending_save";
-  static final String KEY_USERNAME = "username";
-  static final String KEY_PASSWORD = "password";
-  static final String KEY_PACKAGE = "packageName";
-  static final String KEY_APP_LABEL = "appLabel";
-  static final String KEY_TS = "timestampMs";
+  private static final String TAG = "GuardianAutofill";
+  private static final String STATE_USERNAME_ID = "guardian.usernameAutofillId";
+  private static final String STATE_PASSWORD_ID = "guardian.passwordAutofillId";
 
   @Override
   public void onFillRequest(
@@ -63,7 +60,14 @@ public class GuardianAutofillService extends AutofillService {
         .setDescription("Save to Guardian")
         .build();
 
-      FillResponse response = new FillResponse.Builder().setSaveInfo(saveInfo).build();
+      Bundle clientState = new Bundle();
+      if (ids.usernameId != null) clientState.putParcelable(STATE_USERNAME_ID, ids.usernameId);
+      if (ids.passwordId != null) clientState.putParcelable(STATE_PASSWORD_ID, ids.passwordId);
+
+      FillResponse response = new FillResponse.Builder()
+        .setClientState(clientState)
+        .setSaveInfo(saveInfo)
+        .build();
       callback.onSuccess(response);
     } catch (Exception ignored) {
       callback.onSuccess(null);
@@ -85,23 +89,36 @@ public class GuardianAutofillService extends AutofillService {
         }
       }
 
-      AutofillStructureParser.ParsedValues values = structure != null
-        ? AutofillStructureParser.extractValues(structure)
-        : null;
+      AutofillStructureParser.ParsedValues values = null;
+      if (structure != null) {
+        Bundle clientState = request.getClientState();
+        AutofillId usernameId = clientState != null ? clientState.getParcelable(STATE_USERNAME_ID) : null;
+        AutofillId passwordId = clientState != null ? clientState.getParcelable(STATE_PASSWORD_ID) : null;
+        values = AutofillStructureParser.extractValues(structure, usernameId, passwordId);
+      }
 
       String username = values != null ? values.username : "";
       String password = values != null ? values.password : "";
 
       if (!TextUtils.isEmpty(password)) {
-        SharedPreferences prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        prefs
-          .edit()
-          .putString(KEY_USERNAME, username)
-          .putString(KEY_PASSWORD, password)
-          .putString(KEY_PACKAGE, packageName)
-          .putString(KEY_APP_LABEL, appLabel)
-          .putLong(KEY_TS, System.currentTimeMillis())
-          .apply();
+        PendingAutofillStore.Item item = PendingAutofillStore.add(this, username, password, packageName, appLabel);
+        Log.i(
+          TAG,
+          "onSaveRequest captured pending save"
+            + " id=" + (item != null ? item.id : "null")
+            + " pkg=" + packageName
+            + " app=" + appLabel
+            + " userLen=" + (username != null ? username.length() : 0)
+            + " passLen=" + password.length()
+        );
+
+        // Best-effort notify the running app (if any).
+        if (item != null) {
+          Intent broadcast = new Intent(PendingAutofillStore.ACTION_PENDING_SAVE_ADDED);
+          broadcast.setPackage(getPackageName());
+          broadcast.putExtra(PendingAutofillStore.EXTRA_ID, item.id);
+          sendBroadcast(broadcast);
+        }
 
         // Bring Guardian to foreground to prompt the user.
         Intent intent = new Intent(this, MainActivity.class);
@@ -111,6 +128,7 @@ public class GuardianAutofillService extends AutofillService {
 
       callback.onSuccess();
     } catch (Exception ignored) {
+      Log.w(TAG, "onSaveRequest failed", ignored);
       callback.onFailure("Failed to save");
     }
   }
@@ -147,6 +165,15 @@ public class GuardianAutofillService extends AutofillService {
       return parsed.passwordId != null ? parsed : null;
     }
 
+    static ParsedValues extractValues(AssistStructure structure, AutofillId usernameId, AutofillId passwordId) {
+      if (usernameId != null || passwordId != null) {
+        ParsedValues byId = extractValuesByAutofillId(structure, usernameId, passwordId);
+        if (!TextUtils.isEmpty(byId.password)) return byId;
+      }
+
+      return extractValues(structure);
+    }
+
     static ParsedValues extractValues(AssistStructure structure) {
       ParsedValues parsed = new ParsedValues();
       int windows = structure.getWindowNodeCount();
@@ -154,6 +181,17 @@ public class GuardianAutofillService extends AutofillService {
         AssistStructure.WindowNode windowNode = structure.getWindowNodeAt(w);
         AssistStructure.ViewNode root = windowNode.getRootViewNode();
         traverseForValues(root, parsed);
+      }
+      return parsed;
+    }
+
+    static ParsedValues extractValuesByAutofillId(AssistStructure structure, AutofillId usernameId, AutofillId passwordId) {
+      ParsedValues parsed = new ParsedValues();
+      int windows = structure.getWindowNodeCount();
+      for (int w = 0; w < windows; w++) {
+        AssistStructure.WindowNode windowNode = structure.getWindowNodeAt(w);
+        AssistStructure.ViewNode root = windowNode.getRootViewNode();
+        traverseForValuesByAutofillId(root, parsed, usernameId, passwordId);
       }
       return parsed;
     }
@@ -217,6 +255,34 @@ public class GuardianAutofillService extends AutofillService {
 
       int count = node.getChildCount();
       for (int i = 0; i < count; i++) traverseForValues(node.getChildAt(i), out);
+    }
+
+    static void traverseForValuesByAutofillId(
+      AssistStructure.ViewNode node,
+      ParsedValues out,
+      AutofillId usernameId,
+      AutofillId passwordId
+    ) {
+      if (node == null) return;
+
+      AutofillId nodeId = node.getAutofillId();
+      if (nodeId != null) {
+        if (passwordId != null && passwordId.equals(nodeId) && TextUtils.isEmpty(out.password)) {
+          out.password = readNodeText(node);
+        }
+        if (usernameId != null && usernameId.equals(nodeId) && TextUtils.isEmpty(out.username)) {
+          out.username = readNodeText(node);
+        }
+      }
+
+      if (!TextUtils.isEmpty(out.password) && (usernameId == null || !TextUtils.isEmpty(out.username))) {
+        return;
+      }
+
+      int count = node.getChildCount();
+      for (int i = 0; i < count; i++) {
+        traverseForValuesByAutofillId(node.getChildAt(i), out, usernameId, passwordId);
+      }
     }
 
     static String readNodeText(AssistStructure.ViewNode node) {

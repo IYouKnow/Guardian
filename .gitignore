@@ -37,3 +37,4 @@ packages/extension/dist/
 packages/extension/.vite/
 packages/server/server.exe
 .gradle/
+tools/esbuild.exe

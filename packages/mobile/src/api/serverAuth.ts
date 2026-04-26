@@ -80,17 +80,53 @@ function isLocalhostUrl(input: string): boolean {
 
 const warnedDecryptIds = new Set<string>();
 
+function decodeBase64ToBytes(input: string): Uint8Array | null {
+  const raw = (input || "").trim();
+  if (!raw) return new Uint8Array();
+
+  // Be forgiving: accept base64url and missing padding.
+  const normalized = raw.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = normalized.length % 4;
+  const padded = pad ? `${normalized}${"=".repeat(4 - pad)}` : normalized;
+
+  try {
+    return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
 async function decryptVaultItems(
   items: VaultItem[],
   key: Uint8Array,
-): Promise<{ entries: VaultEntry[]; settings?: VaultSettings }> {
+): Promise<{ entries: VaultEntry[]; settings?: VaultSettings; candidateCount: number }> {
   const entries: VaultEntry[] = [];
   let settings: VaultSettings | undefined;
+  let candidateCount = 0;
 
   for (const item of items) {
-    const raw = Uint8Array.from(atob(item.encrypted_blob), (c) => c.charCodeAt(0));
-    const nonce = raw.slice(0, 12);
-    const ciphertext = raw.slice(12);
+    const bytes = decodeBase64ToBytes(item.encrypted_blob);
+    if (!bytes) {
+      if (!warnedDecryptIds.has(item.id)) {
+        warnedDecryptIds.add(item.id);
+        console.warn(`Failed to decode server item ${item.id}: invalid base64`);
+      }
+      continue;
+    }
+
+    // Blob format: [Nonce 12][Ciphertext N][Tag 16] => min length 28.
+    if (bytes.length < 28) {
+      if (!warnedDecryptIds.has(item.id)) {
+        warnedDecryptIds.add(item.id);
+        console.warn(`Failed to decrypt server item ${item.id}: encrypted_blob too short (${bytes.length} bytes)`);
+      }
+      continue;
+    }
+
+    candidateCount += 1;
+
+    const nonce = bytes.slice(0, 12);
+    const ciphertext = bytes.slice(12);
 
     try {
       const plaintext = await decrypt(key, nonce, ciphertext);
@@ -109,7 +145,7 @@ async function decryptVaultItems(
     }
   }
 
-  return { entries, settings };
+  return { entries, settings, candidateCount };
 }
 
 export async function fetchVaultFromServer(session: ServerSession): Promise<VaultData> {
@@ -127,7 +163,7 @@ export async function fetchVaultFromServer(session: ServerSession): Promise<Vaul
   const prefs = await fetchPreferencesFromServer(session).catch(() => ({} as VaultSettings));
   const mergedSettings = { ...(decrypted.settings ?? {}), ...(prefs ?? {}) } as VaultSettings;
 
-  if (items.length > 0 && decrypted.entries.length === 0) {
+  if (items.length > 0 && decrypted.entries.length === 0 && decrypted.candidateCount > 0) {
     throw new Error(
       "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
     );
@@ -240,7 +276,7 @@ export async function loginToServerAndFetchVault(
   const items = (itemsResp.json ?? []) as VaultItem[];
   const decrypted = await decryptVaultItems(items, key);
 
-  if (items.length > 0 && decrypted.entries.length === 0) {
+  if (items.length > 0 && decrypted.entries.length === 0 && decrypted.candidateCount > 0) {
     throw new Error(
       "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
     );

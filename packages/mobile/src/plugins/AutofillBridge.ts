@@ -1,6 +1,8 @@
+import type { PluginListenerHandle } from "@capacitor/core";
 import { registerPlugin } from "@capacitor/core";
 
 export type PendingAutofillSave = {
+  id: string;
   username?: string;
   password: string;
   packageName?: string;
@@ -10,7 +12,13 @@ export type PendingAutofillSave = {
 
 export interface AutofillBridgePlugin {
   getPendingSave(): Promise<{ pending: PendingAutofillSave | null }>;
-  clearPendingSave(): Promise<{ ok: boolean }>;
+  ackPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
+  clearPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
+  addListener(
+    eventName: "pendingSave",
+    listenerFunc: (data: { pending: PendingAutofillSave }) => void,
+  ): Promise<PluginListenerHandle> & PluginListenerHandle;
+  removeAllListeners(): Promise<void>;
 }
 
 export const AutofillBridge = registerPlugin<AutofillBridgePlugin>("AutofillBridge");
