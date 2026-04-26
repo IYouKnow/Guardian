@@ -10,7 +10,8 @@ import type { VaultEntry } from "@guardian/shared/crypto";
 import { loadVault, createVault } from "@guardian/shared/crypto";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as CapacitorApp } from "@capacitor/app";
-import { clearServerSession } from "./api/serverAuth";
+import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
+import { clearServerSession, getStoredServerUrl, getStoredServerUsername } from "./api/serverAuth";
 import { fetchPreferencesFromServer, fetchVaultFromServer, fetchVaultItemIdsFromServer, loginToServerAndFetchVault, savePreferencesToServer, type ServerSession } from "./api/serverAuth";
 import { deleteEntryFromServer, deleteEntryViaUpsertToServer, pushEntriesToServer } from "./api/serverSync";
 import type { VaultData, VaultSettings } from "@guardian/shared/crypto/vault";
@@ -67,6 +68,33 @@ type ServerLoginCredentials = {
   password: string;
 };
 
+const BIOMETRIC_LOCAL_PREF_KEY = "guardian_biometric_local_enabled";
+const BIOMETRIC_SERVER_PREF_KEY = "guardian_biometric_server_enabled";
+const BIOMETRIC_LOCAL_SERVER_ID = "guardian-app-local-vault";
+const BIOMETRIC_SERVER_PREFIX = "guardian-app-server:";
+
+function biometryLabel(type: BiometryType): string {
+  if (type === BiometryType.FACE_ID || type === BiometryType.FACE_AUTHENTICATION) return "Face ID";
+  if (type === BiometryType.FINGERPRINT || type === BiometryType.TOUCH_ID) return "Fingerprint";
+  if (type === BiometryType.IRIS_AUTHENTICATION) return "Iris";
+  return "biometrics";
+}
+
+function cleanUrl(input: string): string {
+  return (input || "").trim().replace(/\/+$/, "");
+}
+
+function serverIdFor(url: string): string {
+  return `${BIOMETRIC_SERVER_PREFIX}${cleanUrl(url)}`;
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 function App() {
   type ThemeSyncMode = "off" | "follow" | "sync";
 
@@ -99,6 +127,13 @@ function App() {
     const raw = localStorage.getItem("guardian_theme_sync_mode") as ThemeSyncMode | null;
     return raw || "off";
   });
+  const [biometricLocalEnabled, setBiometricLocalEnabled] = useState<boolean>(() => localStorage.getItem(BIOMETRIC_LOCAL_PREF_KEY) === "1");
+  const [biometricServerEnabled, setBiometricServerEnabled] = useState<boolean>(() => localStorage.getItem(BIOMETRIC_SERVER_PREF_KEY) === "1");
+  const [biometricAvailable, setBiometricAvailable] = useState<boolean>(false);
+  const [biometricTypeLabel, setBiometricTypeLabel] = useState<string>("biometrics");
+  const [biometricAvailabilityDetail, setBiometricAvailabilityDetail] = useState<string>("");
+  const [biometricLocalReady, setBiometricLocalReady] = useState<boolean>(false);
+  const [biometricServerReady, setBiometricServerReady] = useState<boolean>(false);
   const [serverSession, setServerSession] = useState<ServerSession | null>(null);
   const [activeView, setActiveView] = useState<"list" | "detail" | "add" | "edit">("list");
   const [activePasswordId, setActivePasswordId] = useState<string | null>(null);
@@ -107,6 +142,100 @@ function App() {
     loginMode === "server" ? serverSession?.serverUrl ?? null : null,
     loginMode === "server" ? serverSession?.authToken ?? null : null,
   );
+
+  useEffect(() => {
+    const legacy = localStorage.getItem("guardian_biometric_unlock_enabled");
+    if (legacy === "1" && localStorage.getItem(BIOMETRIC_LOCAL_PREF_KEY) == null) {
+      localStorage.setItem(BIOMETRIC_LOCAL_PREF_KEY, "1");
+      localStorage.removeItem("guardian_biometric_unlock_enabled");
+      setBiometricLocalEnabled(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        // Some environments/plugins are picky about options; try without first.
+        const res = await NativeBiometric.isAvailable();
+        if (cancelled) return;
+        setBiometricAvailable(!!res.isAvailable);
+        setBiometricTypeLabel(biometryLabel(res.biometryType));
+        setBiometricAvailabilityDetail(
+          res.isAvailable ? "" : `Unavailable (errorCode=${typeof res.errorCode === "number" ? res.errorCode : "n/a"})`,
+        );
+      } catch (err1) {
+        try {
+          const res = await NativeBiometric.isAvailable({ useFallback: true });
+          if (cancelled) return;
+          setBiometricAvailable(!!res.isAvailable);
+          setBiometricTypeLabel(biometryLabel(res.biometryType));
+          setBiometricAvailabilityDetail(
+            res.isAvailable ? "" : `Unavailable (errorCode=${typeof res.errorCode === "number" ? res.errorCode : "n/a"})`,
+          );
+        } catch (err2) {
+          if (cancelled) return;
+          setBiometricAvailable(false);
+          setBiometricTypeLabel("biometrics");
+          const msg =
+            (err2 instanceof Error ? err2.message : "") ||
+            (err1 instanceof Error ? err1.message : "") ||
+            "Native plugin unavailable (are you running the installed app?)";
+          setBiometricAvailabilityDetail(msg);
+        }
+      }
+    };
+
+    run().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!biometricAvailable) {
+      setBiometricLocalReady(false);
+      setBiometricServerReady(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const check = async () => {
+      try {
+        if (biometricLocalEnabled) {
+          await NativeBiometric.getCredentials({ server: BIOMETRIC_LOCAL_SERVER_ID });
+          if (!cancelled) setBiometricLocalReady(true);
+        } else if (!cancelled) {
+          setBiometricLocalReady(false);
+        }
+      } catch {
+        if (!cancelled) setBiometricLocalReady(false);
+      }
+
+      try {
+        const storedUrl = getStoredServerUrl();
+        if (biometricServerEnabled && storedUrl) {
+          await NativeBiometric.getCredentials({ server: serverIdFor(storedUrl) });
+          if (!cancelled) setBiometricServerReady(true);
+        } else if (!cancelled) {
+          setBiometricServerReady(false);
+        }
+      } catch {
+        if (!cancelled) setBiometricServerReady(false);
+      }
+    };
+
+    check().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [biometricAvailable, biometricLocalEnabled, biometricServerEnabled, serverSession?.serverUrl]);
 
   const filteredPasswords = passwords.filter((p) => {
     const q = searchQuery.toLowerCase();
@@ -242,6 +371,132 @@ function App() {
     setActiveView("list");
     setActivePasswordId(null);
     clearServerSession();
+  };
+
+  const handleBiometricLocalEnabledChange = (enabled: boolean) => {
+    setMutationError(null);
+    setBiometricLocalEnabled(enabled);
+    localStorage.setItem(BIOMETRIC_LOCAL_PREF_KEY, enabled ? "1" : "0");
+
+    (async () => {
+      if (!biometricAvailable) {
+        throw new Error("Biometrics are not available on this device.");
+      }
+
+      if (enabled) {
+        if (loginMode !== "local" || !vaultPath || !masterPassword) {
+          throw new Error("Log in to a local vault first to enable biometric unlock.");
+        }
+        await NativeBiometric.setCredentials({
+          server: BIOMETRIC_LOCAL_SERVER_ID,
+          username: vaultPath,
+          password: masterPassword,
+        });
+      } else {
+        await NativeBiometric.deleteCredentials({ server: BIOMETRIC_LOCAL_SERVER_ID });
+      }
+    })().catch((err) => {
+      console.error("Biometric toggle failed:", err);
+      setMutationError(err instanceof Error ? err.message : "Failed to update biometric settings");
+      setBiometricLocalEnabled(!enabled);
+      localStorage.setItem(BIOMETRIC_LOCAL_PREF_KEY, !enabled ? "1" : "0");
+    });
+  };
+
+  const handleBiometricUnlockLocal = async (): Promise<void> => {
+    setMutationError(null);
+
+    const available = await NativeBiometric.isAvailable({ useFallback: true });
+    if (!available.isAvailable) {
+      throw new Error("Biometrics are not available on this device.");
+    }
+
+    await NativeBiometric.verifyIdentity({
+      title: "Unlock Guardian",
+      reason: "Authenticate to unlock your vault",
+      useFallback: true,
+      maxAttempts: 5,
+    });
+
+    const creds = await NativeBiometric.getCredentials({ server: BIOMETRIC_LOCAL_SERVER_ID });
+    const { data } = await Filesystem.readFile({
+      path: creds.username,
+      directory: Directory.Data,
+    });
+
+    const vaultBytes =
+      typeof data === "string"
+        ? base64ToBytes(data)
+        : new Uint8Array(await data.arrayBuffer());
+    const password = creds.password;
+
+    setLoginMode("local");
+    setServerSession(null);
+    setVaultPath(creds.username);
+    setMasterPassword(password);
+
+    await loadPasswordsFromVault(vaultBytes, password);
+
+    setIsLoggedIn(true);
+    setActiveView("list");
+    setActivePasswordId(null);
+  };
+
+  const enableServerBiometrics = async (accountPassword: string): Promise<void> => {
+    setMutationError(null);
+    if (!biometricAvailable) throw new Error("Biometrics are not available on this device.");
+    if (loginMode !== "server" || !serverSession) throw new Error("Sign in to the server first.");
+    if (accountPassword.length < 8) throw new Error("Password must be at least 8 characters.");
+
+    await NativeBiometric.verifyIdentity({
+      title: "Enable biometric sign-in",
+      reason: "Authenticate to store your sign-in securely",
+      useFallback: true,
+      maxAttempts: 5,
+    });
+
+    await NativeBiometric.setCredentials({
+      server: serverIdFor(serverSession.serverUrl),
+      username: serverSession.username,
+      password: accountPassword,
+    });
+
+    setBiometricServerEnabled(true);
+    localStorage.setItem(BIOMETRIC_SERVER_PREF_KEY, "1");
+  };
+
+  const disableServerBiometrics = async (): Promise<void> => {
+    setMutationError(null);
+    const storedUrl = getStoredServerUrl();
+    if (!storedUrl) {
+      setBiometricServerEnabled(false);
+      localStorage.setItem(BIOMETRIC_SERVER_PREF_KEY, "0");
+      return;
+    }
+
+    await NativeBiometric.deleteCredentials({ server: serverIdFor(storedUrl) });
+    setBiometricServerEnabled(false);
+    localStorage.setItem(BIOMETRIC_SERVER_PREF_KEY, "0");
+  };
+
+  const handleBiometricUnlockServer = async (): Promise<void> => {
+    setMutationError(null);
+
+    const available = await NativeBiometric.isAvailable({ useFallback: true });
+    if (!available.isAvailable) throw new Error("Biometrics are not available on this device.");
+
+    const storedUrl = getStoredServerUrl();
+    if (!storedUrl) throw new Error("No server URL stored yet. Sign in once first.");
+
+    await NativeBiometric.verifyIdentity({
+      title: "Sign in to Guardian",
+      reason: "Authenticate to sign in",
+      useFallback: true,
+      maxAttempts: 5,
+    });
+
+    const creds = await NativeBiometric.getCredentials({ server: serverIdFor(storedUrl) });
+    await handleLogin("server", { url: storedUrl, username: creds.username, password: creds.password });
   };
 
   const activePassword = activePasswordId ? passwords.find((p) => p.id === activePasswordId) : undefined;
@@ -414,6 +669,18 @@ function App() {
       setIsLoggedIn(true);
       setActiveView("list");
       setActivePasswordId(null);
+
+      if (biometricLocalEnabled && biometricAvailable) {
+        try {
+          await NativeBiometric.setCredentials({
+            server: BIOMETRIC_LOCAL_SERVER_ID,
+            username: fileName,
+            password,
+          });
+        } catch (err) {
+          console.warn("Failed to persist biometric credentials:", err);
+        }
+      }
       return;
     }
 
@@ -429,6 +696,18 @@ function App() {
     setIsLoggedIn(true);
     setActiveView("list");
     setActivePasswordId(null);
+
+    if (biometricServerEnabled && biometricAvailable) {
+      try {
+        await NativeBiometric.setCredentials({
+          server: serverIdFor(session.serverUrl),
+          username,
+          password,
+        });
+      } catch (err) {
+        console.warn("Failed to persist server biometric credentials:", err);
+      }
+    }
   };
 
   // Background sync (server mode): SSE-triggered + periodic polling fallback.
@@ -561,6 +840,21 @@ function App() {
     return (
       <Login
         onLogin={handleLogin}
+        biometric={{
+          available: biometricAvailable,
+          label: biometricTypeLabel,
+          localEnabled: biometricLocalEnabled,
+          serverEnabled: biometricServerEnabled,
+          localReady: biometricLocalReady,
+          serverReady: biometricServerReady,
+          serverHint: (() => {
+            const url = getStoredServerUrl();
+            if (!url) return "";
+            return url.replace(/^https?:\/\//, "");
+          })(),
+        }}
+        onBiometricUnlockLocal={handleBiometricUnlockLocal}
+        onBiometricUnlockServer={handleBiometricUnlockServer}
       />
     );
   }
@@ -587,6 +881,16 @@ function App() {
           onBack={() => setShowSettings(false)} 
           onLogout={handleLogout}
           connectionMode={loginMode}
+          biometricAvailable={biometricAvailable}
+          biometricTypeLabel={biometricTypeLabel}
+          biometricAvailabilityDetail={biometricAvailabilityDetail}
+          biometricLocalEnabled={biometricLocalEnabled}
+          biometricServerEnabled={biometricServerEnabled}
+          onBiometricLocalEnabledChange={handleBiometricLocalEnabledChange}
+          onEnableBiometricServer={enableServerBiometrics}
+          onDisableBiometricServer={disableServerBiometrics}
+          serverUrl={serverSession?.serverUrl ?? getStoredServerUrl()}
+          serverUsername={serverSession?.username ?? getStoredServerUsername()}
           theme={theme}
           onThemeChange={handleThemeChange}
           accentColor={accentColor}

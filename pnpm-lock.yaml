@@ -129,6 +129,9 @@ importers:
       '@capacitor/ios':
         specifier: ^7.4.4
         version: 7.4.4(@capacitor/core@7.4.4)
+      '@capgo/capacitor-native-biometric':
+        specifier: 7.1.13
+        version: 7.1.13(@capacitor/core@7.4.4)
       '@guardian/shared':
         specifier: workspace:*
         version: link:../shared
@@ -438,6 +441,11 @@ packages:
 
   '@capacitor/synapse@1.0.4':
     resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
+
+  '@capgo/capacitor-native-biometric@7.1.13':
+    resolution: {integrity: sha512-1Bh4QhyXczNX1vGrau8EDHEu2sFn5JGHIIwOodI/XO3JYjkqO1kVs6GVVmsJ7ICrqZIR2Z1YO0BWK9f0vR/LRg==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
 
   '@crxjs/vite-plugin@2.2.1':
     resolution: {integrity: sha512-SrQY/npF0BNc34DKzA34lHC+aQNlMqbiwoRyzr8EGWngmApwuOAGLHzmGVWIfE8rJmu+TsFC8mKFG4LqLM2+hA==}
@@ -3415,6 +3423,10 @@ snapshots:
       '@capacitor/core': 7.4.4
 
   '@capacitor/synapse@1.0.4': {}
+
+  '@capgo/capacitor-native-biometric@7.1.13(@capacitor/core@7.4.4)':
+    dependencies:
+      '@capacitor/core': 7.4.4
 
   '@crxjs/vite-plugin@2.2.1':
     dependencies:

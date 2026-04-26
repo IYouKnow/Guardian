@@ -16,9 +16,20 @@ type ServerCredentials = {
 
 interface LoginProps {
   onLogin: (mode: LoginMode, credentials: LocalCredentials | ServerCredentials) => Promise<void>;
+  biometric?: {
+    available: boolean;
+    label: string;
+    localEnabled: boolean;
+    serverEnabled: boolean;
+    localReady: boolean;
+    serverReady: boolean;
+    serverHint?: string;
+  };
+  onBiometricUnlockLocal?: () => Promise<void>;
+  onBiometricUnlockServer?: () => Promise<void>;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLogin, biometric, onBiometricUnlockLocal, onBiometricUnlockServer }: LoginProps) {
   const [mode, setMode] = useState<LoginMode>("local");
   const [screen, setScreen] = useState<"choose" | "local" | "server">("choose");
   const [password, setPassword] = useState("");
@@ -35,6 +46,10 @@ export default function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+
+  const canBiometricUnlockLocal = !!onBiometricUnlockLocal && !!biometric?.available && !!biometric?.localEnabled && !!biometric?.localReady;
+  const canBiometricUnlockServer = !!onBiometricUnlockServer && !!biometric?.available && !!biometric?.serverEnabled && !!biometric?.serverReady;
 
   const friendlyError = (raw: string) => {
     const msg = (raw || "").trim();
@@ -148,6 +163,21 @@ export default function Login({ onLogin }: LoginProps) {
     }
   };
 
+  const handleBiometricUnlock = async (kind: "local" | "server") => {
+    if (kind === "local" && !canBiometricUnlockLocal) return;
+    if (kind === "server" && !canBiometricUnlockServer) return;
+    setLoginError("");
+    setIsBiometricLoading(true);
+    try {
+      if (kind === "local") await onBiometricUnlockLocal?.();
+      else await onBiometricUnlockServer?.();
+    } catch (err) {
+      console.error("Biometric unlock failed:", err);
+      setLoginError(friendlyError(err instanceof Error ? err.message : "Biometric unlock failed."));
+      setIsBiometricLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white px-5 pt-12 pb-8">
       {/* Hidden file input */}
@@ -194,6 +224,53 @@ export default function Login({ onLogin }: LoginProps) {
 
       {screen === "choose" ? (
         <div className="space-y-3">
+          {canBiometricUnlockLocal && (
+            <button
+              type="button"
+              onClick={() => handleBiometricUnlock("local")}
+              disabled={isBiometricLoading}
+              className="w-full text-left rounded-2xl border border-[#1a1a1a] bg-[#141414] px-4 py-4 active:opacity-90 disabled:opacity-50"
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11a3 3 0 100-6 3 3 0 000 6z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 20a7 7 0 0114 0" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-medium">{isBiometricLoading ? "Unlocking..." : `Unlock local vault with ${biometric?.label ?? "biometrics"}`}</p>
+                  <p className="text-sm text-gray-400 mt-0.5">Use saved local vault credentials</p>
+                </div>
+              </div>
+            </button>
+          )}
+
+          {canBiometricUnlockServer && (
+            <button
+              type="button"
+              onClick={() => handleBiometricUnlock("server")}
+              disabled={isBiometricLoading}
+              className="w-full text-left rounded-2xl border border-[#1a1a1a] bg-[#141414] px-4 py-4 active:opacity-90 disabled:opacity-50"
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 15h16.8" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-medium">{isBiometricLoading ? "Signing in..." : `Sign in with ${biometric?.label ?? "biometrics"}`}</p>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    {biometric?.serverHint ? `Server: ${biometric.serverHint}` : "Use saved server credentials"}
+                  </p>
+                </div>
+              </div>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -355,6 +432,26 @@ export default function Login({ onLogin }: LoginProps) {
           >
             {isLoading ? (mode === "server" ? "Signing in..." : "Unlocking...") : mode === "server" ? "Sign in" : "Unlock"}
           </button>
+          {canBiometricUnlockLocal && mode === "local" && (
+            <button
+              type="button"
+              onClick={() => handleBiometricUnlock("local")}
+              disabled={isBiometricLoading || isLoading}
+              className="mt-3 w-full rounded-2xl bg-[#141414] border border-[#1a1a1a] py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90"
+            >
+              {isBiometricLoading ? "Unlocking..." : `Unlock with ${biometric?.label ?? "biometrics"}`}
+            </button>
+          )}
+          {canBiometricUnlockServer && mode === "server" && (
+            <button
+              type="button"
+              onClick={() => handleBiometricUnlock("server")}
+              disabled={isBiometricLoading || isLoading}
+              className="mt-3 w-full rounded-2xl bg-[#141414] border border-[#1a1a1a] py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90"
+            >
+              {isBiometricLoading ? "Signing in..." : `Sign in with ${biometric?.label ?? "biometrics"}`}
+            </button>
+          )}
           <p className="text-xs text-gray-500 text-center mt-3">
             {mode === "server"
               ? "Tip: on Android, your server must be reachable from the device network."

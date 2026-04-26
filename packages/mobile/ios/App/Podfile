@@ -11,7 +11,9 @@ install! 'cocoapods', :disable_input_output_paths => true
 def capacitor_pods
   pod 'Capacitor', :path => '../../../../node_modules/.pnpm/@capacitor+ios@7.4.4_@capacitor+core@7.4.4/node_modules/@capacitor/ios'
   pod 'CapacitorCordova', :path => '../../../../node_modules/.pnpm/@capacitor+ios@7.4.4_@capacitor+core@7.4.4/node_modules/@capacitor/ios'
-
+  pod 'CapacitorApp', :path => '../../../../node_modules/.pnpm/@capacitor+app@7.1.0_@capacitor+core@7.4.4/node_modules/@capacitor/app'
+  pod 'CapacitorFilesystem', :path => '../../../../node_modules/.pnpm/@capacitor+filesystem@7.1.5_@capacitor+core@7.4.4/node_modules/@capacitor/filesystem'
+  pod 'CapgoCapacitorNativeBiometric', :path => '../../../../node_modules/.pnpm/@capgo+capacitor-native-bio_c3548be7ee0ec66bc1efc27f5719af23/node_modules/@capgo/capacitor-native-biometric'
 end
 
 target 'App' do

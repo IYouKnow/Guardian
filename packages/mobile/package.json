@@ -19,6 +19,7 @@
     "@capacitor/core": "^7.4.4",
     "@capacitor/filesystem": "^7.0.1",
     "@capacitor/ios": "^7.4.4",
+    "@capgo/capacitor-native-biometric": "7.1.13",
     "@guardian/shared": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

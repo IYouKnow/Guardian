@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Theme, AccentColor } from "@guardian/shared/themes";
 import { getAccentColorClasses } from "@guardian/shared/themes";
 import { getThemeClasses } from "../utils/theme";
@@ -6,6 +7,16 @@ interface SettingsProps {
   onBack: () => void;
   onLogout: () => void;
   connectionMode: "local" | "server";
+  biometricAvailable: boolean;
+  biometricTypeLabel: string;
+  biometricAvailabilityDetail: string;
+  biometricLocalEnabled: boolean;
+  biometricServerEnabled: boolean;
+  onBiometricLocalEnabledChange: (enabled: boolean) => void;
+  onEnableBiometricServer: (accountPassword: string) => Promise<void>;
+  onDisableBiometricServer: () => Promise<void>;
+  serverUrl: string;
+  serverUsername: string;
   theme: Theme;
   accentColor: AccentColor;
   themeSyncMode: "off" | "follow" | "sync";
@@ -21,6 +32,16 @@ export default function Settings({
   onBack,
   onLogout,
   connectionMode,
+  biometricAvailable,
+  biometricTypeLabel,
+  biometricAvailabilityDetail,
+  biometricLocalEnabled,
+  biometricServerEnabled,
+  onBiometricLocalEnabledChange,
+  onEnableBiometricServer,
+  onDisableBiometricServer,
+  serverUrl,
+  serverUsername,
   theme,
   accentColor,
   themeSyncMode,
@@ -31,6 +52,14 @@ export default function Settings({
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
   const themeLocked = connectionMode === "server" && themeSyncMode === "follow";
+  const [serverPassword, setServerPassword] = useState("");
+  const [serverBiometricPending, setServerBiometricPending] = useState(false);
+  const [serverBiometricError, setServerBiometricError] = useState("");
+  const [serverBiometricSaving, setServerBiometricSaving] = useState(false);
+
+  const canUseBiometrics = biometricAvailable;
+  const localToggleDisabled = connectionMode !== "local" || !canUseBiometrics;
+  const serverToggleDisabled = connectionMode !== "server" || !canUseBiometrics;
 
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
@@ -49,6 +78,153 @@ export default function Settings({
 
       <div className="flex-1 overflow-y-auto p-4 pb-20">
         <div className="space-y-4">
+          <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm`}>
+            <h3 className="font-semibold mb-3">Security</h3>
+            <div className="space-y-3">
+              {!biometricAvailable && (
+                <div className={`text-xs ${themeClasses.textMuted} px-1`}>
+                  <p>Biometrics not available.</p>
+                  <p className="mt-1">
+                    {biometricAvailabilityDetail || "Make sure you are running the installed app (not the browser), and that the device has a screen lock + biometrics enrolled."}
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={() => onBiometricLocalEnabledChange(!biometricLocalEnabled)}
+                disabled={localToggleDisabled}
+                className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                  biometricLocalEnabled
+                    ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                    : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                } ${localToggleDisabled ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Local vault biometric unlock</p>
+                    <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
+                      {connectionMode !== "local"
+                        ? "Switch to Local mode to change this."
+                        : biometricAvailable
+                          ? `Unlock your local vault with ${biometricTypeLabel}.`
+                          : "Biometrics not available on this device."}
+                    </p>
+                  </div>
+                  <div
+                    className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
+                      biometricLocalEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
+                    }`}
+                  >
+                    <div
+                      className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                        biometricLocalEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                      } mt-0.5`}
+                    />
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={async () => {
+                  setServerBiometricError("");
+                  if (biometricServerEnabled) {
+                    try {
+                      setServerBiometricSaving(true);
+                      await onDisableBiometricServer();
+                    } catch (err) {
+                      setServerBiometricError(err instanceof Error ? err.message : "Failed to disable biometrics");
+                    } finally {
+                      setServerBiometricSaving(false);
+                    }
+                    return;
+                  }
+                  setServerBiometricPending(true);
+                }}
+                disabled={serverToggleDisabled || serverBiometricSaving}
+                className={`w-full text-left px-3 py-3 rounded-xl border transition-all ${
+                  biometricServerEnabled
+                    ? `${accentClasses.lightClass} ${accentClasses.borderClass} ${accentClasses.textClass} border`
+                    : `${themeClasses.border} ${themeClasses.textSecondary} hover:${themeClasses.text}`
+                } ${(serverToggleDisabled || serverBiometricSaving) ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Server biometric sign-in</p>
+                    <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
+                      {connectionMode !== "server"
+                        ? "Switch to Server mode to change this."
+                        : biometricAvailable
+                          ? `Sign in to ${serverUrl.replace(/^https?:\/\//, "")} as ${serverUsername || "your account"} using ${biometricTypeLabel}.`
+                          : "Biometrics not available on this device."}
+                    </p>
+                  </div>
+                  <div
+                    className={`shrink-0 w-11 h-6 rounded-full border transition-all ${
+                      biometricServerEnabled ? `${accentClasses.bgClass} ${accentClasses.borderClass}` : `${themeClasses.border} bg-transparent`
+                    }`}
+                  >
+                    <div
+                      className={`h-5 w-5 rounded-full bg-white transition-transform ${
+                        biometricServerEnabled ? "translate-x-[22px]" : "translate-x-0.5"
+                      } mt-0.5`}
+                    />
+                  </div>
+                </div>
+              </button>
+
+              {connectionMode === "server" && serverBiometricPending && !biometricServerEnabled && (
+                <div className={`rounded-2xl border ${themeClasses.border} p-3`}>
+                  <p className={`text-xs ${themeClasses.textMuted} mb-2`}>
+                    Enter your account password once to store it securely (protected by biometrics).
+                  </p>
+                  <input
+                    type="password"
+                    value={serverPassword}
+                    onChange={(e) => setServerPassword(e.target.value)}
+                    placeholder="Account password"
+                    className={`w-full bg-transparent outline-none text-base px-3 py-2 rounded-xl border ${themeClasses.border}`}
+                  />
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setServerBiometricError("");
+                        try {
+                          setServerBiometricSaving(true);
+                          await onEnableBiometricServer(serverPassword);
+                          setServerPassword("");
+                          setServerBiometricPending(false);
+                        } catch (err) {
+                          setServerBiometricError(err instanceof Error ? err.message : "Failed to enable biometrics");
+                        } finally {
+                          setServerBiometricSaving(false);
+                        }
+                      }}
+                      disabled={serverBiometricSaving || serverPassword.length < 8}
+                      className={`flex-1 rounded-xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-2.5 font-semibold disabled:opacity-50`}
+                    >
+                      {serverBiometricSaving ? "Enabling..." : "Enable"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setServerBiometricPending(false);
+                        setServerPassword("");
+                        setServerBiometricError("");
+                      }}
+                      disabled={serverBiometricSaving}
+                      className={`flex-1 rounded-xl border ${themeClasses.border} py-2.5 font-semibold`}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {serverBiometricError && (
+                    <p className="mt-2 text-xs text-red-400">{serverBiometricError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm ${themeLocked ? "opacity-60" : ""}`}>
             <h3 className="font-semibold mb-3">Theme</h3>
             <div className="space-y-2">
