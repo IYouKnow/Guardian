@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
     @apply bg-black text-white;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -15,6 +21,19 @@
   /* Safe area support for mobile devices */
   :root {
     --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  }
+
+  html.inline-autofill-sheet,
+  body.inline-autofill-sheet,
+  #root.inline-autofill-sheet {
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  body.inline-autofill-sheet {
+    margin: 0;
   }
 }
 

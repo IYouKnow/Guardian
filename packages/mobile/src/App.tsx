@@ -206,6 +206,20 @@ function App() {
     AutofillBridge.setInlineAutofillServerMode({ enabled: biometricServerEnabled }).catch(() => undefined);
   }, [biometricServerEnabled]);
 
+  const inlineAutofillFlow = autofillLaunchContext.inlineAuth && (inlineAutofillClosing || !!pendingAutofillSave || !isLoggedIn);
+
+  useEffect(() => {
+    document.body.classList.toggle("inline-autofill-sheet", inlineAutofillFlow);
+    document.documentElement.classList.toggle("inline-autofill-sheet", inlineAutofillFlow);
+    const root = document.getElementById("root");
+    root?.classList.toggle("inline-autofill-sheet", inlineAutofillFlow);
+    return () => {
+      document.body.classList.remove("inline-autofill-sheet");
+      document.documentElement.classList.remove("inline-autofill-sheet");
+      root?.classList.remove("inline-autofill-sheet");
+    };
+  }, [inlineAutofillFlow]);
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -1180,14 +1194,12 @@ function App() {
 
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
-  const inlineAutofillFlow = autofillLaunchContext.inlineAuth && (inlineAutofillClosing || !!pendingAutofillSave || !isLoggedIn);
-
   if (!autofillLaunchContextResolved && pendingAutofillSave && biometricServerEnabled && !isLoggedIn) {
     return (
-      <div className={`w-full ${themeClasses.text} px-4 pt-6 pb-4`}>
-        <div className={`w-full rounded-[28px] ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
-          <p className="text-base font-semibold">Preparing secure save...</p>
-          <p className={`text-sm mt-2 ${themeClasses.textSecondary}`}>Guardian is getting the biometric save screen ready.</p>
+      <div className={`w-full max-w-[420px] mx-auto ${themeClasses.text} px-3 pt-2 pb-3`}>
+        <div className={`w-full rounded-[24px] ${themeClasses.card} border ${themeClasses.border} shadow-xl px-4 py-4`}>
+          <p className="text-[15px] font-semibold">Preparing secure save...</p>
+          <p className={`text-[12px] mt-1.5 ${themeClasses.textSecondary}`}>Guardian is getting the biometric save ready.</p>
         </div>
       </div>
     );
@@ -1195,6 +1207,9 @@ function App() {
 
   if (inlineAutofillFlow) {
     const appName = pendingAutofillSave?.appLabel || pendingAutofillSave?.packageName || "app";
+    const compactPackage = (pendingAutofillSave?.packageName || "").replace(/^androidapp:\/\//, "");
+    const showFailureActions = !inlineAutofillClosing && !!mutationError;
+    const showPassiveCancel = !inlineAutofillClosing && !mutationError;
     const statusText = inlineAutofillClosing
       ? "Saved. Closing secure save..."
       : !isLoggedIn
@@ -1202,55 +1217,105 @@ function App() {
       : "Saving login to your Guardian Server...";
 
     return (
-      <div className={`w-full ${themeClasses.text} px-4 pt-6 pb-4`}>
-        <div className={`w-full rounded-[28px] ${themeClasses.card} border ${themeClasses.border} shadow-xl p-6`}>
-          <div className={`h-12 w-12 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center mb-4`}>
-            <svg className={`w-6 h-6 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+      <div className={`w-full max-w-[420px] mx-auto ${themeClasses.text} px-2 pt-2 pb-3`}>
+        <div className={`w-full rounded-[24px] ${themeClasses.card} border ${themeClasses.border} shadow-2xl overflow-hidden`}>
+          <div className="px-4 pt-2 pb-1 flex justify-center">
+            <div className={`h-1 w-10 rounded-full ${themeClasses.border} opacity-60`} />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">Save to Guardian</h1>
-          <p className={`text-sm mt-1 ${themeClasses.textSecondary}`}>{`Login from ${appName}`}</p>
-          <p className={`text-sm mt-4 ${themeClasses.textSecondary}`}>{statusText}</p>
-          {mutationError && (
-            <p className="mt-4 text-sm text-red-400">{mutationError}</p>
-          )}
-          <div className="mt-6 flex flex-col gap-3">
-            {!inlineAutofillClosing && !isLoggedIn && biometricServerEnabled && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMutationError(null);
-                  handleBiometricUnlockServer().catch((err) => {
-                    setMutationError(err instanceof Error ? err.message : "Biometric unlock failed");
-                  });
-                }}
-                className={`rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-3 px-4 font-semibold active:scale-[0.99] transition-all`}
-              >
-                Retry fingerprint
-              </button>
+
+          <div className="px-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className={`h-10 w-10 rounded-[14px] ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center shadow-sm shrink-0`}>
+                <svg className={`w-4.5 h-4.5 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-[18px] leading-none font-semibold tracking-tight">Save to Guardian</h1>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.18em] px-2 py-1 rounded-full ${accentClasses.lightClass} ${accentClasses.textClass} border ${accentClasses.borderClass}`}>
+                    Server
+                  </span>
+                </div>
+                <p className={`text-[12px] mt-1 ${themeClasses.textSecondary}`}>Secure save without opening Guardian.</p>
+              </div>
+            </div>
+
+            <div className={`mt-3 rounded-[18px] border ${themeClasses.border} ${themeClasses.inputBg} px-3.5 py-3`}>
+              <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${themeClasses.textMuted}`}>Source App</p>
+              <p className="text-[14px] font-medium mt-1.5 break-words">{appName}</p>
+              {!!compactPackage && (
+                <p className={`text-[10px] mt-0.5 break-words ${themeClasses.textSecondary}`}>{compactPackage}</p>
+              )}
+            </div>
+
+            <div className={`mt-2.5 rounded-[16px] px-3.5 py-2.5 ${accentClasses.lightClass} border ${accentClasses.borderClass}`}>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${accentClasses.bgClass} ${inlineAutofillClosing ? "opacity-100" : "opacity-70"}`} />
+                  <span className={`h-2 w-2 rounded-full ${accentClasses.bgClass} ${!isLoggedIn && !inlineAutofillClosing ? "opacity-100" : "opacity-50"}`} />
+                  <span className={`h-2 w-2 rounded-full ${accentClasses.bgClass} ${isLoggedIn && !inlineAutofillClosing ? "opacity-100" : "opacity-50"}`} />
+                </div>
+                <p className={`text-[12px] font-medium ${accentClasses.textClass}`}>{statusText}</p>
+              </div>
+            </div>
+
+            {mutationError && (
+              <p className="mt-2.5 text-[12px] text-red-400">{mutationError}</p>
             )}
-            {!inlineAutofillClosing && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    AutofillBridge.openMainApp().catch(() => undefined);
-                  }}
-                  className={`rounded-2xl border ${themeClasses.border} py-3 px-4 font-semibold`}
-                >
-                  Open Guardian
-                </button>
+
+            {showFailureActions && (
+              <div className="mt-3 flex flex-col gap-2.5">
+                {!isLoggedIn && biometricServerEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMutationError(null);
+                      handleBiometricUnlockServer().catch((err) => {
+                        setMutationError(err instanceof Error ? err.message : "Biometric unlock failed");
+                      });
+                    }}
+                    className={`rounded-[16px] ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-2.5 px-4 text-[14px] font-semibold active:scale-[0.99] transition-all shadow-lg`}
+                  >
+                    Retry fingerprint
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      AutofillBridge.finishHostActivity().catch(() => undefined);
+                    }}
+                    className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold ${themeClasses.textSecondary}`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      AutofillBridge.openMainApp().catch(() => undefined);
+                    }}
+                    className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold`}
+                  >
+                    Open Guardian
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showPassiveCancel && (
+              <div className="mt-2.5 flex justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     AutofillBridge.finishHostActivity().catch(() => undefined);
                   }}
-                  className={`rounded-2xl border ${themeClasses.border} py-3 px-4 font-semibold ${themeClasses.textSecondary}`}
+                  className={`text-[11px] font-medium px-2 py-1 ${themeClasses.textSecondary}`}
                 >
                   Cancel
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
