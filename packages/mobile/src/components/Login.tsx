@@ -22,6 +22,7 @@ interface LoginProps {
   theme: Theme;
   accentColor: AccentColor;
   autofillPrompt?: string;
+  autofillMode?: "save" | "fill";
   initialScreen?: "choose" | "local" | "server";
   biometric?: {
     available: boolean;
@@ -41,6 +42,7 @@ export default function Login({
   theme,
   accentColor,
   autofillPrompt,
+  autofillMode,
   initialScreen,
   biometric,
   onBiometricUnlockLocal,
@@ -63,19 +65,52 @@ export default function Login({
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const [preferManualLogin, setPreferManualLogin] = useState(false);
+  const autoBiometricSigRef = useRef<string>("");
 
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
 
   const canBiometricUnlockLocal = !!onBiometricUnlockLocal && !!biometric?.available && !!biometric?.localEnabled && !!biometric?.localReady;
   const canBiometricUnlockServer = !!onBiometricUnlockServer && !!biometric?.available && !!biometric?.serverEnabled && !!biometric?.serverReady;
+  const preferredBiometricKind: LoginMode | null = useMemo(() => {
+    if (screen === "server" && canBiometricUnlockServer) return "server";
+    if (screen === "local" && canBiometricUnlockLocal) return "local";
+    if (initialScreen === "server" && canBiometricUnlockServer) return "server";
+    if (initialScreen === "local" && canBiometricUnlockLocal) return "local";
+    if (canBiometricUnlockServer) return "server";
+    if (canBiometricUnlockLocal) return "local";
+    return null;
+  }, [canBiometricUnlockLocal, canBiometricUnlockServer, initialScreen, screen]);
+
+  useEffect(() => {
+    if (screen === "server") {
+      setMode("server");
+      return;
+    }
+    if (screen === "local") {
+      setMode("local");
+    }
+  }, [screen]);
 
   useEffect(() => {
     if (!initialScreen) return;
-    if (screen !== "choose") return;
     if (initialScreen === "choose") return;
     setScreen(initialScreen);
-  }, [initialScreen, screen]);
+    setPreferManualLogin(false);
+  }, [initialScreen]);
+
+  useEffect(() => {
+    if (!autofillMode) return;
+    if (preferManualLogin) return;
+    if (!preferredBiometricKind) return;
+    if (isBiometricLoading || isLoading) return;
+
+    const sig = `${autofillMode}|${autofillPrompt || ""}|${preferredBiometricKind}|${initialScreen || ""}`;
+    if (autoBiometricSigRef.current === sig) return;
+    autoBiometricSigRef.current = sig;
+    handleBiometricUnlock(preferredBiometricKind).catch(() => undefined);
+  }, [autofillMode, autofillPrompt, initialScreen, isBiometricLoading, isLoading, preferredBiometricKind]);
 
   const friendlyError = (raw: string) => {
     const msg = (raw || "").trim();
@@ -216,6 +251,21 @@ export default function Login({
       />
 
       <header className="mb-6">
+        {autofillMode && preferredBiometricKind && !preferManualLogin && (
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setPreferManualLogin(true);
+                setLoginError("");
+                setScreen(initialScreen && initialScreen !== "choose" ? initialScreen : preferredBiometricKind);
+              }}
+              className={`rounded-xl border ${themeClasses.border} ${themeClasses.cardBg} px-3 py-2 text-xs font-semibold ${themeClasses.textSecondary} active:opacity-90`}
+            >
+              Use form
+            </button>
+          </div>
+        )}
         {screen !== "choose" ? (
           <div className="flex items-center gap-3">
             <button
@@ -250,8 +300,14 @@ export default function Login({
 
       {!!autofillPrompt && (
         <div className={`mb-5 px-4 py-3 rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border}`}>
-          <p className="text-sm font-semibold">Unlock to save login</p>
-          <p className={`text-xs mt-0.5 ${themeClasses.textSecondary}`}>Unlock to save login from {autofillPrompt}.</p>
+          <p className="text-sm font-semibold">
+            {autofillMode === "fill" ? "Unlock to autofill login" : "Unlock to save login"}
+          </p>
+          <p className={`text-xs mt-0.5 ${themeClasses.textSecondary}`}>
+            {autofillMode === "fill"
+              ? `Unlock to fill credentials into ${autofillPrompt}.`
+              : `Unlock to save login from ${autofillPrompt}.`}
+          </p>
         </div>
       )}
 

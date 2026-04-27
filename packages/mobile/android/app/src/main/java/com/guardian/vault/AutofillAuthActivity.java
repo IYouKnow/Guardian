@@ -21,12 +21,14 @@ public class AutofillAuthActivity extends BridgeActivity {
     if (window != null) {
       window.setBackgroundDrawableResource(android.R.color.transparent);
       WindowManager.LayoutParams params = window.getAttributes();
-      params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+      int insetPx = Math.round(getResources().getDisplayMetrics().density * 12f);
+      int targetWidth = Math.max(0, getResources().getDisplayMetrics().widthPixels - (insetPx * 2));
+      params.width = targetWidth;
       params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
       params.gravity = Gravity.BOTTOM;
       params.dimAmount = 0.45f;
       window.setAttributes(params);
-      window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      window.setLayout(targetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
     View content = findViewById(android.R.id.content);

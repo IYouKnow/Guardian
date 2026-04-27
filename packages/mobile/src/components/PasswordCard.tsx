@@ -10,6 +10,7 @@ interface PasswordCardProps {
   onCopyUsername: () => Promise<boolean> | boolean;
   onCopyPassword: () => Promise<boolean> | boolean;
   onDelete: () => void;
+  autofillMode?: boolean;
   theme?: MobileTheme;
   accentColor: AccentColor;
   itemSize: "small" | "medium" | "large";
@@ -34,6 +35,7 @@ export default function PasswordCard({
   onCopyUsername,
   onCopyPassword,
   onDelete,
+  autofillMode = false,
   theme = "dark",
   accentColor,
   itemSize,
@@ -146,9 +148,15 @@ export default function PasswordCard({
               <p className={`mt-1 ${sizeClasses.meta} ${themeClasses.textTertiary} font-mono tracking-widest`}>
                 {passwordMask}
               </p>
+              {autofillMode && (
+                <p className={`mt-2 ${sizeClasses.meta} font-semibold ${accentClasses.textClass}`}>
+                  Tap to autofill
+                </p>
+              )}
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            {!autofillMode && (
+              <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -227,7 +235,8 @@ export default function PasswordCard({
                   />
                 </svg>
               </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

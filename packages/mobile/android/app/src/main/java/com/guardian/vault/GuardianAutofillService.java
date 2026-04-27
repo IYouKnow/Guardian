@@ -1,7 +1,9 @@
 package com.guardian.vault;
 
 import android.app.assist.AssistStructure;
+import android.app.PendingIntent;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
@@ -19,6 +21,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillValue;
+import android.widget.RemoteViews;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -56,6 +59,17 @@ public class GuardianAutofillService extends AutofillService {
       requiredIds.add(ids.passwordId);
       if (ids.usernameId != null) requiredIds.add(ids.usernameId);
 
+      ComponentName activity = structure.getActivityComponent();
+      String packageName = activity != null ? activity.getPackageName() : "";
+      String appLabel = "";
+      if (!TextUtils.isEmpty(packageName)) {
+        try {
+          PackageManager pm = getPackageManager();
+          appLabel = pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString();
+        } catch (Exception ignored) {
+        }
+      }
+
       SaveInfo saveInfo = new SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_PASSWORD, requiredIds.toArray(new AutofillId[0]))
         .setDescription("Save to Guardian")
         .build();
@@ -64,7 +78,43 @@ public class GuardianAutofillService extends AutofillService {
       if (ids.usernameId != null) clientState.putParcelable(STATE_USERNAME_ID, ids.usernameId);
       if (ids.passwordId != null) clientState.putParcelable(STATE_PASSWORD_ID, ids.passwordId);
 
+      Intent authIntent = new Intent(this, AutofillAuthActivity.class);
+      authIntent.putExtra(AutofillBridgePlugin.EXTRA_INLINE_AUTH, true);
+      authIntent.putExtra(AutofillBridgePlugin.EXTRA_AUTOFILL_FLOW, AutofillBridgePlugin.AUTOFILL_FLOW_FILL);
+      authIntent.putExtra(AutofillBridgePlugin.EXTRA_FILL_PACKAGE_NAME, packageName);
+      authIntent.putExtra(AutofillBridgePlugin.EXTRA_FILL_APP_LABEL, appLabel);
+      authIntent.putExtra(AutofillBridgePlugin.EXTRA_FILL_USERNAME_ID, ids.usernameId);
+      authIntent.putExtra(AutofillBridgePlugin.EXTRA_FILL_PASSWORD_ID, ids.passwordId);
+      authIntent.addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK
+          | Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+          | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+          | Intent.FLAG_ACTIVITY_NO_ANIMATION
+      );
+
+      int pendingIntentFlags = PendingIntent.FLAG_CANCEL_CURRENT;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        pendingIntentFlags |= PendingIntent.FLAG_MUTABLE;
+      }
+
+      PendingIntent authPendingIntent = PendingIntent.getActivity(
+        this,
+        1001,
+        authIntent,
+        pendingIntentFlags
+      );
+
+      RemoteViews authPresentation = createSingleLinePresentation(
+        this,
+        TextUtils.isEmpty(appLabel) ? "Unlock with Guardian" : "Use Guardian for " + appLabel
+      );
+
       FillResponse response = new FillResponse.Builder()
+        .setAuthentication(
+          requiredIds.toArray(new AutofillId[0]),
+          authPendingIntent.getIntentSender(),
+          authPresentation
+        )
         .setClientState(clientState)
         .setSaveInfo(saveInfo)
         .build();
@@ -144,6 +194,20 @@ public class GuardianAutofillService extends AutofillService {
       Log.w(TAG, "onSaveRequest failed", ignored);
       callback.onFailure("Failed to save");
     }
+  }
+
+  private static RemoteViews createSingleLinePresentation(Context context, String text) {
+    RemoteViews views = new RemoteViews("com.guardian.vault", R.layout.autofill_suggestion_chip);
+    String theme = AutofillBridgePlugin.getAutofillPresentationTheme(context);
+    boolean light = "light".equalsIgnoreCase(theme);
+    views.setInt(
+      R.id.autofill_chip_root,
+      "setBackgroundResource",
+      light ? R.drawable.autofill_chip_bg_light : R.drawable.autofill_chip_bg_dark
+    );
+    views.setInt(android.R.id.text1, "setTextColor", light ? 0xFF2E2610 : 0xFFF9E7A3);
+    views.setTextViewText(android.R.id.text1, text);
+    return views;
   }
 
   static final class AutofillStructureParser {
@@ -234,6 +298,11 @@ public class GuardianAutofillService extends AutofillService {
         }
       }
 
+      CharSequence hintText = node.getHint();
+      if (out.usernameId == null && hintLooksLikeUsername(hintText)) {
+        out.usernameId = node.getAutofillId();
+      }
+
       int count = node.getChildCount();
       for (int i = 0; i < count; i++) traverseForIds(node.getChildAt(i), out);
     }
@@ -263,6 +332,11 @@ public class GuardianAutofillService extends AutofillService {
           if (TextUtils.isEmpty(out.username) && (lower.contains("user") || lower.contains("email") || lower.contains("login"))) {
             out.username = value;
           }
+        }
+
+        CharSequence hintText = node.getHint();
+        if (TextUtils.isEmpty(out.username) && hintLooksLikeUsername(hintText)) {
+          out.username = value;
         }
       }
 
@@ -337,7 +411,17 @@ public class GuardianAutofillService extends AutofillService {
     static boolean isEmailInputType(int inputType) {
       if (inputType == 0) return false;
       int variation = inputType & InputType.TYPE_MASK_VARIATION;
-      return variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS;
+      return variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        || variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS;
+    }
+
+    static boolean hintLooksLikeUsername(CharSequence hint) {
+      if (hint == null) return false;
+      String lower = hint.toString().toLowerCase();
+      return lower.contains("user")
+        || lower.contains("email")
+        || lower.contains("login")
+        || lower.contains("account");
     }
 
     static boolean nodeIsPassword(AssistStructure.ViewNode node) {

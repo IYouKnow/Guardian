@@ -10,6 +10,13 @@ export type PendingAutofillSave = {
   timestampMs?: number;
 };
 
+export type PendingAutofillFillRequest = {
+  packageName?: string;
+  appLabel?: string;
+  hasUsernameField: boolean;
+  hasPasswordField: boolean;
+};
+
 export type AutofillLaunchContext = {
   inlineAuth: boolean;
   activity: string;
@@ -17,8 +24,12 @@ export type AutofillLaunchContext = {
 
 export interface AutofillBridgePlugin {
   getPendingSave(): Promise<{ pending: PendingAutofillSave | null }>;
+  getFillRequest(): Promise<{ request: PendingAutofillFillRequest | null }>;
   ackPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
   clearPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
+  completeFill(options: { username?: string; password: string; label?: string }): Promise<{ ok: boolean }>;
+  cancelFill(): Promise<{ ok: boolean }>;
+  setAutofillPresentationTheme(options: { theme: string }): Promise<{ ok: boolean }>;
   getLaunchContext(): Promise<AutofillLaunchContext>;
   finishHostActivity(): Promise<void>;
   openMainApp(): Promise<void>;

@@ -9,6 +9,7 @@ interface PasswordGridProps {
   onCopyUsername: (username: string) => Promise<boolean> | boolean;
   onCopyPassword: (password: string) => Promise<boolean> | boolean;
   onDelete: (id: string) => void;
+  autofillMode?: boolean;
   theme?: MobileTheme;
   accentColor: AccentColor;
   itemSize: "small" | "medium" | "large";
@@ -20,6 +21,7 @@ export default function PasswordGrid({
   onCopyUsername,
   onCopyPassword,
   onDelete,
+  autofillMode = false,
   theme = "dark",
   accentColor,
   itemSize,
@@ -37,6 +39,7 @@ export default function PasswordGrid({
           onCopyUsername={() => onCopyUsername(password.username)}
           onCopyPassword={() => onCopyPassword(password.password)}
           onDelete={() => onDelete(password.id)}
+          autofillMode={autofillMode}
           theme={theme}
           accentColor={accentColor}
           itemSize={itemSize}

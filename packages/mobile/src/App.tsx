@@ -19,7 +19,7 @@ import { getAccentColorClasses, type AccentColor, type Theme } from "@guardian/s
 import { getThemeClasses } from "./utils/theme";
 import { useSSE } from "./hooks/useSSE";
 import { SensitiveClipboard } from "./plugins/SensitiveClipboard";
-import { AutofillBridge, type AutofillLaunchContext, type PendingAutofillSave } from "./plugins/AutofillBridge";
+import { AutofillBridge, type AutofillLaunchContext, type PendingAutofillFillRequest, type PendingAutofillSave } from "./plugins/AutofillBridge";
 
 // Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -98,6 +98,10 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
+function normalizeAndroidAppWebsite(input: string): string {
+  return (input || "").trim().toLowerCase().replace(/^androidapp:\/\//, "");
+}
+
 function App() {
   type ThemeSyncMode = "off" | "follow" | "sync";
   type InterfaceDensity = "small" | "medium" | "large";
@@ -118,10 +122,13 @@ function App() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [autofillInitialEntry, setAutofillInitialEntry] = useState<PasswordEntry | null>(null);
   const [pendingAutofillSave, setPendingAutofillSave] = useState<PendingAutofillSave | null>(null);
+  const [autofillFillRequest, setAutofillFillRequest] = useState<PendingAutofillFillRequest | null>(null);
+  const [showAutofillFillManualLogin, setShowAutofillFillManualLogin] = useState(false);
   const savingPendingAutofillRef = useRef(false);
   const pendingAutofillRetryRef = useRef<number | null>(null);
   const autoBiometricAttemptedRef = useRef(false);
   const autofillDebugOnceRef = useRef<{ checked: boolean; error: boolean }>({ checked: false, error: false });
+  const autofillFillInFlightRef = useRef(false);
   const [entryCreatedAtMap, setEntryCreatedAtMap] = useState<Map<string, string>>(new Map());
   const [searchQuery, setSearchQuery] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -206,7 +213,12 @@ function App() {
     AutofillBridge.setInlineAutofillServerMode({ enabled: biometricServerEnabled }).catch(() => undefined);
   }, [biometricServerEnabled]);
 
-  const inlineAutofillFlow = autofillLaunchContext.inlineAuth && (inlineAutofillClosing || !!pendingAutofillSave || !isLoggedIn);
+  useEffect(() => {
+    AutofillBridge.setAutofillPresentationTheme({ theme }).catch(() => undefined);
+  }, [theme]);
+
+  const inlineAutofillFlow = autofillLaunchContext.inlineAuth && !!pendingAutofillSave && (inlineAutofillClosing || !isLoggedIn);
+  const inlineAutofillFillFlow = autofillLaunchContext.inlineAuth && !!autofillFillRequest && !showAutofillFillManualLogin;
 
   useEffect(() => {
     document.body.classList.toggle("inline-autofill-sheet", inlineAutofillFlow);
@@ -312,6 +324,26 @@ function App() {
     return title.includes(q) || username.includes(q) || website.includes(q);
   });
 
+  const autofillTargetPackage = (autofillFillRequest?.packageName ?? "").trim().toLowerCase();
+  const autofillTargetAppLabel = (autofillFillRequest?.appLabel ?? "").trim().toLowerCase();
+  const displayedPasswords = useMemo(() => {
+    if (!autofillFillRequest) return filteredPasswords;
+
+    const rankEntry = (entry: PasswordEntry) => {
+      const websitePkg = normalizeAndroidAppWebsite(entry.website ?? "");
+      if (autofillTargetPackage && websitePkg === autofillTargetPackage) return 0;
+      const title = (entry.title ?? "").trim().toLowerCase();
+      if (autofillTargetAppLabel && title === autofillTargetAppLabel) return 1;
+      return 2;
+    };
+
+    return [...filteredPasswords].sort((a, b) => {
+      const byRank = rankEntry(a) - rankEntry(b);
+      if (byRank !== 0) return byRank;
+      return (b.lastModified ?? "").localeCompare(a.lastModified ?? "");
+    });
+  }, [autofillFillRequest, autofillTargetAppLabel, autofillTargetPackage, filteredPasswords]);
+
   const copyToClipboard = async (
     text: string,
     opts?: { sensitive?: boolean; clearAfterMs?: number },
@@ -369,6 +401,27 @@ function App() {
   const handleCopyUsername = (username: string) => copyToClipboard(username);
 
   const handleCopyPassword = (password: string) => copyToClipboard(password, { sensitive: true });
+
+  const completeAutofillFill = useCallback(async (entry: PasswordEntry) => {
+    if (!autofillFillRequest) return;
+    if (autofillFillInFlightRef.current) return;
+
+    autofillFillInFlightRef.current = true;
+    setMutationError(null);
+    try {
+      await AutofillBridge.completeFill({
+        username: entry.username || "",
+        password: entry.password,
+        label: entry.title || entry.username || "Guardian login",
+      });
+      setAutofillFillRequest(null);
+    } catch (err) {
+      console.error("Autofill fill failed:", err);
+      setMutationError(err instanceof Error ? err.message : "Failed to autofill this login");
+    } finally {
+      autofillFillInFlightRef.current = false;
+    }
+  }, [autofillFillRequest]);
 
   const loadPasswordsFromVault = async (vaultBytes: Uint8Array, password: string) => {
     try {
@@ -983,16 +1036,39 @@ function App() {
     }
   }, [pendingAutofillSave]);
 
+  const refreshAutofillFillRequest = useCallback(async (): Promise<PendingAutofillFillRequest | null> => {
+    try {
+      const res = await AutofillBridge.getFillRequest();
+      const request = res?.request ?? null;
+      setAutofillFillRequest(request);
+      return request;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    setShowAutofillFillManualLogin(false);
+    autoBiometricAttemptedRef.current = false;
+  }, [autofillFillRequest?.packageName, autofillFillRequest?.appLabel]);
+
   useEffect(() => {
     // On launch, consume any pending Android Autofill save.
     refreshPendingAutofillSave().catch(() => undefined);
+    refreshAutofillFillRequest().catch(() => undefined);
 
     const listener = CapacitorApp.addListener("appStateChange", (state) => {
-      if (state.isActive) refreshPendingAutofillSave().catch(() => undefined);
+      if (state.isActive) {
+        refreshPendingAutofillSave().catch(() => undefined);
+        refreshAutofillFillRequest().catch(() => undefined);
+      }
     });
 
     const onVisibility = () => {
-      if (!document.hidden) refreshPendingAutofillSave().catch(() => undefined);
+      if (!document.hidden) {
+        refreshPendingAutofillSave().catch(() => undefined);
+        refreshAutofillFillRequest().catch(() => undefined);
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
 
@@ -1000,7 +1076,7 @@ function App() {
       listener.then((l) => l.remove());
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refreshPendingAutofillSave]);
+  }, [refreshAutofillFillRequest, refreshPendingAutofillSave]);
 
   useEffect(() => {
     // Live event when a new pending save arrives while the app is running.
@@ -1074,26 +1150,27 @@ function App() {
     if (loginMode === "server" && !serverSession) return;
     if (savingPendingAutofillRef.current) return;
 
-    const draft = buildAutofillDraft(pendingAutofillSave);
+    const pending = pendingAutofillSave;
+    const draft = buildAutofillDraft(pending);
     if (!draft.password.trim()) return;
 
     savingPendingAutofillRef.current = true;
     console.warn("[autofill] attempting to persist pending save", {
-      id: pendingAutofillSave.id,
-      pkg: pendingAutofillSave.packageName,
-      app: pendingAutofillSave.appLabel,
+      id: pending.id,
+      pkg: pending.packageName,
+      app: pending.appLabel,
       mode: loginMode,
     });
     if (localStorage.getItem("guardian_debug_autofill") === "1") {
       console.info("[autofill] savePendingAutofill start", {
-        id: pendingAutofillSave.id,
-        pkg: pendingAutofillSave.packageName,
-        app: pendingAutofillSave.appLabel,
+        id: pending.id,
+        pkg: pending.packageName,
+        app: pending.appLabel,
         mode: loginMode,
       });
     }
 
-    const id = pendingAutofillSave.id;
+    const id = pending.id;
     const nowIso = new Date().toISOString();
     const newEntry: PasswordEntry = {
       id,
@@ -1131,7 +1208,7 @@ function App() {
       }
       await AutofillBridge.ackPendingSave({ id }).catch(() => undefined);
       clearPendingAutofill();
-      const appName = (pendingAutofillSave.appLabel || pendingAutofillSave.packageName || "app").trim();
+      const appName = (pending.appLabel || pending.packageName || "app").trim();
       setAutofillNotice(`Saved login from ${appName}.`);
       window.setTimeout(() => setAutofillNotice(null), 3000);
       if (autofillLaunchContext.inlineAuth) {
@@ -1178,19 +1255,31 @@ function App() {
     // Server mode can’t restore the encryption key on cold start without re-auth.
     // If biometrics are enabled, prompt immediately so we can complete the pending save.
     if (isLoggedIn) return;
-    if (!pendingAutofillSave) return;
-    if (!biometricServerEnabled) return;
+    if (!pendingAutofillSave && !autofillFillRequest) return;
     if (autoBiometricAttemptedRef.current) return;
+    const canUseServerBiometrics = biometricServerEnabled && biometricServerReady && !!getStoredServerUrl();
+    const canUseLocalBiometrics = biometricLocalEnabled && biometricLocalReady;
+    if (!canUseServerBiometrics && !canUseLocalBiometrics) return;
     autoBiometricAttemptedRef.current = true;
 
-    handleBiometricUnlockServer().catch((err) => {
+    const run = canUseServerBiometrics ? handleBiometricUnlockServer : handleBiometricUnlockLocal;
+    run().catch((err) => {
       // If user cancels, keep pending save around; they can log in manually.
       if (autofillLaunchContext.inlineAuth) {
         setMutationError(err instanceof Error ? err.message : "Biometric unlock failed");
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autofillLaunchContext.inlineAuth, biometricServerEnabled, isLoggedIn, pendingAutofillSave]);
+  }, [
+    autofillFillRequest,
+    autofillLaunchContext.inlineAuth,
+    biometricLocalEnabled,
+    biometricLocalReady,
+    biometricServerEnabled,
+    biometricServerReady,
+    isLoggedIn,
+    pendingAutofillSave,
+  ]);
 
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
@@ -1200,6 +1289,152 @@ function App() {
         <div className={`w-full rounded-[24px] ${themeClasses.card} border ${themeClasses.border} shadow-xl px-4 py-4`}>
           <p className="text-[15px] font-semibold">Preparing secure save...</p>
           <p className={`text-[12px] mt-1.5 ${themeClasses.textSecondary}`}>Guardian is getting the biometric save ready.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (inlineAutofillFillFlow) {
+    const appName = autofillFillRequest?.appLabel || autofillFillRequest?.packageName || "app";
+    const compactPackage = (autofillFillRequest?.packageName || "").replace(/^androidapp:\/\//, "");
+    const quickMatches = displayedPasswords.slice(0, 4);
+    const canRetryBiometric = biometricServerReady || biometricLocalReady;
+
+    return (
+      <div className={`w-full max-w-[420px] mx-auto ${themeClasses.text} px-2 pt-2 pb-3`}>
+        <div className={`w-full rounded-[24px] ${themeClasses.card} border ${themeClasses.border} shadow-2xl overflow-hidden`}>
+          <div className="px-4 pt-2 pb-1 flex justify-center">
+            <div className={`h-1 w-10 rounded-full ${themeClasses.border} opacity-60`} />
+          </div>
+
+          <div className="px-4 pb-4">
+            <div className="flex items-center gap-3">
+              <div className={`h-10 w-10 rounded-[14px] ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center shadow-sm shrink-0`}>
+                <svg className={`w-4.5 h-4.5 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-[18px] leading-none font-semibold tracking-tight">Autofill with Guardian</h1>
+                  <span className={`text-[9px] font-bold uppercase tracking-[0.18em] px-2 py-1 rounded-full ${accentClasses.lightClass} ${accentClasses.textClass} border ${accentClasses.borderClass}`}>
+                    Secure
+                  </span>
+                </div>
+                <p className={`text-[12px] mt-1 ${themeClasses.textSecondary}`}>
+                  {isLoggedIn ? "Choose a login to fill without opening the full vault." : `Unlock Guardian for ${appName}.`}
+                </p>
+              </div>
+            </div>
+
+            <div className={`mt-3 rounded-[18px] border ${themeClasses.border} ${themeClasses.inputBg} px-3.5 py-3`}>
+              <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${themeClasses.textMuted}`}>Target App</p>
+              <p className="text-[14px] font-medium mt-1.5 break-words">{appName}</p>
+              {!!compactPackage && (
+                <p className={`text-[10px] mt-0.5 break-words ${themeClasses.textSecondary}`}>{compactPackage}</p>
+              )}
+            </div>
+
+            {!isLoggedIn ? (
+              <>
+                <div className={`mt-2.5 rounded-[16px] px-3.5 py-2.5 ${accentClasses.lightClass} border ${accentClasses.borderClass}`}>
+                  <p className={`text-[12px] font-medium ${accentClasses.textClass}`}>
+                    {autoBiometricAttemptedRef.current ? `Waiting for ${biometricTypeLabel}...` : "Preparing secure autofill..."}
+                  </p>
+                </div>
+
+                {mutationError && (
+                  <p className="mt-2.5 text-[12px] text-red-400">{mutationError}</p>
+                )}
+
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAutofillFillManualLogin(true);
+                      setMutationError(null);
+                    }}
+                    className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold ${themeClasses.textSecondary}`}
+                  >
+                    Use form
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      AutofillBridge.cancelFill().catch(() => undefined);
+                      setAutofillFillRequest(null);
+                    }}
+                    className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                {mutationError && canRetryBiometric && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      autoBiometricAttemptedRef.current = false;
+                      setMutationError(null);
+                    }}
+                    className={`mt-2.5 w-full rounded-[14px] ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-2.5 px-4 text-[13px] font-semibold`}
+                  >
+                    Retry biometrics
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="mt-3 space-y-2.5">
+                  {quickMatches.length > 0 ? (
+                    quickMatches.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => {
+                          completeAutofillFill(entry).catch(console.error);
+                        }}
+                        className={`w-full rounded-[18px] border ${themeClasses.border} ${themeClasses.inputBg} px-3.5 py-3 text-left active:scale-[0.99] transition-all`}
+                      >
+                        <p className="text-[14px] font-semibold truncate">{entry.title || "Untitled"}</p>
+                        <p className={`text-[11px] mt-1 truncate ${themeClasses.textSecondary}`}>
+                          {entry.username || entry.website || "No username"}
+                        </p>
+                      </button>
+                    ))
+                  ) : (
+                    <div className={`rounded-[18px] border ${themeClasses.border} ${themeClasses.inputBg} px-3.5 py-3`}>
+                      <p className="text-[13px] font-medium">No saved login matched yet.</p>
+                      <p className={`text-[11px] mt-1 ${themeClasses.textSecondary}`}>Open the full vault if you want to search everything.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAutofillFillManualLogin(true);
+                    }}
+                    className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold ${themeClasses.textSecondary}`}
+                  >
+                    Open vault
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      AutofillBridge.cancelFill().catch(() => undefined);
+                      setAutofillFillRequest(null);
+                    }}
+                    className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1331,10 +1566,15 @@ function App() {
         theme={theme}
         accentColor={accentColor}
         autofillPrompt={
-          pendingAutofillSave ? pendingAutofillSave.appLabel || pendingAutofillSave.packageName || "an app" : undefined
+          autofillFillRequest
+            ? autofillFillRequest.appLabel || autofillFillRequest.packageName || "an app"
+            : pendingAutofillSave
+              ? pendingAutofillSave.appLabel || pendingAutofillSave.packageName || "an app"
+              : undefined
         }
+        autofillMode={autofillFillRequest ? "fill" : pendingAutofillSave ? "save" : undefined}
         initialScreen={
-          pendingAutofillSave && getStoredServerUrl() && getStoredServerUsername() ? "server" : undefined
+          (pendingAutofillSave || autofillFillRequest) && getStoredServerUrl() && getStoredServerUsername() ? "server" : undefined
         }
         biometric={{
           available: biometricAvailable,
@@ -1517,6 +1757,28 @@ function App() {
 
             {/* Search */}
             <div className={`mt-4 ${themeClasses.card} border ${themeClasses.border} rounded-2xl p-3 shadow-sm`}>
+              {autofillFillRequest && (
+                <div className={`mb-3 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} px-3 py-3`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${accentClasses.textClass}`}>Tap a login to autofill</p>
+                      <p className={`text-[11px] mt-1 ${themeClasses.textSecondary}`}>
+                        {`Guardian will fill this login into ${autofillFillRequest.appLabel || autofillFillRequest.packageName || "the app"}.`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        AutofillBridge.cancelFill().catch(() => undefined);
+                        setAutofillFillRequest(null);
+                      }}
+                      className={`shrink-0 rounded-xl border ${themeClasses.border} px-3 py-2 text-[11px] font-semibold ${themeClasses.textSecondary}`}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="relative">
                 <input
                   type="text"
@@ -1547,7 +1809,7 @@ function App() {
               </div>
               <div className="flex items-center justify-between mt-2 px-1">
                 <p className={`text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted}`}>
-                  {filteredPasswords.length} {filteredPasswords.length === 1 ? "item" : "items"}
+                  {displayedPasswords.length} {displayedPasswords.length === 1 ? "item" : "items"}
                 </p>
                 {searchQuery && (
                   <p className={`text-[11px] font-bold uppercase tracking-widest ${accentClasses.textClass}`}>
@@ -1570,7 +1832,7 @@ function App() {
 
           {/* Main Content */}
           <main className="flex-1 overflow-y-auto px-4 pb-24 relative z-10">
-            {filteredPasswords.length === 0 ? (
+            {displayedPasswords.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center py-20">
                 <div className={`w-20 h-20 rounded-3xl ${themeClasses.card} border ${themeClasses.border} flex items-center justify-center mb-6 shadow-sm`}>
                   <svg className={`w-8 h-8 ${themeClasses.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1581,13 +1843,20 @@ function App() {
                   {searchQuery ? "No matches found" : "Empty Secure Vault"}
                 </p>
                 <p className={`${themeClasses.textMuted} text-[11px] font-bold uppercase tracking-widest`}>
-                  {searchQuery ? "Try a different search term" : "Add your first record to begin"}
+                  {searchQuery ? "Try a different search term" : autofillFillRequest ? "No saved logins available to autofill" : "Add your first record to begin"}
                 </p>
               </div>
             ) : (
               <PasswordGrid
-                passwords={filteredPasswords}
+                passwords={displayedPasswords}
                 onCardClick={(id) => {
+                  if (autofillFillRequest) {
+                    const selected = passwords.find((p) => p.id === id);
+                    if (selected) {
+                      completeAutofillFill(selected).catch(console.error);
+                    }
+                    return;
+                  }
                   setActivePasswordId(id);
                   setActiveView("detail");
                 }}
@@ -1596,6 +1865,7 @@ function App() {
                 onDelete={(id) => {
                   deletePassword(id).catch(console.error);
                 }}
+                autofillMode={!!autofillFillRequest}
                 theme={theme}
                 accentColor={accentColor}
                 itemSize={interfaceDensity}
@@ -1603,18 +1873,20 @@ function App() {
             )}
           </main>
 
-          <button
-            onClick={() => {
-              setAutofillInitialEntry(null);
-              setActiveView("add");
-            }}
-            className={`fixed right-4 bottom-[84px] w-14 h-14 rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-xl flex items-center justify-center z-30 active:scale-95 transition-all`}
-            title="Add"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
+          {!autofillFillRequest && (
+            <button
+              onClick={() => {
+                setAutofillInitialEntry(null);
+                setActiveView("add");
+              }}
+              className={`fixed right-4 bottom-[84px] w-14 h-14 rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-xl flex items-center justify-center z-30 active:scale-95 transition-all`}
+              title="Add"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
         </>
       )}
 
