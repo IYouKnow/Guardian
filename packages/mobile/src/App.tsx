@@ -151,6 +151,7 @@ function App() {
   const [biometricLocalEnabled, setBiometricLocalEnabled] = useState<boolean>(() => localStorage.getItem(BIOMETRIC_LOCAL_PREF_KEY) === "1");
   const [biometricServerEnabled, setBiometricServerEnabled] = useState<boolean>(() => localStorage.getItem(BIOMETRIC_SERVER_PREF_KEY) === "1");
   const [biometricAvailable, setBiometricAvailable] = useState<boolean>(false);
+  const [accessibilityFillEnabled, setAccessibilityFillEnabled] = useState<boolean>(false);
   const [biometricTypeLabel, setBiometricTypeLabel] = useState<string>("biometrics");
   const [biometricAvailabilityDetail, setBiometricAvailabilityDetail] = useState<string>("");
   const [biometricLocalReady, setBiometricLocalReady] = useState<boolean>(false);
@@ -216,6 +217,19 @@ function App() {
   useEffect(() => {
     AutofillBridge.setAutofillPresentationTheme({ theme }).catch(() => undefined);
   }, [theme]);
+
+  const refreshAccessibilityStatus = useCallback(async () => {
+    try {
+      const status = await AutofillBridge.getAccessibilityStatus();
+      setAccessibilityFillEnabled(!!status.enabled);
+    } catch {
+      setAccessibilityFillEnabled(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAccessibilityStatus().catch(() => undefined);
+  }, [refreshAccessibilityStatus]);
 
   const inlineAutofillFlow = autofillLaunchContext.inlineAuth && !!pendingAutofillSave && (inlineAutofillClosing || !isLoggedIn);
   const inlineAutofillFillFlow = autofillLaunchContext.inlineAuth && !!autofillFillRequest && !showAutofillFillManualLogin;
@@ -418,6 +432,41 @@ function App() {
     } catch (err) {
       console.error("Autofill fill failed:", err);
       setMutationError(err instanceof Error ? err.message : "Failed to autofill this login");
+    } finally {
+      autofillFillInFlightRef.current = false;
+    }
+  }, [autofillFillRequest]);
+
+  const fillCurrentAppViaAccessibility = useCallback(async (entry: PasswordEntry) => {
+    setMutationError(null);
+    const result = await AutofillBridge.fillCurrentApp({
+      username: entry.username || "",
+      password: entry.password,
+    });
+    if (!result?.ok) throw new Error("Guardian couldn't write into the focused app fields. Make sure Accessibility direct fill is enabled.");
+    setAutofillFillRequest(null);
+    await AutofillBridge.finishHostActivity().catch(() => undefined);
+  }, []);
+
+  const completeAutofillFillResponse = useCallback(async (entries: PasswordEntry[]) => {
+    if (!autofillFillRequest) return;
+    if (autofillFillInFlightRef.current) return;
+    if (!entries.length) return;
+
+    autofillFillInFlightRef.current = true;
+    setMutationError(null);
+    try {
+      await AutofillBridge.completeFillResponse({
+        entries: entries.map((entry) => ({
+          username: entry.username || "",
+          password: entry.password,
+          label: entry.title || entry.username || "Guardian login",
+        })),
+      });
+      setAutofillFillRequest(null);
+    } catch (err) {
+      console.error("Autofill fill response failed:", err);
+      setMutationError(err instanceof Error ? err.message : "Failed to prepare autofill suggestions");
     } finally {
       autofillFillInFlightRef.current = false;
     }
@@ -1061,6 +1110,7 @@ function App() {
       if (state.isActive) {
         refreshPendingAutofillSave().catch(() => undefined);
         refreshAutofillFillRequest().catch(() => undefined);
+        refreshAccessibilityStatus().catch(() => undefined);
       }
     });
 
@@ -1068,6 +1118,7 @@ function App() {
       if (!document.hidden) {
         refreshPendingAutofillSave().catch(() => undefined);
         refreshAutofillFillRequest().catch(() => undefined);
+        refreshAccessibilityStatus().catch(() => undefined);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -1076,7 +1127,7 @@ function App() {
       listener.then((l) => l.remove());
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refreshAutofillFillRequest, refreshPendingAutofillSave]);
+  }, [refreshAccessibilityStatus, refreshAutofillFillRequest, refreshPendingAutofillSave]);
 
   useEffect(() => {
     // Live event when a new pending save arrives while the app is running.
@@ -1297,7 +1348,7 @@ function App() {
   if (inlineAutofillFillFlow) {
     const appName = autofillFillRequest?.appLabel || autofillFillRequest?.packageName || "app";
     const compactPackage = (autofillFillRequest?.packageName || "").replace(/^androidapp:\/\//, "");
-    const quickMatches = displayedPasswords.slice(0, 4);
+    const quickMatches = displayedPasswords.slice(0, 6);
     const canRetryBiometric = biometricServerReady || biometricLocalReady;
 
     return (
@@ -1393,7 +1444,13 @@ function App() {
                         key={entry.id}
                         type="button"
                         onClick={() => {
-                          completeAutofillFill(entry).catch(console.error);
+                          if (accessibilityFillEnabled) {
+                            fillCurrentAppViaAccessibility(entry).catch((err) => {
+                              setMutationError(err instanceof Error ? err.message : "Direct fill failed");
+                            });
+                            return;
+                          }
+                          completeAutofillFillResponse([entry]).catch(console.error);
                         }}
                         className={`w-full rounded-[18px] border ${themeClasses.border} ${themeClasses.inputBg} px-3.5 py-3 text-left active:scale-[0.99] transition-all`}
                       >
@@ -1411,15 +1468,30 @@ function App() {
                   )}
                 </div>
 
+                <div className={`mt-2.5 rounded-[16px] px-3.5 py-2.5 ${accessibilityFillEnabled ? accentClasses.lightClass : themeClasses.inputBg} border ${accessibilityFillEnabled ? accentClasses.borderClass : themeClasses.border}`}>
+                  <p className={`text-[12px] font-medium ${accessibilityFillEnabled ? accentClasses.textClass : themeClasses.text}`}>
+                    {accessibilityFillEnabled ? "Accessibility direct fill is enabled." : "Enable Accessibility direct fill for stubborn apps."}
+                  </p>
+                  <p className={`text-[11px] mt-1 ${themeClasses.textSecondary}`}>
+                    {accessibilityFillEnabled
+                      ? "Guardian will write the selected login straight into the focused app fields."
+                      : "Without this permission, Guardian has to rely on Android Autofill, which some apps ignore."}
+                  </p>
+                </div>
+
                 <div className="mt-3 grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => {
+                      if (!accessibilityFillEnabled) {
+                        AutofillBridge.openAccessibilitySettings().catch(() => undefined);
+                        return;
+                      }
                       setShowAutofillFillManualLogin(true);
                     }}
                     className={`rounded-[14px] border ${themeClasses.border} py-2.5 px-4 text-[13px] font-semibold ${themeClasses.textSecondary}`}
                   >
-                    Open vault
+                    {accessibilityFillEnabled ? "Open vault" : "Enable fill"}
                   </button>
                   <button
                     type="button"
@@ -1619,6 +1691,10 @@ function App() {
           biometricAvailabilityDetail={biometricAvailabilityDetail}
           biometricLocalEnabled={biometricLocalEnabled}
           biometricServerEnabled={biometricServerEnabled}
+          accessibilityFillEnabled={accessibilityFillEnabled}
+          onOpenAccessibilitySettings={() => {
+            AutofillBridge.openAccessibilitySettings().catch(() => undefined);
+          }}
           onBiometricLocalEnabledChange={handleBiometricLocalEnabledChange}
           onEnableBiometricServer={enableServerBiometrics}
           onDisableBiometricServer={disableServerBiometrics}

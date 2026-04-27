@@ -32,6 +32,7 @@
             android:finishOnTaskLaunch="true"
             android:launchMode="singleTask"
             android:noHistory="true"
+            android:taskAffinity="com.guardian.vault.autofill"
             android:theme="@style/AppTheme.AutofillDialog" />
 
         <provider
@@ -56,6 +57,19 @@
             <meta-data
                 android:name="android.autofill"
                 android:resource="@xml/autofillservice" />
+        </service>
+
+        <service
+            android:name=".GuardianAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibilityservice" />
         </service>
     </application>
 

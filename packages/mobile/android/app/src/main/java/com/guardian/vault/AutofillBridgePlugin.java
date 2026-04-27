@@ -8,18 +8,23 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.service.autofill.Dataset;
+import android.service.autofill.FillResponse;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillManager;
 import android.view.autofill.AutofillValue;
 import android.widget.RemoteViews;
+import android.provider.Settings;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.PluginMethod;
+
+import org.json.JSONObject;
 
 @CapacitorPlugin(name = "AutofillBridge")
 public class AutofillBridgePlugin extends Plugin {
@@ -150,6 +155,38 @@ public class AutofillBridgePlugin extends Plugin {
   }
 
   @PluginMethod
+  public void getAccessibilityStatus(PluginCall call) {
+    JSObject res = new JSObject();
+    res.put("enabled", GuardianAccessibilityService.isEnabled(getContext()));
+    call.resolve(res);
+  }
+
+  @PluginMethod
+  public void openAccessibilitySettings(PluginCall call) {
+    Context context = getActivity() != null ? getActivity() : getContext();
+    Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    context.startActivity(intent);
+    call.resolve();
+  }
+
+  @PluginMethod
+  public void fillCurrentApp(PluginCall call) {
+    String username = call.getString("username", "");
+    String password = call.getString("password", "");
+    Intent intent = getActivity() != null ? getActivity().getIntent() : null;
+    String packageName = intent != null ? intent.getStringExtra(EXTRA_FILL_PACKAGE_NAME) : "";
+    boolean ok = GuardianAccessibilityService.requestDeferredFill(packageName, username, password);
+    JSObject res = new JSObject();
+    res.put("ok", ok);
+    call.resolve(res);
+    if (ok && getActivity() != null) {
+      getActivity().setResult(Activity.RESULT_CANCELED);
+      getActivity().finish();
+    }
+  }
+
+  @PluginMethod
   public void ackPendingSave(PluginCall call) {
     String id = call.getString("id", "");
     boolean ok = PendingAutofillStore.remove(getContext(), id);
@@ -195,6 +232,63 @@ public class AutofillBridgePlugin extends Plugin {
 
     Intent result = new Intent();
     result.putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, dataset.build());
+    result.putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT_EPHEMERAL_DATASET, true);
+    activity.setResult(Activity.RESULT_OK, result);
+    activity.finish();
+
+    JSObject res = new JSObject();
+    res.put("ok", true);
+    call.resolve(res);
+  }
+
+  @PluginMethod
+  public void completeFillResponse(PluginCall call) {
+    JSArray entries = call.getArray("entries");
+    Activity activity = getActivity();
+    if (activity == null) {
+      call.reject("No host activity.");
+      return;
+    }
+    if (entries == null || entries.length() == 0) {
+      call.reject("At least one autofill entry is required.");
+      return;
+    }
+
+    Intent sourceIntent = activity.getIntent();
+    AutofillId usernameId = getAutofillIdExtra(sourceIntent, EXTRA_FILL_USERNAME_ID);
+    AutofillId passwordId = getAutofillIdExtra(sourceIntent, EXTRA_FILL_PASSWORD_ID);
+    if (passwordId == null) {
+      call.reject("No password field found for this autofill request.");
+      return;
+    }
+
+    FillResponse.Builder response = new FillResponse.Builder();
+    for (int i = 0; i < entries.length(); i++) {
+      JSONObject entry = entries.optJSONObject(i);
+      if (entry == null) continue;
+      String username = entry.optString("username", "");
+      String password = entry.optString("password", "");
+      String label = entry.optString("label", "");
+      if (TextUtils.isEmpty(password)) continue;
+
+      String datasetLabel = !TextUtils.isEmpty(label)
+        ? label
+        : (!TextUtils.isEmpty(username) ? username : "Guardian login");
+      RemoteViews presentation = createSingleLinePresentation(getContext(), datasetLabel);
+      Dataset.Builder dataset = new Dataset.Builder(presentation);
+      if (usernameId != null) {
+        if (!TextUtils.isEmpty(username)) {
+          dataset.setValue(usernameId, AutofillValue.forText(username), presentation);
+        } else {
+          dataset.setValue(usernameId, null, presentation);
+        }
+      }
+      dataset.setValue(passwordId, AutofillValue.forText(password), presentation);
+      response.addDataset(dataset.build());
+    }
+
+    Intent result = new Intent();
+    result.putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, response.build());
     activity.setResult(Activity.RESULT_OK, result);
     activity.finish();
 

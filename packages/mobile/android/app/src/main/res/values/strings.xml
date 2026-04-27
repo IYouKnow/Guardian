@@ -6,4 +6,6 @@
     <string name="custom_url_scheme">com.guardian.vault</string>
     <string name="autofill_service_description">Save credentials to Guardian</string>
     <string name="autofill_service_label">Guardian</string>
+    <string name="accessibility_service_description">Fill saved logins directly into apps when Android autofill is not enough.</string>
+    <string name="accessibility_service_summary">Direct app filling for stubborn login screens.</string>
 </resources>

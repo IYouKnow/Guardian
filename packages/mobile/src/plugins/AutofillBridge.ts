@@ -22,12 +22,20 @@ export type AutofillLaunchContext = {
   activity: string;
 };
 
+export type AccessibilityStatus = {
+  enabled: boolean;
+};
+
 export interface AutofillBridgePlugin {
   getPendingSave(): Promise<{ pending: PendingAutofillSave | null }>;
   getFillRequest(): Promise<{ request: PendingAutofillFillRequest | null }>;
+  getAccessibilityStatus(): Promise<AccessibilityStatus>;
+  openAccessibilitySettings(): Promise<void>;
+  fillCurrentApp(options: { username?: string; password: string }): Promise<{ ok: boolean }>;
   ackPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
   clearPendingSave(options: { id: string }): Promise<{ ok: boolean }>;
   completeFill(options: { username?: string; password: string; label?: string }): Promise<{ ok: boolean }>;
+  completeFillResponse(options: { entries: Array<{ username?: string; password: string; label: string }> }): Promise<{ ok: boolean }>;
   cancelFill(): Promise<{ ok: boolean }>;
   setAutofillPresentationTheme(options: { theme: string }): Promise<{ ok: boolean }>;
   getLaunchContext(): Promise<AutofillLaunchContext>;

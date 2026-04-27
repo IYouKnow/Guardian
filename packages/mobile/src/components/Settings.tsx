@@ -13,6 +13,8 @@ interface SettingsProps {
   biometricAvailabilityDetail: string;
   biometricLocalEnabled: boolean;
   biometricServerEnabled: boolean;
+  accessibilityFillEnabled: boolean;
+  onOpenAccessibilitySettings: () => void;
   onBiometricLocalEnabledChange: (enabled: boolean) => void;
   onEnableBiometricServer: (accountPassword: string) => Promise<void>;
   onDisableBiometricServer: () => Promise<void>;
@@ -40,6 +42,8 @@ export default function Settings({
   biometricAvailabilityDetail,
   biometricLocalEnabled,
   biometricServerEnabled,
+  accessibilityFillEnabled,
+  onOpenAccessibilitySettings,
   onBiometricLocalEnabledChange,
   onEnableBiometricServer,
   onDisableBiometricServer,
@@ -242,6 +246,27 @@ export default function Settings({
                   )}
                 </div>
               )}
+
+              <div className={`rounded-2xl border ${themeClasses.border} p-3`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Accessibility direct fill</p>
+                    <p className={`text-xs mt-0.5 ${themeClasses.textMuted}`}>
+                      More reliable for apps where Android Autofill refuses to insert the login.
+                    </p>
+                    <p className={`text-xs mt-2 ${accessibilityFillEnabled ? accentClasses.textClass : themeClasses.textSecondary}`}>
+                      {accessibilityFillEnabled ? "Enabled. Guardian can fill directly into focused app fields." : "Permission required. Turn this on in Android Accessibility settings."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onOpenAccessibilitySettings}
+                    className={`shrink-0 rounded-xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} px-3 py-2 text-xs font-semibold`}
+                  >
+                    {accessibilityFillEnabled ? "Manage" : "Enable"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
