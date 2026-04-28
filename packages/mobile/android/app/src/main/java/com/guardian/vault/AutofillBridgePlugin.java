@@ -35,10 +35,18 @@ public class AutofillBridgePlugin extends Plugin {
   public static final String EXTRA_INLINE_AUTH = "guardian.inline_auth";
   public static final String EXTRA_AUTOFILL_FLOW = "guardian.autofill_flow";
   public static final String AUTOFILL_FLOW_FILL = "fill";
+  public static final String AUTOFILL_FLOW_SAVE = "save";
   public static final String EXTRA_FILL_PACKAGE_NAME = "guardian.fill.package_name";
   public static final String EXTRA_FILL_APP_LABEL = "guardian.fill.app_label";
   public static final String EXTRA_FILL_USERNAME_ID = "guardian.fill.username_id";
   public static final String EXTRA_FILL_PASSWORD_ID = "guardian.fill.password_id";
+  public static final String EXTRA_SAVE_ID = "guardian.save.id";
+  public static final String EXTRA_SAVE_USERNAME = "guardian.save.username";
+  public static final String EXTRA_SAVE_PASSWORD = "guardian.save.password";
+  public static final String EXTRA_SAVE_PACKAGE_NAME = "guardian.save.package_name";
+  public static final String EXTRA_SAVE_APP_LABEL = "guardian.save.app_label";
+  public static final String EXTRA_SAVE_APP_ICON_DATA_URL = "guardian.save.app_icon_data_url";
+  public static final String EXTRA_SAVE_TIMESTAMP_MS = "guardian.save.timestamp_ms";
   private BroadcastReceiver pendingReceiver;
 
   static boolean isInlineAutofillServerModeEnabled(Context context) {
@@ -74,6 +82,7 @@ public class AutofillBridgePlugin extends Plugin {
         pending.put("password", item.password);
         pending.put("packageName", item.packageName);
         pending.put("appLabel", item.appLabel);
+        pending.put("appIconDataUrl", item.appIconDataUrl);
         pending.put("timestampMs", item.timestampMs);
 
         JSObject data = new JSObject();
@@ -112,6 +121,12 @@ public class AutofillBridgePlugin extends Plugin {
   @PluginMethod
   public void getPendingSave(PluginCall call) {
     JSObject res = new JSObject();
+    JSObject intentPending = getPendingSaveFromIntent();
+    if (intentPending != null) {
+      res.put("pending", intentPending);
+      call.resolve(res);
+      return;
+    }
 
     PendingAutofillStore.Item item = PendingAutofillStore.peekNext(getContext());
     if (item != null && !TextUtils.isEmpty(item.password)) {
@@ -122,6 +137,7 @@ public class AutofillBridgePlugin extends Plugin {
       pending.put("password", item.password);
       pending.put("packageName", item.packageName);
       pending.put("appLabel", item.appLabel);
+      pending.put("appIconDataUrl", item.appIconDataUrl);
       pending.put("timestampMs", item.timestampMs);
       res.put("pending", pending);
     } else {
@@ -190,6 +206,7 @@ public class AutofillBridgePlugin extends Plugin {
   public void ackPendingSave(PluginCall call) {
     String id = call.getString("id", "");
     boolean ok = PendingAutofillStore.remove(getContext(), id);
+    clearPendingSaveIntent(id);
     Log.i(TAG, "ackPendingSave id=" + id + " ok=" + ok);
     JSObject res = new JSObject();
     res.put("ok", ok);
@@ -314,6 +331,7 @@ public class AutofillBridgePlugin extends Plugin {
     String id = call.getString("id", "");
     if (!TextUtils.isEmpty(id)) {
       boolean ok = PendingAutofillStore.remove(getContext(), id);
+      clearPendingSaveIntent(id);
       Log.i(TAG, "clearPendingSave(id) id=" + id + " ok=" + ok);
       JSObject res = new JSObject();
       res.put("ok", ok);
@@ -322,10 +340,55 @@ public class AutofillBridgePlugin extends Plugin {
     }
 
     PendingAutofillStore.clearAll(getContext());
+    clearPendingSaveIntent(null);
     Log.i(TAG, "clearPendingSave(all) ok=true");
     JSObject res = new JSObject();
     res.put("ok", true);
     call.resolve(res);
+  }
+
+  private JSObject getPendingSaveFromIntent() {
+    Activity activity = getActivity();
+    Intent intent = activity != null ? activity.getIntent() : null;
+    if (intent == null) return null;
+    String flow = intent.getStringExtra(EXTRA_AUTOFILL_FLOW);
+    if (!AUTOFILL_FLOW_SAVE.equals(flow)) return null;
+
+    String id = intent.getStringExtra(EXTRA_SAVE_ID);
+    String password = intent.getStringExtra(EXTRA_SAVE_PASSWORD);
+    if (TextUtils.isEmpty(id) || TextUtils.isEmpty(password)) return null;
+
+    JSObject pending = new JSObject();
+    pending.put("id", id);
+    pending.put("username", intent.getStringExtra(EXTRA_SAVE_USERNAME));
+    pending.put("password", password);
+    pending.put("packageName", intent.getStringExtra(EXTRA_SAVE_PACKAGE_NAME));
+    pending.put("appLabel", intent.getStringExtra(EXTRA_SAVE_APP_LABEL));
+    pending.put("appIconDataUrl", intent.getStringExtra(EXTRA_SAVE_APP_ICON_DATA_URL));
+    pending.put("timestampMs", intent.getLongExtra(EXTRA_SAVE_TIMESTAMP_MS, 0));
+    return pending;
+  }
+
+  private void clearPendingSaveIntent(String id) {
+    Activity activity = getActivity();
+    Intent intent = activity != null ? activity.getIntent() : null;
+    if (intent == null) return;
+    String flow = intent.getStringExtra(EXTRA_AUTOFILL_FLOW);
+    if (!AUTOFILL_FLOW_SAVE.equals(flow)) return;
+    if (!TextUtils.isEmpty(id)) {
+      String intentId = intent.getStringExtra(EXTRA_SAVE_ID);
+      if (!id.equals(intentId)) return;
+    }
+
+    intent.removeExtra(EXTRA_AUTOFILL_FLOW);
+    intent.removeExtra(EXTRA_SAVE_ID);
+    intent.removeExtra(EXTRA_SAVE_USERNAME);
+    intent.removeExtra(EXTRA_SAVE_PASSWORD);
+    intent.removeExtra(EXTRA_SAVE_PACKAGE_NAME);
+    intent.removeExtra(EXTRA_SAVE_APP_LABEL);
+    intent.removeExtra(EXTRA_SAVE_APP_ICON_DATA_URL);
+    intent.removeExtra(EXTRA_SAVE_TIMESTAMP_MS);
+    activity.setIntent(intent);
   }
 
   @PluginMethod

@@ -4,7 +4,7 @@ import type { MobileTheme } from "../utils/theme";
 import { getThemeClasses } from "../utils/theme";
 import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
 
-type Draft = Pick<PasswordEntry, "title" | "website" | "username" | "password" | "notes">;
+type Draft = Pick<PasswordEntry, "title" | "website" | "username" | "password" | "notes" | "favicon">;
 
 type Props = {
   mode: "add" | "edit";
@@ -26,6 +26,7 @@ export default function PasswordForm({ mode, theme, accentColor, initial, onCanc
       username: initial?.username ?? "",
       password: initial?.password ?? "",
       notes: initial?.notes ?? "",
+      favicon: initial?.favicon,
     }),
     [initial],
   );
@@ -50,6 +51,7 @@ export default function PasswordForm({ mode, theme, accentColor, initial, onCanc
       username: draft.username.trim(),
       password: draft.password,
       notes: (draft.notes ?? "").trim(),
+      favicon: draft.favicon,
     });
   };
 
@@ -72,6 +74,21 @@ export default function PasswordForm({ mode, theme, accentColor, initial, onCanc
       <form onSubmit={submit} className="flex-1 overflow-y-auto px-4 pb-24">
         <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm`}>
           <div className="space-y-4">
+            {!!draft.favicon && (
+              <div>
+                <label className={`block text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted}`}>Icon</label>
+                <div className={`mt-2 flex items-center gap-3 ${themeClasses.inputBg} border ${themeClasses.border} rounded-xl px-3 py-3`}>
+                  <img src={draft.favicon} alt="" className="w-11 h-11 rounded-2xl object-cover shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{draft.title.trim() || "Saved app"}</p>
+                    <p className={`text-[11px] ${themeClasses.textSecondary} truncate`}>
+                      {(draft.website || "").replace(/^androidapp:\/\//, "") || "Embedded app icon"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className={`block text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted}`}>Title</label>
               <input

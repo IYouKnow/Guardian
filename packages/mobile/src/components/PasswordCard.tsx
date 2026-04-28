@@ -45,6 +45,7 @@ export default function PasswordCard({
   const websiteLabel = formatWebsiteLabel(password.website);
   const title = (password.title || "").trim() || "Untitled";
   const passwordMask = "••••••••••••";
+  const [iconFailed, setIconFailed] = useState(false);
   const [copied, setCopied] = useState<"username" | "password" | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
 
@@ -114,7 +115,16 @@ export default function PasswordCard({
           <div
             className={`${sizeClasses.avatar} rounded-2xl bg-gradient-to-br ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${accentClasses.textClass} font-bold text-sm shadow-inner`}
           >
-            {title.charAt(0).toUpperCase()}
+            {password.favicon && !iconFailed ? (
+              <img
+                src={password.favicon}
+                alt=""
+                className="w-full h-full object-cover rounded-2xl"
+                onError={() => setIconFailed(true)}
+              />
+            ) : (
+              title.charAt(0).toUpperCase()
+            )}
           </div>
           {password.breached && (
             <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 ${themeClasses.border}`} />

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PasswordEntry } from "../types";
 import type { MobileTheme } from "../utils/theme";
 import { getThemeClasses } from "../utils/theme";
@@ -26,6 +27,7 @@ export default function PasswordDetail({
 }: Props) {
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
+  const [iconFailed, setIconFailed] = useState(false);
 
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
@@ -40,11 +42,25 @@ export default function PasswordDetail({
           </svg>
         </button>
 
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-bold truncate">{password.title}</h2>
-          <p className={`text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted} truncate mt-0.5`}>
-            {password.website || "No website"}
-          </p>
+        <div className="min-w-0 flex-1 flex items-center gap-3">
+          <div className={`w-12 h-12 shrink-0 rounded-2xl border ${themeClasses.border} overflow-hidden flex items-center justify-center ${accentClasses.lightClass} ${accentClasses.textClass} font-bold`}>
+            {password.favicon && !iconFailed ? (
+              <img
+                src={password.favicon}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={() => setIconFailed(true)}
+              />
+            ) : (
+              (password.title || "?").charAt(0).toUpperCase()
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold truncate">{password.title}</h2>
+            <p className={`text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted} truncate mt-0.5`}>
+              {password.website || "No website"}
+            </p>
+          </div>
         </div>
 
         <button

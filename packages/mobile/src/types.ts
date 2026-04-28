@@ -4,6 +4,7 @@ export interface PasswordEntry {
   username: string;
   website: string;
   password: string;
+  favicon?: string;
   category?: string;
   favorite?: boolean;
   passwordStrength?: "weak" | "medium" | "strong" | "very-strong";

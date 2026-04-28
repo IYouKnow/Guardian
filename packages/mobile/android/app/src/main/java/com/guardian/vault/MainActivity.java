@@ -1,5 +1,6 @@
 package com.guardian.vault;
 
+import android.content.Intent;
 import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
@@ -10,5 +11,11 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(SensitiveClipboardPlugin.class);
     registerPlugin(AutofillBridgePlugin.class);
     super.onCreate(savedInstanceState);
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
   }
 }

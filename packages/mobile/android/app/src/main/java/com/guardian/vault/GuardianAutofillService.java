@@ -5,7 +5,12 @@ import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Build;
 import android.service.autofill.AutofillService;
@@ -26,8 +31,10 @@ import android.widget.RemoteViews;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
+import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
@@ -35,6 +42,8 @@ public class GuardianAutofillService extends AutofillService {
   private static final String TAG = "GuardianAutofill";
   private static final String STATE_USERNAME_ID = "guardian.usernameAutofillId";
   private static final String STATE_PASSWORD_ID = "guardian.passwordAutofillId";
+  private static final String STATE_PACKAGE_NAME = "guardian.packageName";
+  private static final String STATE_APP_LABEL = "guardian.appLabel";
 
   @Override
   public void onFillRequest(
@@ -77,6 +86,8 @@ public class GuardianAutofillService extends AutofillService {
       Bundle clientState = new Bundle();
       if (ids.usernameId != null) clientState.putParcelable(STATE_USERNAME_ID, ids.usernameId);
       if (ids.passwordId != null) clientState.putParcelable(STATE_PASSWORD_ID, ids.passwordId);
+      clientState.putString(STATE_PACKAGE_NAME, packageName);
+      clientState.putString(STATE_APP_LABEL, appLabel);
 
       Intent authIntent = new Intent(this, AutofillAuthActivity.class);
       authIntent.putExtra(AutofillBridgePlugin.EXTRA_INLINE_AUTH, true);
@@ -128,20 +139,32 @@ public class GuardianAutofillService extends AutofillService {
   public void onSaveRequest(@NonNull SaveRequest request, @NonNull SaveCallback callback) {
     try {
       AssistStructure structure = AutofillStructureParser.latestStructure(request);
+      Bundle clientState = request.getClientState();
       ComponentName activity = structure != null ? structure.getActivityComponent() : null;
-      String packageName = activity != null ? activity.getPackageName() : "";
-      String appLabel = "";
+      String packageName = clientState != null ? clientState.getString(STATE_PACKAGE_NAME, "") : "";
+      if (TextUtils.isEmpty(packageName) && activity != null) {
+        packageName = activity.getPackageName();
+      }
+      String appLabel = clientState != null ? clientState.getString(STATE_APP_LABEL, "") : "";
+      String appIconDataUrl = "";
       if (!TextUtils.isEmpty(packageName)) {
         try {
           PackageManager pm = getPackageManager();
-          appLabel = pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString();
+          ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
+          if (TextUtils.isEmpty(appLabel)) {
+            CharSequence label = pm.getApplicationLabel(appInfo);
+            if (label != null) appLabel = label.toString().trim();
+          }
+          if (TextUtils.isEmpty(appLabel) && appInfo.nonLocalizedLabel != null) {
+            appLabel = appInfo.nonLocalizedLabel.toString().trim();
+          }
+          appIconDataUrl = drawableToDataUrl(pm.getApplicationIcon(appInfo));
         } catch (Exception ignored) {
         }
       }
 
       AutofillStructureParser.ParsedValues values = null;
       if (structure != null) {
-        Bundle clientState = request.getClientState();
         AutofillId usernameId = clientState != null ? clientState.getParcelable(STATE_USERNAME_ID) : null;
         AutofillId passwordId = clientState != null ? clientState.getParcelable(STATE_PASSWORD_ID) : null;
         values = AutofillStructureParser.extractValues(structure, usernameId, passwordId);
@@ -151,13 +174,14 @@ public class GuardianAutofillService extends AutofillService {
       String password = values != null ? values.password : "";
 
       if (!TextUtils.isEmpty(password)) {
-        PendingAutofillStore.Item item = PendingAutofillStore.add(this, username, password, packageName, appLabel);
+        PendingAutofillStore.Item item = PendingAutofillStore.add(this, username, password, packageName, appLabel, appIconDataUrl);
         Log.i(
           TAG,
           "onSaveRequest captured pending save"
             + " id=" + (item != null ? item.id : "null")
             + " pkg=" + packageName
             + " app=" + appLabel
+            + " icon=" + (!TextUtils.isEmpty(appIconDataUrl) ? "yes" : "no")
             + " userLen=" + (username != null ? username.length() : 0)
             + " passLen=" + password.length()
         );
@@ -176,6 +200,14 @@ public class GuardianAutofillService extends AutofillService {
           : MainActivity.class;
         Intent intent = new Intent(this, targetActivity);
         intent.putExtra(AutofillBridgePlugin.EXTRA_INLINE_AUTH, targetActivity == AutofillAuthActivity.class);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_AUTOFILL_FLOW, AutofillBridgePlugin.AUTOFILL_FLOW_SAVE);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_ID, item != null ? item.id : "");
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_USERNAME, username);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_PASSWORD, password);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_PACKAGE_NAME, packageName);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_APP_LABEL, appLabel);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_APP_ICON_DATA_URL, appIconDataUrl);
+        intent.putExtra(AutofillBridgePlugin.EXTRA_SAVE_TIMESTAMP_MS, item != null ? item.timestampMs : System.currentTimeMillis());
         if (targetActivity == AutofillAuthActivity.class) {
           intent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK
@@ -184,7 +216,7 @@ public class GuardianAutofillService extends AutofillService {
               | Intent.FLAG_ACTIVITY_NO_ANIMATION
           );
         } else {
-          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         }
         startActivity(intent);
       }
@@ -208,6 +240,31 @@ public class GuardianAutofillService extends AutofillService {
     views.setInt(android.R.id.text1, "setTextColor", light ? 0xFF2E2610 : 0xFFF9E7A3);
     views.setTextViewText(android.R.id.text1, text);
     return views;
+  }
+
+  private static String drawableToDataUrl(Drawable drawable) {
+    if (drawable == null) return "";
+
+    try {
+      Bitmap bitmap;
+      if (drawable instanceof BitmapDrawable && ((BitmapDrawable) drawable).getBitmap() != null) {
+        bitmap = ((BitmapDrawable) drawable).getBitmap();
+      } else {
+        int width = Math.max(1, drawable.getIntrinsicWidth());
+        int height = Math.max(1, drawable.getIntrinsicHeight());
+        bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+      }
+
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+      String base64 = Base64.getEncoder().encodeToString(output.toByteArray());
+      return "data:image/png;base64," + base64;
+    } catch (Exception ignored) {
+      return "";
+    }
   }
 
   static final class AutofillStructureParser {

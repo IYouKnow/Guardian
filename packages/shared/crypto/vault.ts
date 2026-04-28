@@ -78,9 +78,9 @@ export interface VaultEntry {
   notes?: string;
   createdAt: string;
   lastModified: string;
-  // Optional page favicon captured at save time, stored as a data URL
+  // Optional page favicon or native app icon captured at save time, stored as a data URL
   // so the client can render it without making cross-origin requests or
-  // leaking the user's password list to an external favicon service.
+  // leaking the user's password list to an external service.
   favicon?: string;
 }
 

@@ -34,6 +34,7 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
     username: vaultEntry.username || "",
     website: vaultEntry.url || legacy.website || "",
     password: vaultEntry.password || "",
+    favicon: vaultEntry.favicon,
     category: undefined,
     favorite: false,
     passwordStrength: undefined,
@@ -53,6 +54,7 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
     password: passwordEntry.password,
     url: passwordEntry.website || undefined,
     notes: passwordEntry.notes || undefined,
+    favicon: passwordEntry.favicon || undefined,
     createdAt: new Date().toISOString(),
     lastModified: passwordEntry.lastModified || new Date().toISOString(),
   };
@@ -100,6 +102,43 @@ function base64ToBytes(base64: string): Uint8Array {
 
 function normalizeAndroidAppWebsite(input: string): string {
   return (input || "").trim().toLowerCase().replace(/^androidapp:\/\//, "");
+}
+
+function fallbackTitleFromPackageName(packageName: string): string {
+  const genericSegments = new Set([
+    "app",
+    "apps",
+    "android",
+    "mobile",
+    "release",
+    "debug",
+    "prod",
+    "production",
+    "staging",
+    "beta",
+    "alpha",
+    "dev",
+    "qa",
+    "pt",
+    "com",
+  ]);
+  const segments = (packageName || "")
+    .trim()
+    .split(".")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const preferred =
+    [...segments]
+      .reverse()
+      .find((part) => !genericSegments.has(part.toLowerCase()) && /[a-z]/i.test(part)) || "";
+  if (!preferred) return "Saved Login";
+  const spaced = preferred.replace(/[-_]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+  if (!spaced) return "Saved Login";
+  const words = spaced.split(/\s+/).filter(Boolean);
+  if (words.length === 1 && /^[a-z0-9]{2,5}$/i.test(words[0])) {
+    return words[0].toUpperCase();
+  }
+  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
 function App() {
@@ -1182,12 +1221,13 @@ function App() {
   const buildAutofillDraft = useCallback((pending: PendingAutofillSave) => {
     const packageName = (pending.packageName ?? "").trim();
     const appLabel = (pending.appLabel ?? "").trim();
-    const title = appLabel || (packageName ? packageName.split(".").slice(-1)[0] : "") || "Saved Login";
+    const title = appLabel || fallbackTitleFromPackageName(packageName);
     const website = packageName ? `androidapp://${packageName}` : "";
     const username = (pending.username ?? "").trim();
     const password = pending.password ?? "";
     const notes = packageName ? `Saved from Android app: ${packageName}` : undefined;
-    return { title, website, username, password, notes };
+    const favicon = (pending.appIconDataUrl ?? "").trim() || undefined;
+    return { title, website, username, password, notes, favicon };
   }, []);
 
   const clearPendingAutofill = useCallback(() => {
@@ -1229,6 +1269,7 @@ function App() {
       website: draft.website,
       username: draft.username,
       password: draft.password,
+      favicon: draft.favicon,
       notes: draft.notes,
       category: undefined,
       favorite: false,
@@ -1247,10 +1288,8 @@ function App() {
     const prevPasswords = passwords;
     const updatedPasswords = [newEntry, ...passwords.filter((p) => p.id !== id)];
     setPasswords(updatedPasswords);
-    if (!autofillLaunchContext.inlineAuth) {
-      setActivePasswordId(id);
-      setActiveView("detail");
-    }
+    setActivePasswordId(null);
+    setActiveView("list");
 
     try {
       await persistPasswords(updatedPasswords, newEntry);
@@ -1259,7 +1298,7 @@ function App() {
       }
       await AutofillBridge.ackPendingSave({ id }).catch(() => undefined);
       clearPendingAutofill();
-      const appName = (pending.appLabel || pending.packageName || "app").trim();
+      const appName = (draft.title || pending.appLabel || pending.packageName || "app").trim();
       setAutofillNotice(`Saved login from ${appName}.`);
       window.setTimeout(() => setAutofillNotice(null), 3000);
       if (autofillLaunchContext.inlineAuth) {
@@ -1751,6 +1790,7 @@ function App() {
               website: draft.website,
               username: draft.username,
               password: draft.password,
+              favicon: draft.favicon,
               notes: draft.notes,
               category: undefined,
               favorite: false,

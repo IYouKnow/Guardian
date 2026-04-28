@@ -7,6 +7,7 @@ export type PendingAutofillSave = {
   password: string;
   packageName?: string;
   appLabel?: string;
+  appIconDataUrl?: string;
   timestampMs?: number;
 };
 

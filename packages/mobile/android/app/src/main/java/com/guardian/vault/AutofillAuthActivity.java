@@ -1,5 +1,6 @@
 package com.guardian.vault;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -45,5 +46,11 @@ public class AutofillAuthActivity extends BridgeActivity {
         child.requestLayout();
       });
     }
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
   }
 }

@@ -28,6 +28,7 @@ public final class PendingAutofillStore {
   private static final String LEGACY_KEY_PASSWORD = "password";
   private static final String LEGACY_KEY_PACKAGE = "packageName";
   private static final String LEGACY_KEY_APP_LABEL = "appLabel";
+  private static final String LEGACY_KEY_APP_ICON_DATA_URL = "appIconDataUrl";
   private static final String LEGACY_KEY_TS = "timestampMs";
 
   private static final Object LOCK = new Object();
@@ -38,14 +39,16 @@ public final class PendingAutofillStore {
     public final String password;
     public final String packageName;
     public final String appLabel;
+    public final String appIconDataUrl;
     public final long timestampMs;
 
-    Item(String id, String username, String password, String packageName, String appLabel, long timestampMs) {
+    Item(String id, String username, String password, String packageName, String appLabel, String appIconDataUrl, long timestampMs) {
       this.id = id;
       this.username = username;
       this.password = password;
       this.packageName = packageName;
       this.appLabel = appLabel;
+      this.appIconDataUrl = appIconDataUrl;
       this.timestampMs = timestampMs;
     }
 
@@ -57,6 +60,7 @@ public final class PendingAutofillStore {
         o.put("password", password);
         o.put("packageName", packageName);
         o.put("appLabel", appLabel);
+        o.put("appIconDataUrl", appIconDataUrl);
         o.put("timestampMs", timestampMs);
       } catch (Exception ignored) {
       }
@@ -75,6 +79,7 @@ public final class PendingAutofillStore {
         password,
         o.optString("packageName", ""),
         o.optString("appLabel", ""),
+        o.optString("appIconDataUrl", ""),
         o.optLong("timestampMs", 0)
       );
     }
@@ -139,6 +144,7 @@ public final class PendingAutofillStore {
         legacyPassword,
         legacy.getString(LEGACY_KEY_PACKAGE, ""),
         legacy.getString(LEGACY_KEY_APP_LABEL, ""),
+        legacy.getString(LEGACY_KEY_APP_ICON_DATA_URL, ""),
         legacy.getLong(LEGACY_KEY_TS, System.currentTimeMillis())
       );
 
@@ -202,7 +208,7 @@ public final class PendingAutofillStore {
     }
   }
 
-  public static Item add(Context context, String username, String password, String packageName, String appLabel) {
+  public static Item add(Context context, String username, String password, String packageName, String appLabel, String appIconDataUrl) {
     if (TextUtils.isEmpty(password)) return null;
     synchronized (LOCK) {
       Context app = context.getApplicationContext();
@@ -219,6 +225,7 @@ public final class PendingAutofillStore {
         password,
         packageName != null ? packageName : "",
         appLabel != null ? appLabel : "",
+        appIconDataUrl != null ? appIconDataUrl : "",
         System.currentTimeMillis()
       );
 
