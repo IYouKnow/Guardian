@@ -1,8 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { PasswordEntry } from "../types";
 import type { MobileTheme } from "../utils/theme";
 import { getThemeClasses } from "../utils/theme";
 import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
+import { normalizeIcon } from "@guardian/shared";
 
 type Draft = Pick<PasswordEntry, "title" | "website" | "username" | "password" | "notes" | "favicon">;
 
@@ -18,6 +19,7 @@ type Props = {
 export default function PasswordForm({ mode, theme, accentColor, initial, onCancel, onSave }: Props) {
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const defaultDraft = useMemo<Draft>(
     () => ({
@@ -33,6 +35,7 @@ export default function PasswordForm({ mode, theme, accentColor, initial, onCanc
 
   const [draft, setDraft] = useState<Draft>(defaultDraft);
   const [error, setError] = useState("");
+  const [iconBusy, setIconBusy] = useState(false);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -55,6 +58,35 @@ export default function PasswordForm({ mode, theme, accentColor, initial, onCanc
     });
   };
 
+  const handleIconPick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file for the icon.");
+      return;
+    }
+
+    setError("");
+    setIconBusy(true);
+    try {
+      const dataUrl = await normalizeIcon(file);
+      if (!dataUrl) {
+        throw new Error("Couldn't prepare that icon. Try a different image.");
+      }
+
+      setDraft((current) => ({ ...current, favicon: dataUrl }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load the selected icon.");
+    } finally {
+      setIconBusy(false);
+    }
+  };
+
+  const iconTitle = draft.title.trim() || "Saved app";
+  const iconSubtitle = (draft.website || "").replace(/^androidapp:\/\//, "") || "Custom app icon";
+
   return (
     <div className={`flex flex-col h-full ${themeClasses.bg} ${themeClasses.text}`}>
       <div className="flex items-center justify-between gap-4 px-4 pb-4 pt-12">
@@ -74,20 +106,55 @@ export default function PasswordForm({ mode, theme, accentColor, initial, onCanc
       <form onSubmit={submit} className="flex-1 overflow-y-auto px-4 pb-24">
         <div className={`${themeClasses.card} border ${themeClasses.border} rounded-2xl p-4 shadow-sm`}>
           <div className="space-y-4">
-            {!!draft.favicon && (
-              <div>
+            <div>
+              <div className="flex items-center justify-between gap-3">
                 <label className={`block text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted}`}>Icon</label>
-                <div className={`mt-2 flex items-center gap-3 ${themeClasses.inputBg} border ${themeClasses.border} rounded-xl px-3 py-3`}>
-                  <img src={draft.favicon} alt="" className="w-11 h-11 rounded-2xl object-cover shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{draft.title.trim() || "Saved app"}</p>
-                    <p className={`text-[11px] ${themeClasses.textSecondary} truncate`}>
-                      {(draft.website || "").replace(/^androidapp:\/\//, "") || "Embedded app icon"}
-                    </p>
-                  </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleIconPick}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={iconBusy}
+                    className={`rounded-xl border ${themeClasses.border} px-3 py-2 text-[11px] font-semibold ${accentClasses.textClass} disabled:opacity-60`}
+                  >
+                    {draft.favicon ? "Replace" : "Add icon"}
+                  </button>
+                  {draft.favicon && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError("");
+                        setDraft((current) => ({ ...current, favicon: undefined }));
+                      }}
+                      className={`rounded-xl border ${themeClasses.border} px-3 py-2 text-[11px] font-semibold ${themeClasses.textSecondary}`}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+              <div className={`mt-2 flex items-center gap-3 ${themeClasses.inputBg} border ${themeClasses.border} rounded-xl px-3 py-3`}>
+                <div className={`w-11 h-11 rounded-2xl overflow-hidden shrink-0 border ${themeClasses.border} ${accentClasses.lightClass} ${accentClasses.textClass} flex items-center justify-center font-bold text-sm`}>
+                  {draft.favicon ? (
+                    <img src={draft.favicon} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    iconTitle.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{iconTitle}</p>
+                  <p className={`text-[11px] ${themeClasses.textSecondary} truncate`}>
+                    {iconBusy ? "Loading selected image..." : iconSubtitle}
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div>
               <label className={`block text-[11px] font-bold uppercase tracking-widest ${themeClasses.textMuted}`}>Title</label>

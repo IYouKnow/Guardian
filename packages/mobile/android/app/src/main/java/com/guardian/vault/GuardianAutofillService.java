@@ -7,9 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Build;
@@ -31,10 +28,8 @@ import android.widget.RemoteViews;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
-import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
@@ -147,6 +142,7 @@ public class GuardianAutofillService extends AutofillService {
       }
       String appLabel = clientState != null ? clientState.getString(STATE_APP_LABEL, "") : "";
       String appIconDataUrl = "";
+      Drawable appIcon = null;
       if (!TextUtils.isEmpty(packageName)) {
         try {
           PackageManager pm = getPackageManager();
@@ -158,10 +154,11 @@ public class GuardianAutofillService extends AutofillService {
           if (TextUtils.isEmpty(appLabel) && appInfo.nonLocalizedLabel != null) {
             appLabel = appInfo.nonLocalizedLabel.toString().trim();
           }
-          appIconDataUrl = drawableToDataUrl(pm.getApplicationIcon(appInfo));
+          appIcon = pm.getApplicationIcon(appInfo);
         } catch (Exception ignored) {
         }
       }
+      appIconDataUrl = AppIconDataUrlFactory.create(appIcon, appLabel, packageName);
 
       AutofillStructureParser.ParsedValues values = null;
       if (structure != null) {
@@ -241,32 +238,6 @@ public class GuardianAutofillService extends AutofillService {
     views.setTextViewText(android.R.id.text1, text);
     return views;
   }
-
-  private static String drawableToDataUrl(Drawable drawable) {
-    if (drawable == null) return "";
-
-    try {
-      Bitmap bitmap;
-      if (drawable instanceof BitmapDrawable && ((BitmapDrawable) drawable).getBitmap() != null) {
-        bitmap = ((BitmapDrawable) drawable).getBitmap();
-      } else {
-        int width = Math.max(1, drawable.getIntrinsicWidth());
-        int height = Math.max(1, drawable.getIntrinsicHeight());
-        bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawable.draw(canvas);
-      }
-
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
-      String base64 = Base64.getEncoder().encodeToString(output.toByteArray());
-      return "data:image/png;base64," + base64;
-    } catch (Exception ignored) {
-      return "";
-    }
-  }
-
   static final class AutofillStructureParser {
     static final class ParsedIds {
       AutofillId usernameId;

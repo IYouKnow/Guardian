@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
@@ -109,6 +110,7 @@ export default function PasswordTable({
 
   const themeClasses = getThemeClasses();
   const accentClasses = getAccentColorClasses(accentColor, theme);
+  const [failedFavicons, setFailedFavicons] = useState<Set<string>>(new Set());
 
   return (
     <motion.div
@@ -141,9 +143,24 @@ export default function PasswordTable({
                 <td className={sizeClasses.cellPadding}>
                   <div className={`flex items-center ${sizeClasses.gap}`}>
                     <div className={`${sizeClasses.iconSize} rounded-xl ${accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
-                      <span className={`font-bold ${accentClasses.onContrastClass} ${sizeClasses.iconText}`}>
-                        {password.title.charAt(0).toUpperCase()}
-                      </span>
+                      {password.favicon && !failedFavicons.has(password.id) ? (
+                        <img
+                          src={password.favicon}
+                          alt=""
+                          className="w-full h-full object-cover rounded-xl"
+                          onError={() => {
+                            setFailedFavicons((current) => {
+                              const next = new Set(current);
+                              next.add(password.id);
+                              return next;
+                            });
+                          }}
+                        />
+                      ) : (
+                        <span className={`font-bold ${accentClasses.onContrastClass} ${sizeClasses.iconText}`}>
+                          {password.title.charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight`}>{password.title}</div>
@@ -215,4 +232,3 @@ export default function PasswordTable({
     </motion.div>
   );
 }
-

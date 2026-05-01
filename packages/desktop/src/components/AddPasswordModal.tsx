@@ -1,5 +1,6 @@
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent, useEffect, useRef, type ChangeEvent } from "react";
 import { PasswordEntry } from "../types";
+import { normalizeIcon } from "@guardian/shared";
 
 interface AddPasswordModalProps {
   isOpen: boolean;
@@ -12,10 +13,13 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
   const [password, setPassword] = useState("");
+  const [favicon, setFavicon] = useState<string | undefined>(undefined);
   const [category, setCategory] = useState("Development");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isNormalizingIcon, setIsNormalizingIcon] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -24,6 +28,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
       setUsername("");
       setWebsite("");
       setPassword("");
+      setFavicon(undefined);
       setCategory("Development");
       setNotes("");
       setError("");
@@ -53,6 +58,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
         username: username.trim(),
         website: website.trim(),
         password: password,
+        favicon,
         category: category || undefined,
         favorite: false,
         lastModified: new Date().toISOString(),
@@ -67,6 +73,31 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
       setError("Failed to save password. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleIconPick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file for the icon.");
+      return;
+    }
+
+    setError("");
+    setIsNormalizingIcon(true);
+    try {
+      const normalized = await normalizeIcon(file);
+      if (!normalized) {
+        throw new Error("Couldn't prepare that icon. Try a different image.");
+      }
+      setFavicon(normalized);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to prepare the icon.");
+    } finally {
+      setIsNormalizingIcon(false);
     }
   };
 
@@ -93,6 +124,56 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
               {error}
             </div>
           )}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm text-gray-400">Icon</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleIconPick}
+                className="hidden"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting || isNormalizingIcon}
+                  className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                >
+                  {favicon ? "Replace" : "Add icon"}
+                </button>
+                {favicon && (
+                  <button
+                    type="button"
+                    onClick={() => setFavicon(undefined)}
+                    disabled={isSubmitting || isNormalizingIcon}
+                    className="px-3 py-1.5 border border-[#2a2a2a] text-gray-300 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-3 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl overflow-hidden bg-yellow-400/10 border border-[#2a2a2a] flex items-center justify-center text-sm font-bold text-yellow-400">
+                  {favicon ? (
+                    <img src={favicon} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    (title.trim() || "A").charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{title.trim() || "Saved app"}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {isNormalizingIcon ? "Preparing icon..." : website.trim() || "Custom app icon"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm text-gray-400 mb-2">Title *</label>
             <input
@@ -193,4 +274,3 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
     </div>
   );
 }
-

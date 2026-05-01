@@ -1103,9 +1103,6 @@ function App() {
       if (pending && (!pendingAutofillSave || pending.id !== pendingAutofillSave.id)) {
         setPendingAutofillSave(pending);
         console.warn("[autofill] pending save detected", { id: pending.id, pkg: pending.packageName, app: pending.appLabel });
-      } else if (!pending && !autofillDebugOnceRef.current.checked) {
-        autofillDebugOnceRef.current.checked = true;
-        console.warn("[autofill] getPendingSave() returned null (no pending save found)");
       }
       if (localStorage.getItem("guardian_debug_autofill") === "1") {
         console.info("[autofill] getPendingSave()", pending ? { id: pending.id, pkg: pending.packageName, app: pending.appLabel } : null);
@@ -1828,6 +1825,7 @@ function App() {
               website: draft.website,
               username: draft.username,
               password: draft.password,
+              favicon: draft.favicon,
               notes: draft.notes,
               lastModified: nowIso,
             };

@@ -5,6 +5,7 @@
 
 import { openVaultWithKey, createVaultWithKey, type VaultEntry } from "../../shared/crypto/vault";
 import { pushEntriesToServer } from "./utils/serverSync";
+import { normalizeIcon } from "../../shared/icons";
 
 
 
@@ -73,6 +74,16 @@ type SeededCapturedCredential = {
 const PENDING_SAVE_TTL_MS = 90_000;
 const pendingSaveBannerByTab = new Map<number, PendingSaveBanner>();
 const seededCapturedCredentialByTab = new Map<number, SeededCapturedCredential>();
+
+function bytesToBase64(bytes: Uint8Array): string {
+  if (bytes.length === 0) return '';
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
 
 /**
  * Session secrets (tokens + key material) must use **only**
@@ -366,7 +377,7 @@ async function writeEncryptedVault(entries: VaultEntry[]): Promise<boolean> {
   if (!cachedLocalKey) return false;
   try {
     const encrypted = await createVaultWithKey(new Uint8Array(cachedLocalKey), entries);
-    const base64 = btoa(String.fromCharCode(...encrypted));
+    const base64 = bytesToBase64(encrypted);
     const storage = chrome.storage as any;
     await storage.local.set({ [VAULT_STORAGE_KEY]: base64 });
     sessionLastModified = Date.now();
@@ -419,8 +430,6 @@ async function maybePushToServer(entries: VaultEntry[]): Promise<ServerPushStatu
 // Keeps entries self-contained (no runtime cross-origin leaks) and bounded
 // in size. The SW has host permissions for <all_urls>, so cross-origin
 // favicon fetches succeed here even when a content script couldn't do it.
-const MAX_FAVICON_BYTES = 32 * 1024;
-
 async function fetchFaviconAsDataUrl(url: string | undefined): Promise<string | undefined> {
   if (!url) return undefined;
   try {
@@ -429,13 +438,8 @@ async function fetchFaviconAsDataUrl(url: string | undefined): Promise<string | 
     const ct = resp.headers.get('content-type') || '';
     if (!ct.startsWith('image/') && !ct.includes('icon')) return undefined;
     const blob = await resp.blob();
-    if (blob.size === 0 || blob.size > MAX_FAVICON_BYTES) return undefined;
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-    const b64 = btoa(binary);
-    const mime = blob.type || 'image/x-icon';
-    return `data:${mime};base64,${b64}`;
+    if (blob.size === 0) return undefined;
+    return await normalizeIcon(blob);
   } catch (err) {
     console.warn('[SW] favicon fetch failed', err);
     return undefined;

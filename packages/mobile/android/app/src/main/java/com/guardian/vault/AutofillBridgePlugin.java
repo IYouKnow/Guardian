@@ -141,7 +141,6 @@ public class AutofillBridgePlugin extends Plugin {
       pending.put("timestampMs", item.timestampMs);
       res.put("pending", pending);
     } else {
-      Log.d(TAG, "getPendingSave -> null");
       res.put("pending", null);
     }
 

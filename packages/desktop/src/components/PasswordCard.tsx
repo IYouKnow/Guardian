@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
@@ -102,6 +103,7 @@ export default function PasswordCard({
 
   const themeClasses = getThemeClasses();
   const accentClasses = getAccentColorClasses(accentColor, theme);
+  const [faviconFailed, setFaviconFailed] = useState(false);
 
   return (
     <motion.div
@@ -113,7 +115,16 @@ export default function PasswordCard({
         <div className={`flex items-start justify-between ${sizeClasses.spacing} mb-6`}>
           <div className="flex items-center gap-4 min-w-0">
             <div className={`${sizeClasses.iconSize} rounded-xl bg-gradient-to-br ${accentClasses.lightClass} border border-white/5 flex items-center justify-center ${accentClasses.textClass} font-bold ${sizeClasses.iconText} shadow-inner`}>
-              {password.title.charAt(0).toUpperCase()}
+              {password.favicon && !faviconFailed ? (
+                <img
+                  src={password.favicon}
+                  alt=""
+                  className="w-full h-full object-cover rounded-xl"
+                  onError={() => setFaviconFailed(true)}
+                />
+              ) : (
+                password.title.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="min-w-0">
               <h3 className={`font-bold ${themeClasses.text} ${sizeClasses.titleSize} truncate`}>
@@ -185,4 +196,3 @@ export default function PasswordCard({
     </motion.div>
   );
 }
-

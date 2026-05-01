@@ -31,6 +31,7 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
     username: vaultEntry.username || "",
     website: vaultEntry.url || "",
     password: vaultEntry.password,
+    favicon: vaultEntry.favicon,
     category: undefined,
     favorite: false,
     passwordStrength: undefined,
@@ -50,6 +51,7 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
     password: passwordEntry.password,
     url: passwordEntry.website || undefined,
     notes: passwordEntry.notes || undefined,
+    favicon: passwordEntry.favicon || undefined,
     createdAt: new Date().toISOString(),
     lastModified: passwordEntry.lastModified || new Date().toISOString(),
   };

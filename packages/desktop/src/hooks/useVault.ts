@@ -34,6 +34,16 @@ interface VaultItem {
   revision: number;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  if (bytes.length === 0) return "";
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
 export function useVault(): UseVaultReturn {
   const [connectionMode, setConnectionMode] = useState<"local" | "server">("local");
 
@@ -247,7 +257,7 @@ export function useVault(): UseVaultReturn {
       finalObj.set(encrypted, nonce.length);
 
       // To Base64
-      return btoa(String.fromCharCode(...finalObj));
+      return bytesToBase64(finalObj);
     }
 
     // 1. Process standard entries

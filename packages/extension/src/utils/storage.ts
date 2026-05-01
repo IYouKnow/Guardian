@@ -13,6 +13,16 @@ const FILE_HANDLE_STORAGE_KEY = "guardian_file_handle";
 const MASTER_SALT_STORAGE_KEY = "guardian_master_salt";
 const LOGIN_PREFS_STORAGE_KEY = "guardian_login_prefs";
 
+function bytesToBase64(bytes: Uint8Array): string {
+  if (bytes.length === 0) return "";
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
 export interface ExtensionSettings {
   theme?: "dark" | "slate" | "light" | "editor" | "violet";
   accentColor?: "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
@@ -100,7 +110,7 @@ export async function getExtensionMasterSalt(): Promise<Uint8Array> {
 
   // Generate a new 16-byte salt
   const newSalt = crypto.getRandomValues(new Uint8Array(16));
-  const base64Salt = btoa(String.fromCharCode(...newSalt));
+  const base64Salt = bytesToBase64(newSalt);
   await storage.set({ [MASTER_SALT_STORAGE_KEY]: base64Salt });
   return newSalt;
 }
@@ -113,7 +123,7 @@ export async function saveVault(key: Uint8Array, entries: VaultEntry[]): Promise
     const encryptedVault = await createVaultWithKey(key, entries);
 
     // Convert Uint8Array to base64 for storage
-    const base64Vault = btoa(String.fromCharCode(...encryptedVault));
+    const base64Vault = bytesToBase64(encryptedVault);
 
     await getStorage().set({ [VAULT_STORAGE_KEY]: base64Vault });
   } catch (error) {
@@ -300,4 +310,3 @@ export async function clearFileHandleMetadata(): Promise<void> {
     console.error("Error clearing file handle metadata:", error);
   }
 }
-

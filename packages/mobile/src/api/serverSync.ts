@@ -8,6 +8,18 @@ interface ServerItem {
   revision: number;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  if (bytes.length === 0) return "";
+
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
 function cleanUrl(url: string): string {
   return url.replace(/\/$/, "");
 }
@@ -24,7 +36,7 @@ async function encryptEntry(key: Uint8Array, entry: VaultEntry): Promise<ServerI
 
   return {
     id: entry.id,
-    encrypted_blob: btoa(String.fromCharCode(...packed)),
+    encrypted_blob: bytesToBase64(packed),
     revision: 1,
   };
 }
