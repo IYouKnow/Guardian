@@ -27,7 +27,7 @@ interface UsePasswordsReturn {
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
   return {
     id: vaultEntry.id,
-    title: vaultEntry.name,
+    title: vaultEntry.name || "Untitled",
     username: vaultEntry.username || "",
     website: vaultEntry.url || "",
     password: vaultEntry.password,
@@ -67,10 +67,11 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
 
   const filteredPasswords = useMemo(() => {
     return passwords.filter((p) => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
-        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.website.toLowerCase().includes(searchQuery.toLowerCase());
+        (p.title || "").toLowerCase().includes(q) ||
+        (p.username || "").toLowerCase().includes(q) ||
+        (p.website || "").toLowerCase().includes(q);
       const matchesCategory =
         activeCategory === "all" || p.category === activeCategory;
       return matchesSearch && matchesCategory;
@@ -85,6 +86,8 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
       ),
     ];
   }, [passwords]);
+
+
 
   const loadPasswords = useCallback((vaultEntries: VaultEntry[]) => {
     const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);

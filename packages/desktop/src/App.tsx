@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import "./App.css";
 
 import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
@@ -173,7 +174,11 @@ function App() {
       console.log(`[SSE] Received ${lastEvent.type}. Triggering background sync...`);
       
       syncVault().then(vaultData => {
-        loadPasswords(vaultData.entries);
+        if (vaultData.entries.length > 0) {
+          loadPasswords(vaultData.entries);
+        } else {
+          console.warn('[SSE] Sync returned 0 entries — keeping current passwords');
+        }
         if (vaultData.settings) {
           loadFromVault(vaultData.settings as any);
         }
@@ -217,6 +222,22 @@ function App() {
 
     return () => clearTimeout(handler);
   }, [preferences, saveVaultFile, getVaultEntries, preferencesLoading, isAuthenticated]);
+
+  // Mini mode window resize
+  const isMiniMode = !preferencesLoading && !isAuthenticated && !showRegister;
+
+  useEffect(() => {
+    if (preferencesLoading) return;
+
+    const appWindow = getCurrentWindow();
+    if (isMiniMode) {
+      appWindow.setSize(new LogicalSize(420, 340)).catch(() => {});
+      appWindow.setMinSize(new LogicalSize(420, 300)).catch(() => {});
+    } else {
+      appWindow.setSize(new LogicalSize(1000, 600)).catch(() => {});
+      appWindow.setMinSize(new LogicalSize(600, 400)).catch(() => {});
+    }
+  }, [isMiniMode, preferencesLoading]);
 
   // Sidebar resize handlers
   useEffect(() => {
@@ -305,7 +326,23 @@ function App() {
     const passwordId = deleteModal.passwordId;
 
     try {
+      if (connectionMode === "server" && serverUrl && authToken) {
+        const cleanUrl = (url: string) => url.replace(/\/$/, "");
+        const markerResp = await fetch(`${cleanUrl(serverUrl)}/vault/items`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify([{ id: passwordId, encrypted_blob: "", revision: 0 }]),
+        });
+        if (!markerResp.ok) {
+          throw new Error(`Server delete marker failed (${markerResp.status})`);
+        }
+      }
+
       await deletePassword(passwordId);
+
       success("Record removed");
       setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" });
     } catch (err) {
@@ -411,6 +448,7 @@ function App() {
           lastVaultPath={preferences.lastVaultPath}
           theme={activeTheme}
           accentColor={preferences.accentColor}
+          mini={isMiniMode}
         />
         <ToastContainer toasts={preferences.showNotifications ? toasts : []} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>

@@ -6,11 +6,12 @@ import { useEffect, useState } from "react";
 interface TitleBarProps {
     theme: Theme;
     accentColor: AccentColor;
+    compact?: boolean;
 }
 
 const appWindow = getCurrentWindow();
 
-export default function TitleBar({ theme, accentColor }: TitleBarProps) {
+export default function TitleBar({ theme, accentColor, compact }: TitleBarProps) {
     const [isMac, setIsMac] = useState(false);
 
     useEffect(() => {
@@ -68,7 +69,7 @@ export default function TitleBar({ theme, accentColor }: TitleBarProps) {
                     e.stopPropagation();
                     appWindow.minimize().catch(err => console.error("Minimize error:", err));
                 }}
-                className={`w-10 h-full flex items-center justify-center transition-colors ${themeClasses.hover} ${themeClasses.text} opacity-60 hover:opacity-100`}
+                className={`${compact ? 'w-8' : 'w-10'} h-full flex items-center justify-center transition-colors ${themeClasses.hover} ${themeClasses.text} opacity-60 hover:opacity-100`}
             >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
@@ -79,7 +80,7 @@ export default function TitleBar({ theme, accentColor }: TitleBarProps) {
                     e.stopPropagation();
                     appWindow.toggleMaximize().catch(err => console.error("Maximize error:", err));
                 }}
-                className={`w-10 h-full flex items-center justify-center transition-colors ${themeClasses.hover} ${themeClasses.text} opacity-60 hover:opacity-100`}
+                className={`${compact ? 'w-8' : 'w-10'} h-full flex items-center justify-center transition-colors ${themeClasses.hover} ${themeClasses.text} opacity-60 hover:opacity-100`}
             >
                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2.5} />
@@ -90,7 +91,7 @@ export default function TitleBar({ theme, accentColor }: TitleBarProps) {
                     e.stopPropagation();
                     appWindow.close().catch(err => console.error("Close error:", err));
                 }}
-                className={`w-10 h-full flex items-center justify-center transition-colors ${isMac ? 'hover:bg-red-500/80 hover:text-white rounded-l-none' : 'hover:bg-red-500/80 hover:text-white'} transition-colors duration-200 group`}
+                className={`${compact ? 'w-8' : 'w-10'} h-full flex items-center justify-center transition-colors ${isMac ? 'hover:bg-red-500/80 hover:text-white rounded-l-none' : 'hover:bg-red-500/80 hover:text-white'} transition-colors duration-200 group`}
             >
                 <svg className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -105,11 +106,11 @@ export default function TitleBar({ theme, accentColor }: TitleBarProps) {
             onDoubleClick={() => {
                 appWindow.toggleMaximize().catch(err => console.error("Toggle maximize error:", err));
             }}
-            className={`h-8 flex items-center justify-between ${isMac ? 'flex-row-reverse' : ''} ${themeClasses.bg} backdrop-blur-xl border-b ${themeClasses.border} select-none relative z-[100] cursor-default`}
+            className={`${compact ? 'h-7' : 'h-8'} flex items-center justify-between ${isMac ? 'flex-row-reverse' : ''} ${themeClasses.bg} backdrop-blur-xl border-b ${themeClasses.border} select-none relative z-[100] cursor-default`}
         >
-            <div className={`flex items-center px-4 gap-2 pointer-events-none ${isMac ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-3 h-3 rounded-full ${accentClasses.bgClass} shadow-sm`} />
-                <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${themeClasses.text} opacity-40`}>
+            <div className={`flex items-center ${compact ? 'px-3 gap-1.5' : 'px-4 gap-2'} pointer-events-none ${isMac ? 'flex-row-reverse' : ''}`}>
+                <div className={`${compact ? 'w-2 h-2' : 'w-3 h-3'} rounded-full ${accentClasses.bgClass} shadow-sm`} />
+                <span className={`${compact ? 'text-[8px]' : 'text-[10px]'} font-black uppercase tracking-[0.2em] ${themeClasses.text} opacity-40`}>
                     Guardian
                 </span>
             </div>
