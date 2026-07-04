@@ -231,11 +231,13 @@ function App() {
 
     const appWindow = getCurrentWindow();
     if (isMiniMode) {
-      appWindow.setSize(new LogicalSize(420, 340)).catch(() => {});
-      appWindow.setMinSize(new LogicalSize(420, 300)).catch(() => {});
+      appWindow.setSize(new LogicalSize(450, 250)).catch(() => {});
+      appWindow.setMinSize(new LogicalSize(450, 250)).catch(() => {});
+      appWindow.setMaxSize(new LogicalSize(450, 250)).catch(() => {});
     } else {
       appWindow.setSize(new LogicalSize(1000, 600)).catch(() => {});
       appWindow.setMinSize(new LogicalSize(600, 400)).catch(() => {});
+      appWindow.setMaxSize(new LogicalSize(1600, 1200)).catch(() => {});
     }
   }, [isMiniMode, preferencesLoading]);
 

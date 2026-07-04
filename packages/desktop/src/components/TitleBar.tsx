@@ -76,11 +76,12 @@ export default function TitleBar({ theme, accentColor, compact }: TitleBarProps)
                 </svg>
             </button>
             <button
+                disabled={compact}
                 onClick={(e) => {
                     e.stopPropagation();
                     appWindow.toggleMaximize().catch(err => console.error("Maximize error:", err));
                 }}
-                className={`${compact ? 'w-8' : 'w-10'} h-full flex items-center justify-center transition-colors ${themeClasses.hover} ${themeClasses.text} opacity-60 hover:opacity-100`}
+                className={`${compact ? 'w-8' : 'w-10'} h-full flex items-center justify-center transition-colors ${themeClasses.hover} ${themeClasses.text} ${compact ? 'opacity-20 cursor-default' : 'opacity-60 hover:opacity-100'}`}
             >
                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={2.5} />
@@ -102,10 +103,14 @@ export default function TitleBar({ theme, accentColor, compact }: TitleBarProps)
 
     return (
         <div
-            data-tauri-drag-region
-            onDoubleClick={() => {
+            {...(compact ? {} : { 'data-tauri-drag-region': true })}
+            onDoubleClick={compact ? undefined : () => {
                 appWindow.toggleMaximize().catch(err => console.error("Toggle maximize error:", err));
             }}
+            onMouseDown={compact ? (e) => {
+                e.preventDefault();
+                appWindow.startDragging().catch(() => {});
+            } : undefined}
             className={`${compact ? 'h-7' : 'h-8'} flex items-center justify-between ${isMac ? 'flex-row-reverse' : ''} ${themeClasses.bg} backdrop-blur-xl border-b ${themeClasses.border} select-none relative z-[100] cursor-default`}
         >
             <div className={`flex items-center ${compact ? 'px-3 gap-1.5' : 'px-4 gap-2'} pointer-events-none ${isMac ? 'flex-row-reverse' : ''}`}>
