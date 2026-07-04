@@ -56,6 +56,7 @@ function App() {
     setRevealCensorSeconds,
     setShowNotifications,
     setThemeSyncMode,
+    setMiniMode,
     loadFromVault,
   } = usePreferences();
 
@@ -224,7 +225,7 @@ function App() {
   }, [preferences, saveVaultFile, getVaultEntries, preferencesLoading, isAuthenticated]);
 
   // Mini mode window resize
-  const isMiniMode = !preferencesLoading && !isAuthenticated && !showRegister;
+  const isMiniMode = !preferencesLoading && !isAuthenticated && !showRegister && preferences.miniMode;
 
   useEffect(() => {
     if (preferencesLoading) return;
@@ -548,6 +549,8 @@ function App() {
                     themeSyncMode={preferences.themeSyncMode as any}
                     onThemeSyncModeChange={handleThemeSyncModeChange}
                     onSync={handleSync}
+                    miniMode={preferences.miniMode}
+                    onMiniModeChange={setMiniMode}
                     connectionMode={connectionMode}
                   />
               </motion.div>

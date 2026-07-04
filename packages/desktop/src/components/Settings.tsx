@@ -19,6 +19,7 @@ interface SettingsProps {
   onRevealCensorSecondsChange: (seconds: number) => void;
   onSync?: () => void;
   onLinkAccount?: () => void;
+  onMiniMode?: () => void;
   showNotifications: boolean;
   onShowNotificationsChange: (show: boolean) => void;
   themeSyncMode: "off" | "follow" | "sync";
@@ -61,6 +62,8 @@ export default function Settings({
   onRevealCensorSecondsChange,
   onSync,
   onLinkAccount,
+  miniMode,
+  onMiniModeChange,
   showNotifications,
   onShowNotificationsChange,
   themeSyncMode,
@@ -138,6 +141,22 @@ export default function Settings({
                     </div>
                   )}
                 </div>
+
+              </div>
+
+              <div className={`p-6 rounded-2xl ${themeClasses.sectionBg} border ${themeClasses.border} flex items-center justify-between`}>
+                <div className="flex-1">
+                  <h3 className={`text-sm font-bold ${themeClasses.text}`}>Mini Mode</h3>
+                  <p className={`text-xs ${themeClasses.textSecondary} mt-1 max-w-xs`}>
+                    Compact login window (450×250) for quick access. When enabled, the login screen appears as a small window.
+                  </p>
+                </div>
+                <button
+                  onClick={() => onMiniModeChange(!miniMode)}
+                  className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${miniMode ? accentClasses.bgClass : 'bg-gray-700'}`}
+                >
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-300 ${miniMode ? 'translate-x-6' : 'translate-x-0'}`} />
+                </button>
               </div>
             </section>
           </motion.div>

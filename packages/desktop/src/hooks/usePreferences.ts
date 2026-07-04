@@ -15,6 +15,7 @@ interface Preferences {
   revealCensorSeconds: number;
   showNotifications: boolean;
   themeSyncMode: ThemeSyncMode;
+  miniMode: boolean;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -28,6 +29,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   revealCensorSeconds: 5,
   showNotifications: true,
   themeSyncMode: "off",
+  miniMode: false,
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -82,6 +84,7 @@ export function usePreferences() {
         const savedShowNotifications = await store.get<boolean>("showNotifications");
         const savedSyncTheme = await store.get<boolean>("syncTheme"); // legacy
         const savedThemeSyncMode = await store.get<ThemeSyncMode>("themeSyncMode");
+        const savedMiniMode = await store.get<boolean>("miniMode");
 
         const resolvedThemeSyncMode =
           savedThemeSyncMode ?? (savedSyncTheme ? "follow" : DEFAULT_PREFERENCES.themeSyncMode);
@@ -97,6 +100,7 @@ export function usePreferences() {
           revealCensorSeconds: savedRevealCensorSeconds ?? DEFAULT_PREFERENCES.revealCensorSeconds,
           showNotifications: savedShowNotifications ?? DEFAULT_PREFERENCES.showNotifications,
           themeSyncMode: resolvedThemeSyncMode,
+          miniMode: savedMiniMode ?? DEFAULT_PREFERENCES.miniMode,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -174,6 +178,11 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const setMiniMode = useCallback(
+    (enabled: boolean) => updatePreference("miniMode", enabled),
+    [updatePreference]
+  );
+
   // Helper to persist settings to local store
   const persistSettings = useCallback(async (settings: Partial<Preferences>) => {
     try {
@@ -235,6 +244,7 @@ export function usePreferences() {
     setRevealCensorSeconds,
     setShowNotifications,
     setThemeSyncMode,
+    setMiniMode,
     loadFromVault,
   };
 }
