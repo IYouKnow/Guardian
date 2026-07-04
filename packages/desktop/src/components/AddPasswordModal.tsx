@@ -7,13 +7,14 @@ interface AddPasswordModalProps {
   onClose: () => void;
   onAddPassword: (password: PasswordEntry) => Promise<void>;
   folders: Folder[];
+  defaultFolderId?: string | null;
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
   return folders.filter((f) => f.parentId === parentId);
 }
 
-export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folders }: AddPasswordModalProps) {
+export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folders, defaultFolderId }: AddPasswordModalProps) {
   const [title, setTitle] = useState("");
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
@@ -35,11 +36,11 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folde
       setWebsite("");
       setPassword("");
       setFavicon(undefined);
-      setFolderId(undefined);
+      setFolderId(defaultFolderId ?? undefined);
       setNotes("");
       setError("");
     }
-  }, [isOpen]);
+  }, [isOpen, defaultFolderId]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {

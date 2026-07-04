@@ -79,6 +79,8 @@ function App() {
   const { isSyncing, lastEvent, setIsSyncing } = useSSE(serverUrl, authToken);
 
   const { toasts, removeToast, success, error: showError } = useToast();
+  const [passwordContextMenu, setPasswordContextMenu] = useState<{ x: number; y: number; passwordId: string; passwordTitle: string; username: string; password: string } | null>(null);
+  const [areaContextMenu, setAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleSync = async () => {
     try {
@@ -153,8 +155,8 @@ function App() {
   };
 
   // Wrap saveVaultFile to always include preferences and folders
-  const handleSavePasswords = async (entries: any[], folders?: any[]) => {
-    return saveVaultFile(entries, preferences, folders);
+  const handleSavePasswords = async (entries: any[]) => {
+    return saveVaultFile(entries, preferences, getFolders());
   };
 
   const handleSaveFolders = async (folders: any[]) => {
@@ -287,6 +289,24 @@ function App() {
       document.body.style.userSelect = "";
     };
   }, [isResizing, setSidebarWidth]);
+
+  // Close context menus on outside click
+  const passwordContextRef = useRef<HTMLDivElement>(null);
+  const areaContextRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (passwordContextRef.current && !passwordContextRef.current.contains(e.target as Node)) {
+        setPasswordContextMenu(null);
+      }
+      if (areaContextRef.current && !areaContextRef.current.contains(e.target as Node)) {
+        setAreaContextMenu(null);
+      }
+    };
+    if (passwordContextMenu || areaContextMenu) {
+      document.addEventListener("mousedown", handleClick);
+    }
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [passwordContextMenu, areaContextMenu]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -580,7 +600,7 @@ function App() {
               >
 
 
-                <div className="flex-1 overflow-y-auto p-8 relative">
+                <div className="flex-1 overflow-y-auto p-8 relative" onContextMenu={(e) => { e.preventDefault(); setAreaContextMenu({ x: e.clientX, y: e.clientY }); }}>
                   {filteredPasswords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-20">
                       <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>
@@ -604,6 +624,7 @@ function App() {
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
+                      onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password })}
                     />
                   ) : (
                     <PasswordTable
@@ -614,6 +635,7 @@ function App() {
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
+                      onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password })}
                     />
                   )}
                 </div>
@@ -623,7 +645,64 @@ function App() {
         </main>
       </div>
 
-      <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} folders={folders} />
+      <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} folders={folders} defaultFolderId={activeFolderId} />
+
+      {/* Password Context Menu */}
+      {/* Area Context Menu */}
+      {areaContextMenu && (
+        <div
+          ref={areaContextRef}
+          className="fixed z-[200] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden"
+          style={{ left: areaContextMenu.x, top: areaContextMenu.y }}
+        >
+          <button
+            className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+            onClick={() => { setShowAddModal(true); setAreaContextMenu(null); }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            New Entry
+          </button>
+        </div>
+      )}
+
+      {passwordContextMenu && (
+        <div
+          ref={passwordContextRef}
+          className="fixed z-[200] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden"
+          style={{ left: passwordContextMenu.x, top: passwordContextMenu.y }}
+        >
+          <button
+            className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+            onClick={() => { copyToClipboard(passwordContextMenu.username); setPasswordContextMenu(null); }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            Copy Username
+          </button>
+          <button
+            className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+            onClick={() => { copyToClipboard(passwordContextMenu.password); setPasswordContextMenu(null); }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            Copy Password
+          </button>
+          <div className="h-px bg-[#333] my-1" />
+          <button
+            className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+            onClick={() => { handleDeletePassword(passwordContextMenu.passwordId); setPasswordContextMenu(null); }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        </div>
+      )}
 
       {/* Folder Creation Modal */}
       {folderModalParentId !== undefined && (

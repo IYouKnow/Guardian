@@ -8,6 +8,7 @@ interface PasswordTableProps {
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
+  onContextMenu?: (x: number, y: number, password: PasswordEntry) => void;
   theme: Theme;
   itemSize: "small" | "medium" | "large";
   accentColor: AccentColor;
@@ -18,6 +19,7 @@ export default function PasswordTable({
   onCopyUsername,
   onCopyPassword,
   onDelete,
+  onContextMenu,
   theme,
   itemSize,
   accentColor,
@@ -137,6 +139,7 @@ export default function PasswordTable({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 key={password.id}
+                onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY, password); } : undefined}
                 className={`group border-b last:border-0 ${themeClasses.rowBorder} ${themeClasses.rowHover} transition-all duration-200`}
               >
                 {/* Service */}

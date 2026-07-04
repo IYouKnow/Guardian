@@ -8,6 +8,7 @@ interface PasswordCardProps {
   onCopyUsername: () => void;
   onCopyPassword: () => void;
   onDelete: () => void;
+  onContextMenu?: (x: number, y: number) => void;
   theme: Theme;
   itemSize: "small" | "medium" | "large";
   accentColor: AccentColor;
@@ -18,6 +19,7 @@ export default function PasswordCard({
   onCopyUsername,
   onCopyPassword,
   onDelete,
+  onContextMenu,
   theme,
   itemSize,
   accentColor,
@@ -108,6 +110,7 @@ export default function PasswordCard({
   return (
     <motion.div
       layout
+      onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); } : undefined}
       className={`relative group ${themeClasses.card} backdrop-blur-xl rounded-[1.5rem] border ${themeClasses.border} ${accentClasses.hoverBorderClass} transition-all duration-300 overflow-hidden shadow-xl hover:shadow-2xl ${accentClasses.hoverShadowClass}`}
     >
       <div className={sizeClasses.padding}>

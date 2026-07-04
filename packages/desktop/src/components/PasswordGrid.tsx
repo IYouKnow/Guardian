@@ -6,6 +6,7 @@ interface PasswordGridProps {
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
+  onContextMenu?: (x: number, y: number, password: PasswordEntry) => void;
   theme: Theme;
   itemSize: "small" | "medium" | "large";
   accentColor: AccentColor;
@@ -16,6 +17,7 @@ export default function PasswordGrid({
   onCopyUsername,
   onCopyPassword,
   onDelete,
+  onContextMenu,
   theme,
   itemSize,
   accentColor,
@@ -49,6 +51,7 @@ export default function PasswordGrid({
           onCopyUsername={() => onCopyUsername(password.username)}
           onCopyPassword={() => onCopyPassword(password.password)}
           onDelete={() => onDelete(password.id)}
+          onContextMenu={onContextMenu ? (x, y) => onContextMenu(x, y, password) : undefined}
           theme={theme}
           itemSize={itemSize}
           accentColor={accentColor}
