@@ -19,7 +19,8 @@ interface SettingsProps {
   onRevealCensorSecondsChange: (seconds: number) => void;
   onSync?: () => void;
   onLinkAccount?: () => void;
-  onMiniMode?: () => void;
+  miniMode: boolean;
+  onMiniModeChange: (enabled: boolean) => void;
   showNotifications: boolean;
   onShowNotificationsChange: (show: boolean) => void;
   themeSyncMode: "off" | "follow" | "sync";

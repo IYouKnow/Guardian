@@ -1,3 +1,9 @@
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
 export interface PasswordEntry {
   id: string;
   title: string;
@@ -5,7 +11,7 @@ export interface PasswordEntry {
   website: string;
   password: string;
   favicon?: string;
-  category?: string;
+  folderId?: string;
   favorite?: boolean;
   passwordStrength?: "weak" | "medium" | "strong" | "very-strong";
   lastModified?: string;

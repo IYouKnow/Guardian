@@ -1,11 +1,15 @@
-import { Theme, AccentColor } from "../types";
+import { useState, useRef, useEffect } from "react";
+import { Theme, AccentColor, Folder } from "../types";
 import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
 
 interface SidebarProps {
-  categories: string[];
-  activeCategory: string;
-  onCategoryChange: (category: string) => void;
+  folders: Folder[];
+  activeFolderId: string | null;
+  onFolderChange: (id: string | null) => void;
+  onAddFolder: (parentId: string | null) => void;
+  onRenameFolder: (id: string, name: string) => void;
+  onDeleteFolder: (id: string) => void;
   onAddPassword: () => void;
   onLogout: () => void;
   onSettings: () => void;
@@ -18,10 +22,17 @@ interface SidebarProps {
   vaultName: string;
 }
 
+function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
+  return folders.filter((f) => f.parentId === parentId);
+}
+
 export default function Sidebar({
-  categories,
-  activeCategory,
-  onCategoryChange,
+  folders,
+  activeFolderId,
+  onFolderChange,
+  onAddFolder,
+  onRenameFolder,
+  onDeleteFolder,
   onAddPassword,
   onLogout,
   onSettings,
@@ -33,11 +44,123 @@ export default function Sidebar({
   connectionMode,
   vaultName,
 }: SidebarProps) {
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string | null } | null>(null);
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const contextRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const sidebarRef = useRef<HTMLElement>(null);
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
 
+  useEffect(() => {
+    if (renamingFolderId) {
+      const folder = folders.find((f) => f.id === renamingFolderId);
+      if (folder) setRenameValue(folder.name);
+      setTimeout(() => renameInputRef.current?.focus(), 50);
+    }
+  }, [renamingFolderId, folders]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (contextRef.current && !contextRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const toggleExpand = (folderId: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, folderId: string | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (sidebarRef.current) {
+      const rect = sidebarRef.current.getBoundingClientRect();
+      setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, folderId });
+    }
+  };
+
+  const handleRenameSubmit = () => {
+    if (renamingFolderId && renameValue.trim()) {
+      onRenameFolder(renamingFolderId, renameValue.trim());
+    }
+    setRenamingFolderId(null);
+  };
+
+  const renderFolderItem = (folder: Folder, depth: number) => {
+    const children = getChildFolders(folders, folder.id);
+    const isExpanded = expandedFolders.has(folder.id);
+    const isActive = activeFolderId === folder.id;
+    const isRenaming = renamingFolderId === folder.id;
+
+    return (
+      <li key={folder.id}>
+        <div
+          className={`group relative flex items-center gap-1 w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            isActive && !showSettings
+              ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
+              : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
+          }`}
+          style={{ paddingLeft: `${12 + depth * 16}px` }}
+          onClick={() => onFolderChange(folder.id)}
+          onContextMenu={(e) => handleContextMenu(e, folder.id)}
+        >
+          {children.length > 0 ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleExpand(folder.id); }}
+              className={`w-4 h-4 flex items-center justify-center flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          ) : (
+            <div className="w-4 h-4 flex-shrink-0" />
+          )}
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={(e) => { if (e.key === "Enter") handleRenameSubmit(); if (e.key === "Escape") setRenamingFolderId(null); }}
+              className={`flex-1 min-w-0 bg-transparent outline-none border-b ${accentClasses.borderClass} text-xs font-bold uppercase tracking-wider`}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="truncate">{folder.name}</span>
+          )}
+          {isActive && !showSettings && (
+            <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full ml-auto flex-shrink-0 ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
+          )}
+        </div>
+        {children.length > 0 && isExpanded && (
+          <ul className="space-y-0.5">
+            {children.map((child) => renderFolderItem(child, depth + 1))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
+  const rootFolders = getChildFolders(folders, null);
+
   return (
-    <aside className={`w-full h-full backdrop-blur-xl ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col relative`}>
+    <aside ref={sidebarRef} className={`w-full h-full backdrop-blur-xl ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col relative overflow-visible`}>
       {/* Branding */}
       <div className={`p-8 border-b ${themeClasses.border}`}>
         <div className="flex items-center justify-between mb-1">
@@ -72,9 +195,7 @@ export default function Sidebar({
           <div className="relative group">
             <svg
               className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${themeClasses.textMuted} transition-colors group-focus-within:${accentClasses.textClass}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -89,30 +210,44 @@ export default function Sidebar({
         </div>
 
         <div>
-          <h3 className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em] mb-4 px-3`}>
-            Categories
-          </h3>
-          <ul className="space-y-1.5">
-            {categories.map((category) => (
-              <li key={category}>
-                <button
-                  onClick={() => onCategoryChange(category)}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-between group ${activeCategory === category && !showSettings
+          <div className="flex items-center justify-between mb-3 px-3">
+            <h3 className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em]`}>
+              Folders
+            </h3>
+            <button
+              onClick={() => onAddFolder(null)}
+              className={`p-1 rounded-md ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}
+              title="New Folder"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+          <ul className="space-y-0.5">
+            {/* Root "All" node */}
+            <li>
+              <div
+                className={`flex items-center gap-2 w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  activeFolderId === null && !showSettings
                     ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
                     : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
-                    }`}
-                >
-                  <span>{category === "all" ? "Whole Vault" : category}</span>
-                  {activeCategory === category && !showSettings && (
-                    <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
-                  )}
-                </button>
-              </li>
-            ))}
+                }`}
+                onClick={() => onFolderChange(null)}
+                onContextMenu={(e) => handleContextMenu(e, null)}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                </svg>
+                <span className="truncate">Whole Vault</span>
+                {activeFolderId === null && !showSettings && (
+                  <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full ml-auto flex-shrink-0 ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
+                )}
+              </div>
+            </li>
+            {rootFolders.map((folder) => renderFolderItem(folder, 0))}
           </ul>
         </div>
-
-
 
         <div className={`pt-6 border-t ${themeClasses.border}`}>
           <h3 className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em] mb-4 px-3`}>
@@ -122,10 +257,11 @@ export default function Sidebar({
             <li>
               <button
                 onClick={onSettings}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-3 ${showSettings
-                  ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
-                  : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
-                  }`}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-3 ${
+                  showSettings
+                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
+                    : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
+                }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -138,9 +274,75 @@ export default function Sidebar({
         </div>
       </nav>
 
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextRef}
+          className="absolute z-[200] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {contextMenu.folderId !== null && (
+            <>
+              <button
+                className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+                onClick={() => {
+                  onAddFolder(contextMenu.folderId);
+                  setContextMenu(null);
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Subfolder
+              </button>
+              <button
+                className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+                onClick={() => {
+                  setRenamingFolderId(contextMenu.folderId);
+                  setContextMenu(null);
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Rename
+              </button>
+              <div className="h-px bg-[#333] my-1" />
+              <button
+                className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                onClick={() => {
+                  if (confirm(`Delete folder and move all entries to root?`)) {
+                    onDeleteFolder(contextMenu.folderId!);
+                  }
+                  setContextMenu(null);
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
+              </button>
+            </>
+          )}
+          {contextMenu.folderId === null && (
+            <button
+              className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+              onClick={() => {
+                onAddFolder(null);
+                setContextMenu(null);
+              }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Folder
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Footer Action */}
       <div className={`p-6 border-t ${themeClasses.border} space-y-4`}>
-        {/* Status Info */}
         <div className={`p-3 rounded-xl bg-white/5 border ${themeClasses.border} flex items-center gap-3`}>
           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connectionMode === "server" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"}`} />
           <div className="flex flex-col min-w-0">
@@ -164,7 +366,6 @@ export default function Sidebar({
           Add Record
         </motion.button>
       </div>
-    </aside >
+    </aside>
   );
 }
-

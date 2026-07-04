@@ -126,7 +126,7 @@ export default function PasswordTable({
               <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Username</th>
               <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
               <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Password</th>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Category</th>
+              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
               <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest text-right`}>Actions</th>
             </tr>
           </thead>
@@ -200,10 +200,10 @@ export default function PasswordTable({
                   </div>
                 </td>
 
-                {/* Category */}
+                {/* Website */}
                 <td className={sizeClasses.cellPadding}>
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-lg border text-[0.65rem] font-bold uppercase tracking-wider ${themeClasses.badge}`}>
-                    {password.category}
+                  <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[150px]`}>
+                    {password.website || "—"}
                   </span>
                 </td>
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { VaultEntry, VaultData, VaultSettings, loadVault, createVault } from "../../../shared/crypto/vault";
+import { VaultEntry, VaultData, VaultSettings, FolderNode, loadVault, createVault } from "../../../shared/crypto/vault";
 import { deriveKey } from "../../../shared/crypto/argon2";
 import { encrypt, decrypt, generateNonce } from "../../../shared/crypto/chacha20";
 
@@ -16,7 +16,7 @@ interface UseVaultReturn {
   setVaultPath: (path: string | null) => void;
   setMasterPassword: (password: string) => void;
   loadVaultFile: (path: string, password: string) => Promise<VaultData>;
-  saveVaultFile: (entries: VaultEntry[], settings?: VaultSettings) => Promise<void>;
+  saveVaultFile: (entries: VaultEntry[], settings?: VaultSettings, folders?: FolderNode[]) => Promise<void>;
   createNewVault: (path: string, password: string) => Promise<void>;
 
   // Server Mode
@@ -308,7 +308,7 @@ export function useVault(): UseVaultReturn {
 
   // --- UNIFIED SAVE ---
   const saveVaultFile = useCallback(
-    async (entries: VaultEntry[], settings?: VaultSettings): Promise<void> => {
+    async (entries: VaultEntry[], settings?: VaultSettings, folders?: FolderNode[]): Promise<void> => {
       setIsLoading(true);
       setError(null);
 
@@ -317,7 +317,7 @@ export function useVault(): UseVaultReturn {
           if (!vaultPath || !masterPassword) {
             throw new Error("Vault path or master password not set");
           }
-          const encryptedVault = await createVault(masterPassword, entries, settings);
+          const encryptedVault = await createVault(masterPassword, entries, settings, folders);
           await writeFile(vaultPath, encryptedVault);
         } else {
           // Server Mode Save

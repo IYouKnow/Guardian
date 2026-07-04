@@ -14,6 +14,7 @@ import AddPasswordModal from "./components/AddPasswordModal";
 import DeleteConfirmModal from "./components/DeleteConfirmModal";
 import Settings from "./components/Settings";
 import ToastContainer from "./components/ToastContainer";
+import FolderModal from "./components/FolderModal";
 import { usePreferences } from "./hooks/usePreferences";
 import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
@@ -27,6 +28,7 @@ function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [registerMode, setRegisterMode] = useState<"local" | "server">("local");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [folderModalParentId, setFolderModalParentId] = useState<string | null | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{
@@ -83,7 +85,7 @@ function App() {
       if (connectionMode === 'server' && !isSyncing) {
         setIsSyncing(true);
         const vaultData = await syncVault();
-        loadPasswords(vaultData.entries);
+        loadPasswords(vaultData.entries, vaultData.folders);
         if (vaultData.settings) {
           await loadFromVault(vaultData.settings as any);
         }
@@ -150,9 +152,15 @@ function App() {
     }
   };
 
-  // Wrap saveVaultFile to always include preferences
-  const handleSavePasswords = async (entries: any[]) => {
-    return saveVaultFile(entries, preferences);
+  // Wrap saveVaultFile to always include preferences and folders
+  const handleSavePasswords = async (entries: any[], folders?: any[]) => {
+    return saveVaultFile(entries, preferences, folders);
+  };
+
+  const handleSaveFolders = async (folders: any[]) => {
+    if (isAuthenticated) {
+      await saveVaultFile(getVaultEntries(), preferences, folders);
+    }
   };
 
   // Listen for SSE events to trigger a background sync
@@ -200,17 +208,22 @@ function App() {
   const {
     passwords,
     filteredPasswords,
-    categories,
+    folders,
     searchQuery,
-    activeCategory,
+    activeFolderId,
     setSearchQuery,
-    setActiveCategory,
+    setActiveFolderId,
     addPassword,
     deletePassword,
     loadPasswords,
     getVaultEntries,
+    getFolders,
+    addFolder,
+    renameFolder,
+    deleteFolder,
   } = usePasswords({
     onSave: handleSavePasswords,
+    onSaveFolders: handleSaveFolders,
   });
 
   // Debounced save for preferences
@@ -218,11 +231,11 @@ function App() {
     if (preferencesLoading || !isAuthenticated) return;
 
     const handler = setTimeout(() => {
-      saveVaultFile(getVaultEntries(), preferences);
+      saveVaultFile(getVaultEntries(), preferences, getFolders());
     }, 1000);
 
     return () => clearTimeout(handler);
-  }, [preferences, saveVaultFile, getVaultEntries, preferencesLoading, isAuthenticated]);
+  }, [preferences, saveVaultFile, getVaultEntries, getFolders, preferencesLoading, isAuthenticated]);
 
   // Mini mode window resize
   const isMiniMode = !preferencesLoading && !isAuthenticated && !showRegister && preferences.miniMode;
@@ -399,7 +412,7 @@ function App() {
         // Maybe save server URL to preferences?
       }
 
-      loadPasswords(vaultData.entries);
+      loadPasswords(vaultData.entries, vaultData.folders);
       if (vaultData.settings) {
         await loadFromVault(vaultData.settings as any);
       }
@@ -491,12 +504,15 @@ function App() {
           className="flex-shrink-0 relative z-30"
         >
           <Sidebar
-            categories={categories}
-            activeCategory={activeCategory}
-            onCategoryChange={(category) => {
-              setActiveCategory(category);
+            folders={folders}
+            activeFolderId={activeFolderId}
+            onFolderChange={(id) => {
+              setActiveFolderId(id);
               setShowSettings(false);
             }}
+            onAddFolder={(parentId) => setFolderModalParentId(parentId)}
+            onRenameFolder={renameFolder}
+            onDeleteFolder={deleteFolder}
             onAddPassword={() => setShowAddModal(true)}
             onLogout={handleLogout}
             onSettings={() => setShowSettings(!showSettings)}
@@ -607,7 +623,22 @@ function App() {
         </main>
       </div>
 
-      <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} />
+      <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} folders={folders} />
+
+      {/* Folder Creation Modal */}
+      {folderModalParentId !== undefined && (
+        <FolderModal
+          parentId={folderModalParentId}
+          onClose={() => setFolderModalParentId(undefined)}
+          onCreate={(name) => {
+            addFolder(name, folderModalParentId);
+            setFolderModalParentId(undefined);
+          }}
+          theme={activeTheme}
+          accentColor={preferences.accentColor}
+        />
+      )}
+
       <DeleteConfirmModal
         isOpen={deleteModal.isOpen}
         passwordTitle={deleteModal.passwordTitle}

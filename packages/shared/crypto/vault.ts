@@ -69,6 +69,12 @@ export interface VaultSettings {
   syncTheme?: boolean;
 }
 
+export interface FolderNode {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
 export interface VaultEntry {
   id: string;
   name: string;
@@ -82,6 +88,7 @@ export interface VaultEntry {
   // so the client can render it without making cross-origin requests or
   // leaking the user's password list to an external service.
   favicon?: string;
+  folderId?: string;
 }
 
 export interface VaultData {
@@ -89,6 +96,7 @@ export interface VaultData {
   createdAt: string;
   lastModified: string;
   settings?: VaultSettings;
+  folders?: FolderNode[];
 }
 
 /**
@@ -101,7 +109,8 @@ export interface VaultData {
 export async function createVault(
   password: string,
   entries: VaultEntry[],
-  settings?: VaultSettings
+  settings?: VaultSettings,
+  folders?: FolderNode[]
 ): Promise<Uint8Array> {
   // Generates random salt and nonce
   const salt = generateSalt();
@@ -116,6 +125,7 @@ export async function createVault(
     createdAt: new Date().toISOString(),
     lastModified: new Date().toISOString(),
     settings,
+    folders,
   };
 
   const jsonData = JSON.stringify(data);
@@ -165,7 +175,8 @@ export async function createVault(
 export async function createVaultWithKey(
   key: Uint8Array,
   entries: VaultEntry[],
-  settings?: VaultSettings
+  settings?: VaultSettings,
+  folders?: FolderNode[]
 ): Promise<Uint8Array> {
   // Generates random salt and nonce
   const salt = generateSalt();
@@ -177,6 +188,7 @@ export async function createVaultWithKey(
     createdAt: new Date().toISOString(),
     lastModified: new Date().toISOString(),
     settings,
+    folders,
   };
 
   const jsonData = JSON.stringify(data);

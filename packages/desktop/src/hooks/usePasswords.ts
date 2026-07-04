@@ -1,29 +1,34 @@
 import { useState, useMemo, useCallback } from "react";
-import { PasswordEntry } from "../types";
-import { VaultEntry } from "../../../shared/crypto";
+import { PasswordEntry, Folder } from "../types";
+import { VaultEntry, FolderNode } from "../../../shared/crypto";
 
 interface UsePasswordsProps {
   onSave: (entries: VaultEntry[]) => Promise<void>;
+  onSaveFolders?: (folders: FolderNode[]) => Promise<void>;
 }
 
 interface UsePasswordsReturn {
   passwords: PasswordEntry[];
   entryCreatedAtMap: Map<string, string>;
   filteredPasswords: PasswordEntry[];
-  categories: string[];
+  folders: Folder[];
   searchQuery: string;
-  activeCategory: string;
+  activeFolderId: string | null;
   setPasswords: React.Dispatch<React.SetStateAction<PasswordEntry[]>>;
   setSearchQuery: (query: string) => void;
-  setActiveCategory: (category: string) => void;
+  setActiveFolderId: (id: string | null) => void;
   addPassword: (password: PasswordEntry) => Promise<void>;
   updatePassword: (id: string, updates: Partial<PasswordEntry>) => Promise<void>;
   deletePassword: (id: string) => Promise<void>;
-  loadPasswords: (vaultEntries: VaultEntry[]) => void;
+  loadPasswords: (vaultEntries: VaultEntry[], vaultFolders?: FolderNode[]) => void;
   getVaultEntries: () => VaultEntry[];
+  getFolders: () => FolderNode[];
+  addFolder: (name: string, parentId: string | null) => Folder;
+  renameFolder: (id: string, name: string) => void;
+  deleteFolder: (id: string) => void;
+  movePassword: (passwordId: string, folderId: string | null) => Promise<void>;
 }
 
-// Helper function to convert VaultEntry to PasswordEntry
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
   return {
     id: vaultEntry.id,
@@ -32,7 +37,7 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
     website: vaultEntry.url || "",
     password: vaultEntry.password,
     favicon: vaultEntry.favicon,
-    category: undefined,
+    folderId: vaultEntry.folderId,
     favorite: false,
     passwordStrength: undefined,
     lastModified: vaultEntry.lastModified,
@@ -42,7 +47,6 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
   };
 }
 
-// Helper function to convert PasswordEntry to VaultEntry
 function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
   return {
     id: passwordEntry.id,
@@ -52,18 +56,30 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
     url: passwordEntry.website || undefined,
     notes: passwordEntry.notes || undefined,
     favicon: passwordEntry.favicon || undefined,
+    folderId: passwordEntry.folderId,
     createdAt: new Date().toISOString(),
     lastModified: passwordEntry.lastModified || new Date().toISOString(),
   };
 }
 
-export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn {
+function collectDescendantIds(folders: Folder[], parentId: string): string[] {
+  const ids: string[] = [parentId];
+  for (const f of folders) {
+    if (f.parentId === parentId) {
+      ids.push(...collectDescendantIds(folders, f.id));
+    }
+  }
+  return ids;
+}
+
+export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UsePasswordsReturn {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [entryCreatedAtMap, setEntryCreatedAtMap] = useState<Map<string, string>>(
     new Map()
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
   const filteredPasswords = useMemo(() => {
     return passwords.filter((p) => {
@@ -72,34 +88,12 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
         (p.title || "").toLowerCase().includes(q) ||
         (p.username || "").toLowerCase().includes(q) ||
         (p.website || "").toLowerCase().includes(q);
-      const matchesCategory =
-        activeCategory === "all" || p.category === activeCategory;
-      return matchesSearch && matchesCategory;
+      const matchesFolder =
+        activeFolderId === null ||
+        (p.folderId != null && collectDescendantIds(folders, activeFolderId).includes(p.folderId));
+      return matchesSearch && matchesFolder;
     });
-  }, [passwords, searchQuery, activeCategory]);
-
-  const categories = useMemo(() => {
-    return [
-      "all",
-      ...Array.from(
-        new Set(passwords.map((p) => p.category).filter((c): c is string => Boolean(c)))
-      ),
-    ];
-  }, [passwords]);
-
-
-
-  const loadPasswords = useCallback((vaultEntries: VaultEntry[]) => {
-    const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);
-    const createdAtMap = new Map<string, string>();
-
-    vaultEntries.forEach((entry) => {
-      createdAtMap.set(entry.id, entry.createdAt);
-    });
-
-    setEntryCreatedAtMap(createdAtMap);
-    setPasswords(loadedPasswords);
-  }, []);
+  }, [passwords, searchQuery, activeFolderId, folders]);
 
   const savePasswords = useCallback(
     async (updatedPasswords: PasswordEntry[]) => {
@@ -114,7 +108,6 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
 
       await onSave(vaultEntries);
 
-      // Update createdAt map with any new entries
       const newCreatedAtMap = new Map(entryCreatedAtMap);
       vaultEntries.forEach((entry) => {
         if (!newCreatedAtMap.has(entry.id)) {
@@ -126,6 +119,32 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
     [onSave, entryCreatedAtMap]
   );
 
+  const persistFolders = useCallback(
+    async (updatedFolders: Folder[]) => {
+      await onSaveFolders?.(
+        updatedFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }))
+      );
+    },
+    [onSaveFolders]
+  );
+
+  const loadPasswords = useCallback((vaultEntries: VaultEntry[], vaultFolders?: FolderNode[]) => {
+    const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);
+    const createdAtMap = new Map<string, string>();
+
+    vaultEntries.forEach((entry) => {
+      createdAtMap.set(entry.id, entry.createdAt);
+    });
+
+    setEntryCreatedAtMap(createdAtMap);
+    setPasswords(loadedPasswords);
+    if (vaultFolders) {
+      setFolders(
+        vaultFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }))
+      );
+    }
+  }, []);
+
   const addPassword = useCallback(
     async (password: PasswordEntry) => {
       const updatedPasswords = [...passwords, password];
@@ -134,7 +153,6 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
       try {
         await savePasswords(updatedPasswords);
       } catch (err) {
-        // Revert on error
         setPasswords(passwords);
         throw err;
       }
@@ -152,7 +170,6 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
       try {
         await savePasswords(updatedPasswords);
       } catch (err) {
-        // Revert on error
         setPasswords(passwords);
         throw err;
       }
@@ -168,12 +185,10 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
       try {
         await savePasswords(updatedPasswords);
 
-        // Update createdAt map - remove deleted entry
         const newCreatedAtMap = new Map(entryCreatedAtMap);
         newCreatedAtMap.delete(id);
         setEntryCreatedAtMap(newCreatedAtMap);
       } catch (err) {
-        // Revert on error
         setPasswords(passwords);
         throw err;
       }
@@ -181,16 +196,63 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
     [passwords, savePasswords, entryCreatedAtMap]
   );
 
+  const addFolder = useCallback(
+    (name: string, parentId: string | null): Folder => {
+      const folder: Folder = { id: crypto.randomUUID(), name, parentId };
+      const updated = [...folders, folder];
+      setFolders(updated);
+      persistFolders(updated);
+      return folder;
+    },
+    [folders, persistFolders]
+  );
+
+  const renameFolder = useCallback(
+    (id: string, name: string) => {
+      const updated = folders.map((f) => (f.id === id ? { ...f, name } : f));
+      setFolders(updated);
+      persistFolders(updated);
+    },
+    [folders, persistFolders]
+  );
+
+  const deleteFolder = useCallback(
+    (id: string) => {
+      const descendantIds = collectDescendantIds(folders, id);
+      const remainingFolders = folders.filter((f) => !descendantIds.includes(f.id));
+      const updatedPasswords = passwords.map((p) =>
+        p.folderId && descendantIds.includes(p.folderId)
+          ? { ...p, folderId: undefined }
+          : p
+      );
+      setFolders(remainingFolders);
+      setPasswords(updatedPasswords);
+      persistFolders(remainingFolders);
+      savePasswords(updatedPasswords);
+      if (activeFolderId && descendantIds.includes(activeFolderId)) {
+        setActiveFolderId(null);
+      }
+    },
+    [folders, passwords, activeFolderId, persistFolders, savePasswords]
+  );
+
+  const movePassword = useCallback(
+    async (passwordId: string, folderId: string | null) => {
+      await updatePassword(passwordId, { folderId: folderId ?? undefined });
+    },
+    [updatePassword]
+  );
+
   return {
     passwords,
     entryCreatedAtMap,
     filteredPasswords,
-    categories,
+    folders,
     searchQuery,
-    activeCategory,
+    activeFolderId,
     setPasswords,
     setSearchQuery,
-    setActiveCategory,
+    setActiveFolderId,
     addPassword,
     updatePassword,
     deletePassword,
@@ -205,6 +267,12 @@ export function usePasswords({ onSave }: UsePasswordsProps): UsePasswordsReturn 
         return vaultEntry;
       });
     }, [passwords, entryCreatedAtMap]),
+    getFolders: useCallback(() => {
+      return folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }));
+    }, [folders]),
+    addFolder,
+    renameFolder,
+    deleteFolder,
+    movePassword,
   };
 }
-

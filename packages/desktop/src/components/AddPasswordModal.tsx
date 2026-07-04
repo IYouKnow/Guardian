@@ -1,27 +1,33 @@
 import { useState, FormEvent, useEffect, useRef, type ChangeEvent } from "react";
-import { PasswordEntry } from "../types";
+import { PasswordEntry, Folder } from "../types";
 import { normalizeIcon } from "@guardian/shared";
 
 interface AddPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddPassword: (password: PasswordEntry) => Promise<void>;
+  folders: Folder[];
 }
 
-export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: AddPasswordModalProps) {
+function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
+  return folders.filter((f) => f.parentId === parentId);
+}
+
+export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folders }: AddPasswordModalProps) {
   const [title, setTitle] = useState("");
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
   const [password, setPassword] = useState("");
   const [favicon, setFavicon] = useState<string | undefined>(undefined);
-  const [category, setCategory] = useState("Development");
+  const [folderId, setFolderId] = useState<string | undefined>(undefined);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNormalizingIcon, setIsNormalizingIcon] = useState(false);
   const [error, setError] = useState("");
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderPickerRef = useRef<HTMLDivElement>(null);
 
-  // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setTitle("");
@@ -29,11 +35,21 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
       setWebsite("");
       setPassword("");
       setFavicon(undefined);
-      setCategory("Development");
+      setFolderId(undefined);
       setNotes("");
       setError("");
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (folderPickerRef.current && !folderPickerRef.current.contains(e.target as Node)) {
+        setShowFolderPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -59,7 +75,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
         website: website.trim(),
         password: password,
         favicon,
-        category: category || undefined,
+        folderId,
         favorite: false,
         lastModified: new Date().toISOString(),
         notes: notes.trim() || undefined,
@@ -100,6 +116,41 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
       setIsNormalizingIcon(false);
     }
   };
+
+  const getFolderPath = (id: string | undefined): string => {
+    if (!id) return "No folder";
+    const folder = folders.find((f) => f.id === id);
+    if (!folder) return "No folder";
+    const parts: string[] = [folder.name];
+    let parent = folder.parentId;
+    while (parent) {
+      const pf = folders.find((f) => f.id === parent);
+      if (pf) {
+        parts.unshift(pf.name);
+        parent = pf.parentId;
+      } else {
+        break;
+      }
+    }
+    return parts.join(" / ");
+  };
+
+  const renderFolderOption = (f: Folder, depth: number) => (
+    <div key={f.id}>
+      <button
+        type="button"
+        onClick={() => { setFolderId(f.id); setShowFolderPicker(false); }}
+        className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/10 rounded transition-colors flex items-center gap-2 ${folderId === f.id ? 'text-yellow-400' : 'text-gray-300'}`}
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+      >
+        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+        {f.name}
+      </button>
+      {getChildFolders(folders, f.id).map((child) => renderFolderOption(child, depth + 1))}
+    </div>
+  );
 
   if (!isOpen) return null;
 
@@ -216,21 +267,35 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword }: Add
               className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
             />
           </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
+          <div className="relative">
+            <label className="block text-sm text-gray-400 mb-2">Folder</label>
+            <button
+              type="button"
+              onClick={() => setShowFolderPicker(!showFolderPicker)}
+              className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2 text-white text-left flex items-center justify-between transition-all focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50"
             >
-              <option>Development</option>
-              <option>Email</option>
-              <option>Social</option>
-              <option>Entertainment</option>
-              <option>Finance</option>
-              <option>Shopping</option>
-              <option>Other</option>
-            </select>
+              <span className={folderId ? "text-white" : "text-gray-500"}>
+                {getFolderPath(folderId)}
+              </span>
+              <svg className={`w-4 h-4 text-gray-500 transition-transform ${showFolderPicker ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showFolderPicker && (
+              <div
+                ref={folderPickerRef}
+                className="absolute z-10 left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl max-h-48 overflow-y-auto py-1"
+              >
+                <button
+                  type="button"
+                  onClick={() => { setFolderId(undefined); setShowFolderPicker(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/10 rounded transition-colors ${!folderId ? 'text-yellow-400' : 'text-gray-300'}`}
+                >
+                  No folder
+                </button>
+                {getChildFolders(folders, null).map((f) => renderFolderOption(f, 0))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-2">Notes</label>

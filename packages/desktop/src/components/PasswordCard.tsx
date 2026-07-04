@@ -131,7 +131,7 @@ export default function PasswordCard({
                 {password.title}
               </h3>
               <p className={`text-[0.6rem] font-bold uppercase tracking-widest ${themeClasses.textMuted} opacity-60`}>
-                {password.category || "General"}
+                {password.website || "Saved password"}
               </p>
             </div>
           </div>
