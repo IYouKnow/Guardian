@@ -297,6 +297,7 @@ export function useVault(): UseVaultReturn {
 
   const saveToServer = async (entries: VaultEntry[], settings?: VaultSettings, folders?: FolderNode[]) => {
     if (!serverUrl || !authToken || !serverKeyRef.current) throw new Error("Not connected to server");
+    const key = serverKeyRef.current;
 
     const itemsToSync: any[] = [];
 
@@ -305,7 +306,7 @@ export function useVault(): UseVaultReturn {
       const json = JSON.stringify(data);
       const plaintext = new TextEncoder().encode(json);
       const nonce = generateNonce();
-      const encrypted = await encrypt(serverKeyRef.current, nonce, plaintext);
+      const encrypted = await encrypt(key, nonce, plaintext);
 
       // Pack: Nonce + Encrypted
       const finalObj = new Uint8Array(nonce.length + encrypted.length);

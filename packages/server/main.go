@@ -234,6 +234,9 @@ func main() {
 	// SSE Events
 	mux.HandleFunc("GET /api/events", server.handleEvents)
 
+	// WebSocket Events (challenge-response auth, no token in URL)
+	mux.HandleFunc("GET /ws/events", server.handleWebSocket)
+
 	// User Preferences
 	// Register both exact and trailing slash to accommodate various clients/proxies
 	mux.HandleFunc("/api/preferences", server.handlePreferences)
