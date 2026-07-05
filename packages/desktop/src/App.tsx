@@ -370,7 +370,6 @@ function App() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      success("Copied to clipboard");
     } catch (err) {
       console.error("Failed to copy:", err);
       showError("Failed to copy to clipboard");
@@ -453,7 +452,6 @@ function App() {
     setShowSettings(false);
     setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" });
     setLastVaultPath(null);
-    success("Vault locked");
   };
 
   const handleRegister = async (data: any) => {
@@ -488,14 +486,14 @@ function App() {
         setLastVaultPath(credentials.path);
       } else {
         vaultData = await loginToServer(credentials.url, credentials.username, credentials.password);
-        setLastServerUrl(credentials.url);
+        const finalUrl = /^https?:\/\//i.test(credentials.url) ? credentials.url : `https://${credentials.url}`;
+        setLastServerUrl(finalUrl);
       }
 
       loadPasswords(vaultData.entries, vaultData.folders);
       if (vaultData.settings) {
         await loadFromVault(vaultData.settings as any);
       }
-      success(mode === "server" ? "Connected to Server" : "Vault unlocked");
     } catch (err) {
       console.error("Failed to load vault:", err);
       showError(

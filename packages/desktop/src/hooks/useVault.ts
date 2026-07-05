@@ -34,6 +34,12 @@ interface VaultItem {
   revision: number;
 }
 
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  if (!/^https?:\/\//i.test(url)) return `https://${url}`;
+  return url;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   if (bytes.length === 0) return "";
   const chunkSize = 0x8000;
@@ -131,7 +137,7 @@ export function useVault(): UseVaultReturn {
   const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<VaultData> => {
     setIsLoading(true);
     setError(null);
-    // Ensure no trailing slash
+    url = normalizeUrl(url);
     url = url.endsWith("/") ? url.slice(0, -1) : url;
     setConnectionMode("server");
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
@@ -121,6 +121,15 @@ export default function PasswordTable({
   const themeClasses = getThemeClasses();
   const accentClasses = getAccentColorClasses(accentColor, theme);
   const [failedFavicons, setFailedFavicons] = useState<Set<string>>(new Set());
+  const [copiedField, setCopiedField] = useState<{ id: string; field: 'username' | 'password' } | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopy = useCallback((id: string, field: 'username' | 'password', value: string, handler: (v: string) => void) => {
+    handler(value);
+    setCopiedField({ id, field });
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopiedField(null), 1500);
+  }, []);
 
   return (
     <motion.div
@@ -194,13 +203,19 @@ export default function PasswordTable({
 
                 {/* Username */}
                 <td className={sizeClasses.cellPadding}>
-                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); onCopyUsername(password.username); }}>
+                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
                     <span className={`${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} ${sizeClasses.textSize} transition-colors`}>
                       {password.username}
                     </span>
-                    <svg className={`w-3 h-3 ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
+                    {copiedField?.id === password.id && copiedField?.field === 'username' ? (
+                      <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className={`w-3 h-3 ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
                   </div>
                 </td>
 
@@ -211,13 +226,19 @@ export default function PasswordTable({
 
                 {/* Password */}
                 <td className={sizeClasses.cellPadding}>
-                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); onCopyPassword(password.password); }}>
+                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
                     <span className={`${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
                       ••••••••
                     </span>
-                    <svg className={`w-3 h-3 ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
+                    {copiedField?.id === password.id && copiedField?.field === 'password' ? (
+                      <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className={`w-3 h-3 ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
                   </div>
                 </td>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
@@ -106,6 +106,15 @@ export default function PasswordCard({
   const themeClasses = getThemeClasses();
   const accentClasses = getAccentColorClasses(accentColor, theme);
   const [faviconFailed, setFaviconFailed] = useState(false);
+  const [copiedField, setCopiedField] = useState<'username' | 'password' | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopy = useCallback((field: 'username' | 'password', handler: () => void) => {
+    handler();
+    setCopiedField(field);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopiedField(null), 1500);
+  }, []);
 
   return (
     <motion.div
@@ -157,13 +166,19 @@ export default function PasswordCard({
               <p className={`${sizeClasses.textSize} ${themeClasses.text} truncate font-medium`}>{password.username}</p>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); onCopyUsername(); }}
+              onClick={(e) => { e.stopPropagation(); handleCopy('username', onCopyUsername); }}
               className={`p-1.5 ${themeClasses.textMuted} group-hover/item:text-white transition-colors`}
               title="Copy"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              {copiedField === 'username' ? (
+                <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
             </button>
           </div>
 
@@ -173,13 +188,19 @@ export default function PasswordCard({
               <p className={`${sizeClasses.textSize} ${themeClasses.textMuted} font-mono tracking-[0.3em]`}>••••••••</p>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); onCopyPassword(); }}
+              onClick={(e) => { e.stopPropagation(); handleCopy('password', onCopyPassword); }}
               className={`p-1.5 ${themeClasses.textMuted} group-hover/item:${accentClasses.textClass} transition-colors`}
               title="Copy"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              {copiedField === 'password' ? (
+                <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
