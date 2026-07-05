@@ -126,15 +126,46 @@ export function useVault(): UseVaultReturn {
 
   // --- SERVER MODE HANDLERS ---
 
-  const deriveServerKey = async (password: string, username: string): Promise<Uint8Array> => {
-    // For MVP: Use SHA-256 of username as salt. 
-    // In production, server should provide a per-user salt on registration.
+  const deriveLegacyKey = async (password: string, username: string): Promise<Uint8Array> => {
     const encoder = new TextEncoder();
     const saltBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(username));
-    const salt = new Uint8Array(saltBuffer).slice(0, 16);
-
-    return deriveKey(password, salt);
+    return deriveKey(password, new Uint8Array(saltBuffer).slice(0, 16));
   };
+
+  async function decryptItemsFromServer(
+    items: VaultItem[],
+    key: Uint8Array,
+  ): Promise<{ entries: VaultEntry[]; settings: VaultSettings | undefined; folders: FolderNode[] | undefined; successCount: number }> {
+    const entries: VaultEntry[] = [];
+    let settings: VaultSettings | undefined;
+    let folders: FolderNode[] | undefined;
+    let successCount = 0;
+
+    for (const item of items) {
+      const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
+      if (raw.length < 28) continue;
+      const nonce = raw.slice(0, 12);
+      const ciphertext = raw.slice(12);
+
+      try {
+        const plaintext = await decrypt(key, nonce, ciphertext) as Uint8Array;
+        const jsonStr = new TextDecoder().decode(plaintext);
+
+        if (item.id === "settings") {
+          settings = JSON.parse(jsonStr);
+        } else if (item.id === "folders") {
+          folders = JSON.parse(jsonStr);
+        } else {
+          entries.push(JSON.parse(jsonStr));
+        }
+        successCount++;
+      } catch {
+        // skip
+      }
+    }
+
+    return { entries, settings, folders, successCount };
+  }
 
   const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<VaultData> => {
     setIsLoading(true);
@@ -165,13 +196,16 @@ export function useVault(): UseVaultReturn {
         throw new Error("Invalid server response (not JSON)");
       }
       const token = data.token;
+      const saltBase64: string | undefined = data.salt;
       setAuthToken(token);
       setServerUrl(url);
       setUsername(username);
 
-      // 2. Derive Key (Once)
-      const key = await deriveServerKey(password, username);
-      serverKeyRef.current = key;
+      // 2. Derive Key — use server-provided salt, fall back to legacy username hash
+      if (!saltBase64) {
+        throw new Error("Server did not return a salt. Update your server.");
+      }
+      const saltBytes = Uint8Array.from(atob(saltBase64), c => c.charCodeAt(0));
 
       // 3. Fetch Items
       const itemsResp = await fetch(`${url}/vault/items`, {
@@ -181,42 +215,41 @@ export function useVault(): UseVaultReturn {
       if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
 
       const items: VaultItem[] = await itemsResp.json();
-      const entries: VaultEntry[] = [];
-      let settings: VaultSettings | undefined;
-      let folders: FolderNode[] | undefined;
 
-      // 4. Decrypt Items
-      const shortBlobIds: string[] = [];
-      for (const item of items) {
-        // Blob format: Base64 string -> [Nonce 12][Ciphertext N][Tag 16] => min length 28
-        const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
-        if (raw.length < 28) {
-          shortBlobIds.push(item.id);
-          continue;
-        }
-        const nonce = raw.slice(0, 12);
-        const ciphertext = raw.slice(12);
+      // 4. Try new salted key first
+      let key = await deriveKey(password, saltBytes);
+      let decryptResult = await decryptItemsFromServer(items, key);
+      let usedLegacyFallback = false;
 
-        try {
-          // Decrypt
-          // For now, using same key for everything. Ideally settings might use different key or iv.
-          // But single key is fine for MVP.
-          const plaintext = await decrypt(key, nonce, ciphertext);
-          const jsonStr = new TextDecoder().decode(plaintext);
-
-          if (item.id === "settings") {
-            settings = JSON.parse(jsonStr);
-          } else if (item.id === "folders") {
-            folders = JSON.parse(jsonStr);
-          } else {
-            entries.push(JSON.parse(jsonStr));
-          }
-        } catch (e) {
-          console.warn(`Failed to decrypt item ${item.id}`, e);
+      // If nothing decrypted, try legacy username-based salt (migration for existing vaults)
+      if (decryptResult.successCount === 0 && items.some(i => i.id !== "settings" && i.id !== "folders")) {
+        const legacyKey = await deriveLegacyKey(password, username);
+        decryptResult = await decryptItemsFromServer(items, legacyKey);
+        if (decryptResult.successCount > 0) {
+          key = legacyKey;
+          usedLegacyFallback = true;
+          console.log("[useVault] Used legacy key derivation (username-based salt). Will migrate.");
         }
       }
 
+      serverKeyRef.current = key;
+
+      // If legacy fallback was used, re-encrypt everything with the new salted key and save
+      if (usedLegacyFallback) {
+        const newKey = await deriveKey(password, saltBytes);
+        serverKeyRef.current = newKey;
+        // Re-encrypt and push all items back to server with new key
+        await saveToServer(decryptResult.entries, decryptResult.settings, decryptResult.folders);
+        console.log("[useVault] Migrated vault to per-user random salt key derivation");
+      }
+
       // Clean up junk items with invalid encrypted blobs
+      const shortBlobIds = items
+        .filter(i => {
+          const raw = Uint8Array.from(atob(i.encrypted_blob), c => c.charCodeAt(0));
+          return raw.length < 28;
+        })
+        .map(i => i.id);
       if (shortBlobIds.length > 0) {
         const cleanupResp = await fetch(`${url}/vault/items`, {
           method: "PUT",
@@ -243,11 +276,11 @@ export function useVault(): UseVaultReturn {
         }
       } catch (e) { console.warn("Failed to fetch preferences", e); }
 
-      const finalSettings = { ...settings, ...remotePrefs };
+      const finalSettings = { ...decryptResult.settings, ...remotePrefs };
 
       return {
-        entries,
-        folders,
+        entries: decryptResult.entries,
+        folders: decryptResult.folders,
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
         settings: (Object.keys(finalSettings).length > 0 ? finalSettings : { theme: 'dark' }) as VaultSettings
@@ -383,38 +416,16 @@ export function useVault(): UseVaultReturn {
       if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
 
       const items: VaultItem[] = await itemsResp.json();
-      const entries: VaultEntry[] = [];
-      let settings: VaultSettings | undefined;
-      let folders: FolderNode[] | undefined;
-
-      const shortBlobIds: string[] = [];
-      for (const item of items) {
-        // Blob format: Base64 string -> [Nonce 12][Ciphertext N][Tag 16] => min length 28
-        const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
-        if (raw.length < 28) {
-          shortBlobIds.push(item.id);
-          continue;
-        }
-        const nonce = raw.slice(0, 12);
-        const ciphertext = raw.slice(12);
-
-        try {
-          const plaintext = await decrypt(serverKeyRef.current, nonce, ciphertext);
-          const jsonStr = new TextDecoder().decode(plaintext);
-
-          if (item.id === "settings") {
-            settings = JSON.parse(jsonStr);
-          } else if (item.id === "folders") {
-            folders = JSON.parse(jsonStr);
-          } else {
-            entries.push(JSON.parse(jsonStr));
-          }
-        } catch (e) {
-          console.warn(`Failed to decrypt item ${item.id}`, e);
-        }
-      }
+      const decryptResult = await decryptItemsFromServer(items, serverKeyRef.current);
+      const { entries, folders, settings } = decryptResult;
 
       // Clean up junk items with invalid encrypted blobs
+      const shortBlobIds = items
+        .filter(i => {
+          const raw = Uint8Array.from(atob(i.encrypted_blob), c => c.charCodeAt(0));
+          return raw.length < 28;
+        })
+        .map(i => i.id);
       if (shortBlobIds.length > 0) {
         const cleanupResp = await fetch(`${serverUrl}/vault/items`, {
           method: "PUT",

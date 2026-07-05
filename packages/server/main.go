@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -151,6 +152,7 @@ type AuthResponse struct {
 	Token    string `json:"token"`
 	Username string `json:"username"`
 	IsAdmin  bool   `json:"is_admin"`
+	Salt     string `json:"salt"`
 }
 
 type VaultItem struct {
@@ -438,6 +440,7 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'User'")
 	db.Exec("ALTER TABLE users ADD COLUMN last_login DATETIME")
 	db.Exec("ALTER TABLE users ADD COLUMN preferences TEXT DEFAULT '{}'")
+	db.Exec("ALTER TABLE users ADD COLUMN salt TEXT DEFAULT ''")
 
 	return db, err
 }
@@ -685,7 +688,15 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 2. Hash Password
+	// 2. Generate random salt for key derivation
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		http.Error(w, "Failed to generate salt", http.StatusInternalServerError)
+		return
+	}
+	saltB64 := base64.StdEncoding.EncodeToString(salt)
+
+	// 3. Hash Password
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, "Error processing password", http.StatusInternalServerError)
@@ -709,9 +720,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := s.systemDB.Exec(`
-		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name, status, role) 
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName, "ACTIVE", role)
+		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name, status, role, salt) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName, "ACTIVE", role, saltB64)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -764,7 +775,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var passwordHash string
 	var isAdmin bool
-	err := s.systemDB.QueryRow("SELECT id, password_hash, is_admin FROM users WHERE username = ?", req.Username).Scan(&id, &passwordHash, &isAdmin)
+	var salt string
+	err := s.systemDB.QueryRow("SELECT id, password_hash, is_admin, salt FROM users WHERE username = ?", req.Username).Scan(&id, &passwordHash, &isAdmin, &salt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
@@ -778,6 +790,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Retroactively generate salt for existing users who don't have one
+	if salt == "" {
+		rawSalt := make([]byte, 16)
+		if _, err := rand.Read(rawSalt); err != nil {
+			http.Error(w, "Failed to generate salt", http.StatusInternalServerError)
+			return
+		}
+		salt = base64.StdEncoding.EncodeToString(rawSalt)
+		s.systemDB.Exec("UPDATE users SET salt = ? WHERE id = ?", salt, id)
+	}
+
 	token, err := createToken(id)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -787,7 +810,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Update last login
 	s.systemDB.Exec("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", id)
 
-	writeJSON(w, http.StatusOK, AuthResponse{Token: token, Username: req.Username, IsAdmin: isAdmin})
+	writeJSON(w, http.StatusOK, AuthResponse{Token: token, Username: req.Username, IsAdmin: isAdmin, Salt: salt})
 }
 
 // --- Vault Handlers ---

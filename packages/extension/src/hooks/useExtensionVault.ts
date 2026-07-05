@@ -29,14 +29,27 @@ export function useExtensionVault(): UseExtensionVaultReturn {
     const [error, setError] = useState<string | null>(null);
     const [serverUrl, setServerUrl] = useState<string | null>(null);
 
-    const deriveServerKey = async (password: string, username: string): Promise<Uint8Array> => {
-        // For MVP: Use SHA-256 of username as salt.
+    const deriveLegacyKey = async (password: string, username: string): Promise<Uint8Array> => {
         const encoder = new TextEncoder();
         const saltBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(username));
-        const salt = new Uint8Array(saltBuffer).slice(0, 16);
-
-        return deriveKey(password, salt);
+        return deriveKey(password, new Uint8Array(saltBuffer).slice(0, 16));
     };
+
+    async function decryptEntries(items: VaultItem[], key: Uint8Array): Promise<VaultEntry[]> {
+        const entries: VaultEntry[] = [];
+        for (const item of items) {
+            if (item.id === "settings") continue;
+            const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
+            if (raw.length < 28) continue;
+            const nonce = raw.slice(0, 12);
+            const ciphertext = raw.slice(12);
+            try {
+                const plaintext = await decrypt(key, nonce, ciphertext);
+                entries.push(JSON.parse(new TextDecoder().decode(plaintext)));
+            } catch { /* skip */ }
+        }
+        return entries;
+    }
 
     const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<ExtensionVaultData> => {
         setIsLoading(true);
@@ -59,10 +72,13 @@ export function useExtensionVault(): UseExtensionVaultReturn {
 
             const data = await resp.json();
             const token = data.token;
+            const saltBase64 = data.salt;
+            if (!saltBase64) throw new Error("Server did not return a salt. Update your server.");
             setServerUrl(cleanUrl);
 
-            // 2. Derive Key
-            const key = await deriveServerKey(password, username);
+            // 2. Derive Key — try server salt, fall back to legacy username hash
+            const saltBytes = Uint8Array.from(atob(saltBase64), c => c.charCodeAt(0));
+            let key = await deriveKey(password, saltBytes);
 
             // 3. Fetch Items
             const itemsResp = await fetch(`${cleanUrl}/vault/items`, {
@@ -72,22 +88,15 @@ export function useExtensionVault(): UseExtensionVaultReturn {
             if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
 
             const items: VaultItem[] = await itemsResp.json();
-            const entries: VaultEntry[] = [];
 
-            // 4. Decrypt Items
-            for (const item of items) {
-                // Blob format: Base64 string -> [Nonce 12][Ciphertext N]
-                const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
-                const nonce = raw.slice(0, 12);
-                const ciphertext = raw.slice(12);
+            // 4. Try new salted key first
+            let entries = await decryptEntries(items, key);
 
-                try {
-                    const plaintext = await decrypt(key, nonce, ciphertext);
-                    const entryStr = new TextDecoder().decode(plaintext);
-                    entries.push(JSON.parse(entryStr));
-                } catch (e) {
-                    console.warn(`Failed to decrypt item ${item.id}`, e);
-                }
+            // Legacy fallback for existing vaults
+            if (entries.length === 0 && items.some(i => i.id !== "settings")) {
+                const legacyKey = await deriveLegacyKey(password, username);
+                entries = await decryptEntries(items, legacyKey);
+                if (entries.length > 0) key = legacyKey;
             }
 
             return {
@@ -124,21 +133,7 @@ export function useExtensionVault(): UseExtensionVaultReturn {
             if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
 
             const items: VaultItem[] = await itemsResp.json();
-            const entries: VaultEntry[] = [];
-
-            for (const item of items) {
-                const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
-                const nonce = raw.slice(0, 12);
-                const ciphertext = raw.slice(12);
-
-                try {
-                    const plaintext = await decrypt(key, nonce, ciphertext);
-                    const entryStr = new TextDecoder().decode(plaintext);
-                    entries.push(JSON.parse(entryStr));
-                } catch (e) {
-                    console.warn(`Failed to decrypt item ${item.id}`, e);
-                }
-            }
+            const entries = await decryptEntries(items, key);
 
             return {
                 entries,

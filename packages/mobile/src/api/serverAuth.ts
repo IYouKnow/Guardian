@@ -8,6 +8,7 @@ export interface ServerAuthResponse {
   token: string;
   username: string;
   is_admin: boolean;
+  salt?: string;
 }
 
 interface VaultItem {
@@ -55,11 +56,6 @@ function ensureUrlHasScheme(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return "";
   return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-}
-
-async function deriveServerKey(password: string, username: string): Promise<Uint8Array> {
-  const salt = sha256(new TextEncoder().encode(username)).slice(0, 16);
-  return deriveKey(password, salt);
 }
 
 function errorMessageFromHttpResult(result: { status: number; text: string }): string {
@@ -260,8 +256,13 @@ export async function loginToServerAndFetchVault(
 
   const token = auth.token;
 
-  // 2) Derive per-user server key
-  const key = await deriveServerKey(password, username);
+  // 2) Derive per-user server key using server-provided salt
+  const saltBase64: string | undefined = auth.salt;
+  if (!saltBase64) throw new Error("Server did not return a salt. Update your server.");
+  const saltBytes = decodeBase64ToBytes(saltBase64);
+  if (!saltBytes) throw new Error("Server returned an invalid salt.");
+
+  const key = await deriveKey(password, saltBytes);
 
   // 3) Fetch items
   const itemsResp = await httpRequest(`${base}/vault/items`, {
@@ -274,7 +275,18 @@ export async function loginToServerAndFetchVault(
   }
 
   const items = (itemsResp.json ?? []) as VaultItem[];
-  const decrypted = await decryptVaultItems(items, key);
+
+  // 4) Try new salted key first
+  let decrypted = await decryptVaultItems(items, key);
+
+  // Try legacy username-based salt as fallback (migration for existing vaults)
+  if (decrypted.entries.length === 0 && decrypted.candidateCount > 0 && items.some(i => i.id !== "settings")) {
+    const legacyKey = await deriveKey(password, sha256(new TextEncoder().encode(username)).slice(0, 16));
+    decrypted = await decryptVaultItems(items, legacyKey);
+    if (decrypted.entries.length > 0) {
+      console.log("[serverAuth] Used legacy key derivation (username-based salt). Vault will be migrated on next desktop sync.");
+    }
+  }
 
   if (items.length > 0 && decrypted.entries.length === 0 && decrypted.candidateCount > 0) {
     throw new Error(
