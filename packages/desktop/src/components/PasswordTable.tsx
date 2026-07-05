@@ -173,10 +173,10 @@ export default function PasswordTable({
                   }
                 }}
                 onPointerUp={() => { dragStartPos.current = null; }}
-                className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.bgClass}` : themeClasses.rowHover}`}
+                className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.lightClass}` : themeClasses.rowHover}`}
               >
                 {/* Service */}
-                <td className={`${sizeClasses.cellPadding} ${selectedId === password.id ? accentClasses.onContrastClass : ''}`}>
+                <td className={sizeClasses.cellPadding}>
                   <div className={`flex items-center ${sizeClasses.gap}`}>
                     <div className={`${sizeClasses.iconSize} rounded-xl ${selectedId === password.id ? 'bg-black/10' : accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
                       {password.favicon && !failedFavicons.has(password.id) ? (
@@ -199,9 +199,9 @@ export default function PasswordTable({
                       )}
                     </div>
                     <div>
-                      <div className={`font-semibold ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.text} ${sizeClasses.textSize} leading-tight`}>{password.title}</div>
+                      <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight`}>{password.title}</div>
                       {password.favorite && (
-                        <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${selectedId === password.id ? accentClasses.onContrastClass : accentClasses.textClass} mt-0.5`}>Favorite</div>
+                        <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5`}>Favorite</div>
                       )}
                     </div>
                   </div>
@@ -210,7 +210,7 @@ export default function PasswordTable({
                 {/* Username */}
                 <td className={sizeClasses.cellPadding}>
                   <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
-                    <span className={`${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} ${sizeClasses.textSize} transition-colors`}>
+                    <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors`}>
                       {password.username}
                     </span>
                     {copiedField?.id === password.id && copiedField?.field === 'username' ? (
@@ -218,7 +218,7 @@ export default function PasswordTable({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <svg className={`w-3 h-3 ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     )}
@@ -227,13 +227,13 @@ export default function PasswordTable({
 
                 {/* Website */}
                 <td className={sizeClasses.cellPadding}>
-                  <span className={`${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} ${sizeClasses.textSize} opacity-70`}>{password.website}</span>
+                  <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70`}>{password.website}</span>
                 </td>
 
                 {/* Password */}
                 <td className={sizeClasses.cellPadding}>
                   <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
-                    <span className={`${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
+                    <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
                       ••••••••
                     </span>
                     {copiedField?.id === password.id && copiedField?.field === 'password' ? (
@@ -241,7 +241,7 @@ export default function PasswordTable({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <svg className={`w-3 h-3 ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     )}
@@ -250,7 +250,7 @@ export default function PasswordTable({
 
                 {/* Website */}
                 <td className={sizeClasses.cellPadding}>
-                  <span className={`text-xs ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textMuted} truncate block max-w-[150px]`}>
+                  <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[150px]`}>
                     {password.website || "—"}
                   </span>
                 </td>

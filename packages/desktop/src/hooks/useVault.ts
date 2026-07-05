@@ -23,6 +23,7 @@ interface UseVaultReturn {
   connectionMode: "local" | "server";
   serverUrl: string | null;
   authToken: string | null;
+  username: string | null;
   loginToServer: (url: string, username: string, password: string) => Promise<VaultData>;
   registerOnServer: (url: string, data: any) => Promise<void>;
   syncVault: () => Promise<VaultData>;
@@ -64,6 +65,7 @@ export function useVault(): UseVaultReturn {
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [serverKey, setServerKey] = useState<Uint8Array | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +172,7 @@ export function useVault(): UseVaultReturn {
       const token = data.token;
       setAuthToken(token);
       setServerUrl(url);
+      setUsername(username);
 
       // 2. Derive Key (Once)
       const key = await deriveServerKey(password, username);
@@ -438,6 +441,7 @@ export function useVault(): UseVaultReturn {
     setMasterPassword("");
     setAuthToken(null);
     setServerKey(null);
+    setUsername(null);
     setError(null);
   }, []);
 
@@ -461,6 +465,7 @@ export function useVault(): UseVaultReturn {
     connectionMode,
     serverUrl,
     authToken,
+    username,
     loginToServer,
     registerOnServer: async (url: string, data: any) => {
       const resp = await fetch(`${url}/auth/register`, {

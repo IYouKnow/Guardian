@@ -20,6 +20,7 @@ interface SidebarProps {
   onSearchChange: (query: string) => void;
   connectionMode: "local" | "server";
   vaultName: string;
+  username?: string | null;
   dragTargetFolderId?: string | null;
 }
 
@@ -44,6 +45,7 @@ export default function Sidebar({
   onSearchChange,
   connectionMode,
   vaultName,
+  username,
   dragTargetFolderId,
 }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -167,8 +169,8 @@ export default function Sidebar({
   return (
     <aside ref={sidebarRef} className={`w-full h-full backdrop-blur-xl ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col relative overflow-visible`}>
       {/* Branding */}
-      <div className={`p-8 border-b ${themeClasses.border}`}>
-        <div className="flex items-center justify-between mb-1">
+      <div className={`p-6 pb-4 border-b ${themeClasses.border}`}>
+        <div className="flex items-center justify-between mb-3">
           <motion.div
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -181,15 +183,6 @@ export default function Sidebar({
             </div>
             <h1 className={`text-xl font-bold tracking-tight ${themeClasses.text}`}>Guardian</h1>
           </motion.div>
-          <button
-            onClick={onLogout}
-            className={`p-2 ${themeClasses.textMuted} hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all`}
-            title="Lock Vault"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -349,30 +342,57 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* Footer Action */}
-      <div className={`p-6 border-t ${themeClasses.border} space-y-4`}>
-        <div className={`p-3 rounded-xl bg-white/5 border ${themeClasses.border} flex items-center gap-3`}>
-          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${connectionMode === "server" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"}`} />
-          <div className="flex flex-col min-w-0">
-            <span className={`text-[0.6rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
-              {connectionMode === "server" ? "Connected to" : "Local Vault"}
-            </span>
-            <span className={`text-xs font-semibold truncate ${themeClasses.text} break-all`} title={vaultName}>
-              {vaultName}
-            </span>
-          </div>
-        </div>
-
+      {/* Footer */}
+      <div className={`p-4 border-t ${themeClasses.border} space-y-3`}>
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={onAddPassword}
-          className={`w-full ${accentClasses.bgClass} ${accentClasses.onContrastClass} font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg ${accentClasses.shadowClass} flex items-center justify-center gap-2.5 text-[0.65rem] uppercase tracking-wider`}
+          className={`w-full ${accentClasses.bgClass} ${accentClasses.onContrastClass} font-bold py-2.5 px-4 rounded-lg transition-all shadow-lg ${accentClasses.shadowClass} flex items-center justify-center gap-2 text-[0.6rem] uppercase tracking-wider`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
           Add Record
         </motion.button>
+
+        {/* Account Banner */}
+        <div className={`flex items-center gap-2.5 p-2.5 rounded-lg ${themeClasses.item} border ${themeClasses.border}`}>
+          <div className={`w-8 h-8 rounded-lg ${accentClasses.bgClass} flex items-center justify-center flex-shrink-0`}>
+            <span className={`text-xs font-bold ${accentClasses.onContrastClass}`}>
+              {(username || vaultName).charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            {connectionMode === "server" && username ? (
+              <>
+                <span className={`text-xs font-semibold truncate ${themeClasses.text}`} title={username}>
+                  {username}
+                </span>
+                <span className={`text-[0.5rem] font-bold uppercase tracking-wider ${themeClasses.textMuted} truncate`} title={vaultName}>
+                  {vaultName}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className={`text-xs font-semibold truncate ${themeClasses.text}`} title={vaultName}>
+                  {vaultName}
+                </span>
+                <span className={`text-[0.5rem] font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>
+                  Local Vault
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            onClick={onLogout}
+            className={`p-1.5 rounded-lg ${themeClasses.textMuted} hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0`}
+            title="Lock Vault"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        </div>
       </div>
     </aside>
   );

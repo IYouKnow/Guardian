@@ -77,6 +77,7 @@ function App() {
     connectionMode,
     serverUrl,
     authToken,
+    username,
   } = useVault();
 
   const { isSyncing, lastEvent, setIsSyncing } = useSSE(serverUrl, authToken);
@@ -704,6 +705,7 @@ function App() {
                 ? (serverUrl || "Server").replace(/^https?:\/\//, "")
                 : (preferences.lastVaultPath || "Local Vault").split(/[\\/]/).pop() || "Local Vault"
             }
+            username={username}
           />
 
           {/* Resize handle */}
