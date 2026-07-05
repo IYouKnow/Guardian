@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { authApi } from "@/api/auth";
 import { adminApi } from "@/api/admin";
 import { toast } from "sonner";
-import { Globe, Server, Save, Loader2, RefreshCw } from "lucide-react";
+import { Server, Save, Loader2, RefreshCw } from "lucide-react";
 
 type SectionID = "appearance" | "server";
 
@@ -30,7 +30,6 @@ export default function Settings() {
     const { theme, setTheme, accentColor, setAccentColor, themeClasses, accentClasses } = useTheme();
     const isAdmin = authApi.isAdmin();
     const [activeSection, setActiveSection] = useState<SectionID>("appearance");
-    const [serverSettings, setServerSettings] = useState<Record<string, string>>({});
     const [wsDefault, setWsDefault] = useState("0");
     const [saving, setSaving] = useState(false);
     const [loadingSettings, setLoadingSettings] = useState(false);
@@ -46,7 +45,6 @@ export default function Settings() {
         setLoadingSettings(true);
         try {
             const data = await adminApi.getSettings();
-            setServerSettings(data);
             setWsDefault(data.max_ws_per_ip_default || "0");
         } catch {
             toast.error("Failed to load server settings");
@@ -65,7 +63,6 @@ export default function Settings() {
         setSaving(true);
         try {
             await adminApi.updateSetting("max_ws_per_ip_default", wsDefault);
-            setServerSettings((prev) => ({ ...prev, max_ws_per_ip_default: wsDefault }));
             toast.success("WebSocket limit updated");
         } catch {
             toast.error("Failed to save setting");
