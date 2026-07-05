@@ -90,6 +90,7 @@ function App() {
   const [dragPasswordId, setDragPasswordId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [dragTargetFolderId, setDragTargetFolderId] = useState<string | null | undefined>(undefined);
+  const [dropIndicatorStyle, setDropIndicatorStyle] = useState<{ left: number; top: number; width: number } | null>(null);
 
   const handleSync = async () => {
     try {
@@ -234,6 +235,7 @@ function App() {
     renameFolder,
     deleteFolder,
     movePassword,
+    reorderPassword,
   } = usePasswords({
     onSave: handleSavePasswords,
     onSaveFolders: handleSaveFolders,
@@ -323,6 +325,11 @@ function App() {
   useEffect(() => {
     if (!dragPasswordId) return;
 
+    document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    const preventSelect = (e: Event) => e.preventDefault();
+    document.addEventListener('selectstart', preventSelect);
+
     const sidebar = sidebarRef.current;
     const handlePointerMove = (e: PointerEvent) => {
       setDragPosition({ x: e.clientX, y: e.clientY });
@@ -337,6 +344,44 @@ function App() {
         } else {
           setDragTargetFolderId(undefined);
         }
+      }
+
+      // Compute drop indicator position for table reorder
+      const tableEl = document.querySelector('[data-table="password-table"]');
+      if (tableEl) {
+        const tableRect = tableEl.getBoundingClientRect();
+        if (e.clientX >= tableRect.left && e.clientX <= tableRect.right) {
+          const rows = tableEl.querySelectorAll('tr[data-password-id]');
+          let indicatorY: number | null = null;
+          for (const row of rows) {
+            const rect = row.getBoundingClientRect();
+            if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+              const midpoint = rect.top + rect.height / 2;
+              indicatorY = e.clientY < midpoint ? rect.top : rect.bottom;
+              break;
+            }
+          }
+          if (indicatorY === null && rows.length > 0) {
+            const firstRect = rows[0].getBoundingClientRect();
+            if (e.clientY < firstRect.top) {
+              indicatorY = firstRect.top;
+            } else {
+              const lastRect = rows[rows.length - 1].getBoundingClientRect();
+              if (e.clientY > lastRect.bottom) {
+                indicatorY = lastRect.bottom;
+              }
+            }
+          }
+          if (indicatorY !== null && dragPasswordId) {
+            setDropIndicatorStyle({ left: tableRect.left, top: indicatorY, width: tableRect.width });
+          } else {
+            setDropIndicatorStyle(null);
+          }
+        } else {
+          setDropIndicatorStyle(null);
+        }
+      } else {
+        setDropIndicatorStyle(null);
       }
     };
 
@@ -353,9 +398,34 @@ function App() {
           }
         }
       }
+
+      // Table reorder drop
+      const tableEl = document.querySelector('[data-table="password-table"]');
+      if (tableEl && dragPasswordId) {
+        const allRows = Array.from(tableEl.querySelectorAll('tr[data-password-id]'));
+        const rowEls = allRows as HTMLElement[];
+        let dropIndex = -1;
+        for (let i = 0; i < rowEls.length; i++) {
+          const rect = rowEls[i].getBoundingClientRect();
+          if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            const midpoint = rect.top + rect.height / 2;
+            dropIndex = e.clientY < midpoint ? i : i + 1;
+            break;
+          }
+        }
+        if (dropIndex === -1 && rowEls.length > 0) {
+          const firstRect = rowEls[0].getBoundingClientRect();
+          dropIndex = e.clientY < firstRect.top ? 0 : rowEls.length;
+        }
+        if (dropIndex >= 0) {
+          reorderPassword(dragPasswordId, dropIndex);
+        }
+      }
+
       setDragPasswordId(null);
       setDragPosition(null);
       setDragTargetFolderId(undefined);
+      setDropIndicatorStyle(null);
     };
 
     document.addEventListener('pointermove', handlePointerMove);
@@ -364,8 +434,34 @@ function App() {
     return () => {
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('selectstart', preventSelect);
+      document.body.style.userSelect = "";
+      document.body.style.webkitUserSelect = "";
     };
-  }, [dragPasswordId, movePassword]);
+  }, [dragPasswordId, movePassword, reorderPassword]);
+
+  // Keyboard reorder: Alt+Up/Down
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedPasswordId || !e.altKey) return;
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+
+      e.preventDefault();
+
+      const sorted = [...passwords].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const currentIndex = sorted.findIndex(p => p.id === selectedPasswordId);
+      if (currentIndex === -1) return;
+
+      if (e.key === 'ArrowUp' && currentIndex > 0) {
+        reorderPassword(selectedPasswordId, currentIndex - 1);
+      } else if (e.key === 'ArrowDown' && currentIndex < sorted.length - 1) {
+        reorderPassword(selectedPasswordId, currentIndex + 1);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPasswordId, passwords, reorderPassword]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -696,9 +792,9 @@ function App() {
                       selectedId={selectedPasswordId}
                       onSelect={setSelectedPasswordId}
                       onDoubleClick={(pw) => setEditingPassword(pw)}
-                      onDragStart={(passwordId, e) => {
+                      onDragStart={(passwordId, clientX, clientY) => {
                         setDragPasswordId(passwordId);
-                        setDragPosition({ x: e.clientX, y: e.clientY });
+                        setDragPosition({ x: clientX, y: clientY });
                       }}
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
@@ -781,12 +877,39 @@ function App() {
       )}
 
       {/* Drag Indicator */}
-      {dragPosition && dragPasswordId && (
+      {dragPosition && dragPasswordId && (() => {
+        const entry = passwords.find((p) => p.id === dragPasswordId);
+        if (!entry) return null;
+        const accent = getAccentColorClasses(preferences.accentColor, activeTheme);
+        return (
+          <div
+            className="fixed z-[300] pointer-events-none flex items-center gap-4 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 shadow-2xl shadow-black/60 whitespace-nowrap"
+            style={{ left: dragPosition.x, top: dragPosition.y - 28, width: 400 }}
+          >
+            <div className={`w-8 h-8 rounded-lg ${accent.bgClass} flex items-center justify-center text-xs font-bold ${accent.onContrastClass} flex-shrink-0`}>
+              {entry.title.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-white truncate">{entry.title}</div>
+              <div className="text-[0.6rem] text-zinc-500 truncate">{entry.username}</div>
+            </div>
+            <div className="text-xs text-zinc-600">{entry.website || '—'}</div>
+          </div>
+        );
+      })()}
+
+      {/* Drop Indicator Line */}
+      {dropIndicatorStyle && dragPasswordId && (
         <div
-          className="fixed z-[300] pointer-events-none bg-yellow-400/10 border border-yellow-400/30 rounded-lg px-3 py-1.5 text-xs text-yellow-400 font-semibold shadow-xl backdrop-blur-sm whitespace-nowrap"
-          style={{ left: dragPosition.x + 12, top: dragPosition.y - 24 }}
+          className="fixed z-[300] pointer-events-none"
+          style={{
+            left: dropIndicatorStyle.left,
+            top: dropIndicatorStyle.top,
+            width: dropIndicatorStyle.width,
+            height: 2,
+          }}
         >
-          {passwords.find((p) => p.id === dragPasswordId)?.title || 'Move entry'}
+          <div className={`h-full rounded-full ${accentClasses.bgClass}`} />
         </div>
       )}
 

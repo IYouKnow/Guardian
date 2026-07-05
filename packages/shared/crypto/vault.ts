@@ -89,6 +89,7 @@ export interface VaultEntry {
   // leaking the user's password list to an external service.
   favicon?: string;
   folderId?: string;
+  order?: number;
 }
 
 export interface VaultData {

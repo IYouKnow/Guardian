@@ -10,7 +10,7 @@ interface PasswordTableProps {
   onDelete: (id: string) => void;
   onContextMenu?: (x: number, y: number, password: PasswordEntry) => void;
   onDoubleClick?: (password: PasswordEntry) => void;
-  onDragStart?: (passwordId: string, e: React.PointerEvent) => void;
+  onDragStart?: (passwordId: string, clientX: number, clientY: number) => void;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   theme: Theme;
@@ -123,6 +123,8 @@ export default function PasswordTable({
   const [failedFavicons, setFailedFavicons] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<{ id: string; field: 'username' | 'password' } | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragStartPos = useRef<{ x: number; y: number; id: string } | null>(null);
+  const dragActive = useRef(false);
 
   const handleCopy = useCallback((id: string, field: 'username' | 'password', value: string, handler: (v: string) => void) => {
     handler(value);
@@ -136,12 +138,12 @@ export default function PasswordTable({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={`w-full overflow-hidden rounded-2xl ${themeClasses.wrapper}`}
+      data-table="password-table"
     >
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
               <thead>
                 <tr className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
-                  <th className={`w-8 ${sizeClasses.headerPadding} ${themeClasses.headerText}`}></th>
                   <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Service</th>
                   <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Username</th>
                   <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
@@ -154,21 +156,25 @@ export default function PasswordTable({
             {passwords.map((password) => (
               <tr
                 key={password.id}
-                onClick={() => onSelect?.(selectedId === password.id ? null : password.id)}
-                onDoubleClick={() => onDoubleClick?.(password)}
+                data-password-id={password.id}
+                onClick={() => { if (!dragActive.current) onSelect?.(selectedId === password.id ? null : password.id); dragActive.current = false; }}
+                onDoubleClick={() => { if (!dragActive.current) onDoubleClick?.(password); }}
                 onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY, password); } : undefined}
+                onPointerDown={(e) => { dragStartPos.current = { x: e.clientX, y: e.clientY, id: password.id }; }}
+                onPointerMove={(e) => {
+                  const start = dragStartPos.current;
+                  if (!start || start.id !== password.id) return;
+                  const dx = e.clientX - start.x;
+                  const dy = e.clientY - start.y;
+                  if (dx * dx + dy * dy > 64) {
+                    dragStartPos.current = null;
+                    dragActive.current = true;
+                    onDragStart?.(password.id, e.clientX, e.clientY);
+                  }
+                }}
+                onPointerUp={() => { dragStartPos.current = null; }}
                 className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.bgClass}` : themeClasses.rowHover}`}
               >
-                {/* Drag Handle */}
-                <td className={`${sizeClasses.cellPadding} w-8 select-none cursor-grab ${selectedId === password.id ? accentClasses.onContrastClass : themeClasses.textTertiary}`}
-                  onPointerDown={(e) => { e.preventDefault(); onDragStart?.(password.id, e); }}
-                >
-                  <div className={`flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity`}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                    </svg>
-                  </div>
-                </td>
                 {/* Service */}
                 <td className={`${sizeClasses.cellPadding} ${selectedId === password.id ? accentClasses.onContrastClass : ''}`}>
                   <div className={`flex items-center ${sizeClasses.gap}`}>

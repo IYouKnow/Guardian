@@ -27,6 +27,7 @@ interface UsePasswordsReturn {
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
   movePassword: (passwordId: string, folderId: string | null) => Promise<void>;
+  reorderPassword: (passwordId: string, targetIndex: number) => Promise<void>;
 }
 
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -38,6 +39,7 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
     password: vaultEntry.password,
     favicon: vaultEntry.favicon,
     folderId: vaultEntry.folderId,
+    order: vaultEntry.order,
     favorite: false,
     passwordStrength: undefined,
     lastModified: vaultEntry.lastModified,
@@ -57,6 +59,7 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
     notes: passwordEntry.notes || undefined,
     favicon: passwordEntry.favicon || undefined,
     folderId: passwordEntry.folderId,
+    order: passwordEntry.order,
     createdAt: new Date().toISOString(),
     lastModified: passwordEntry.lastModified || new Date().toISOString(),
   };
@@ -92,7 +95,7 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
         activeFolderId === null ||
         (p.folderId != null && collectDescendantIds(folders, activeFolderId).includes(p.folderId));
       return matchesSearch && matchesFolder;
-    });
+    }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [passwords, searchQuery, activeFolderId, folders]);
 
   const savePasswords = useCallback(
@@ -129,7 +132,14 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
   );
 
   const loadPasswords = useCallback((vaultEntries: VaultEntry[], vaultFolders?: FolderNode[]) => {
-    const loadedPasswords = vaultEntries.map(vaultEntryToPasswordEntry);
+    const needsOrder = vaultEntries.some(e => e.order === undefined);
+    const loadedPasswords = vaultEntries.map((entry, index) => {
+      const pw = vaultEntryToPasswordEntry(entry);
+      if (needsOrder) {
+        pw.order = index;
+      }
+      return pw;
+    });
     const createdAtMap = new Map<string, string>();
 
     vaultEntries.forEach((entry) => {
@@ -147,7 +157,9 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
 
   const addPassword = useCallback(
     async (password: PasswordEntry) => {
-      const updatedPasswords = [...passwords, password];
+      const maxOrder = passwords.reduce((max, p) => Math.max(max, p.order ?? 0), -1);
+      const entryWithOrder = { ...password, order: maxOrder + 1 };
+      const updatedPasswords = [...passwords, entryWithOrder];
       setPasswords(updatedPasswords);
 
       try {
@@ -243,6 +255,31 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
     [updatePassword]
   );
 
+  const reorderPassword = useCallback(
+    async (passwordId: string, targetIndex: number) => {
+      const sorted = [...passwords].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const draggedIndex = sorted.findIndex(p => p.id === passwordId);
+      if (draggedIndex === -1) return;
+
+      const [dragged] = sorted.splice(draggedIndex, 1);
+      const adjustedTarget = draggedIndex < targetIndex
+        ? Math.min(targetIndex, sorted.length)
+        : targetIndex;
+      sorted.splice(adjustedTarget, 0, dragged);
+
+      const reordered = sorted.map((p, i) => ({ ...p, order: i }));
+      setPasswords(reordered);
+
+      try {
+        await savePasswords(reordered);
+      } catch (err) {
+        setPasswords(passwords);
+        throw err;
+      }
+    },
+    [passwords, savePasswords]
+  );
+
   return {
     passwords,
     entryCreatedAtMap,
@@ -274,5 +311,6 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
     renameFolder,
     deleteFolder,
     movePassword,
+    reorderPassword,
   };
 }

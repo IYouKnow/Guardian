@@ -12,6 +12,7 @@ export interface PasswordEntry {
   password: string;
   favicon?: string;
   folderId?: string;
+  order?: number;
   favorite?: boolean;
   passwordStrength?: "weak" | "medium" | "strong" | "very-strong";
   lastModified?: string;
