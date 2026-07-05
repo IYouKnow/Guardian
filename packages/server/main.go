@@ -300,8 +300,11 @@ func main() {
 
 	// 7. Setup HTTP Server with graceful shutdown
 	httpServer := &http.Server{
-		Addr:    ":" + config.Port,
-		Handler: corsHandler(mux),
+		Addr:         ":" + config.Port,
+		Handler:      corsHandler(mux),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Channel to listen for interrupt signals
