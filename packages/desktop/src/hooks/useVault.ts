@@ -186,9 +186,14 @@ export function useVault(): UseVaultReturn {
       let folders: FolderNode[] | undefined;
 
       // 4. Decrypt Items
+      const shortBlobIds: string[] = [];
       for (const item of items) {
-        // Blob format: Base64 string -> [Nonce 12][Ciphertext N]
+        // Blob format: Base64 string -> [Nonce 12][Ciphertext N][Tag 16] => min length 28
         const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
+        if (raw.length < 28) {
+          shortBlobIds.push(item.id);
+          continue;
+        }
         const nonce = raw.slice(0, 12);
         const ciphertext = raw.slice(12);
 
@@ -209,6 +214,16 @@ export function useVault(): UseVaultReturn {
         } catch (e) {
           console.warn(`Failed to decrypt item ${item.id}`, e);
         }
+      }
+
+      // Clean up junk items with invalid encrypted blobs
+      if (shortBlobIds.length > 0) {
+        const cleanupResp = await fetch(`${url}/vault/items`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify(shortBlobIds.map(id => ({ id, encrypted_blob: "", revision: 0 }))),
+        }).catch(() => null);
+        console.log(`[useVault] Removed ${shortBlobIds.length} junk items from server`, cleanupResp?.ok ? "OK" : "FAILED", shortBlobIds);
       }
 
       // 5. Fetch Preferences (Web Sync)
@@ -372,8 +387,14 @@ export function useVault(): UseVaultReturn {
       let settings: VaultSettings | undefined;
       let folders: FolderNode[] | undefined;
 
+      const shortBlobIds: string[] = [];
       for (const item of items) {
+        // Blob format: Base64 string -> [Nonce 12][Ciphertext N][Tag 16] => min length 28
         const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
+        if (raw.length < 28) {
+          shortBlobIds.push(item.id);
+          continue;
+        }
         const nonce = raw.slice(0, 12);
         const ciphertext = raw.slice(12);
 
@@ -391,6 +412,16 @@ export function useVault(): UseVaultReturn {
         } catch (e) {
           console.warn(`Failed to decrypt item ${item.id}`, e);
         }
+      }
+
+      // Clean up junk items with invalid encrypted blobs
+      if (shortBlobIds.length > 0) {
+        const cleanupResp = await fetch(`${serverUrl}/vault/items`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
+          body: JSON.stringify(shortBlobIds.map(id => ({ id, encrypted_blob: "", revision: 0 }))),
+        }).catch(() => null);
+        console.log(`[useVault] Removed ${shortBlobIds.length} junk items from server`, cleanupResp?.ok ? "OK" : "FAILED", shortBlobIds);
       }
 
       // Fetch Preferences (Web Sync)
@@ -435,12 +466,12 @@ export function useVault(): UseVaultReturn {
     setVaultPath(null);
     setMasterPassword("");
     setAuthToken(null);
+    setUsername(null);
+    setError(null);
     if (serverKeyRef.current) {
       serverKeyRef.current.fill(0);
       serverKeyRef.current = null;
     }
-    setUsername(null);
-    setError(null);
   }, []);
 
   return {

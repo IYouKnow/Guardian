@@ -517,9 +517,9 @@ export default function PasswordTable({
             </tr>
           </thead>
           <tbody>
-            {passwords.map((password) => (
+            {passwords.map((password, idx) => (
               <tr
-                key={password.id}
+                key={password.id ?? idx}
                 data-password-id={password.id}
                 onClick={() => { if (!dragActive.current) onSelect?.(selectedId === password.id ? null : password.id); dragActive.current = false; }}
                 onDoubleClick={() => { if (!dragActive.current) onDoubleClick?.(password); }}

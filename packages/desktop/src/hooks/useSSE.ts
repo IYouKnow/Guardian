@@ -23,8 +23,7 @@ export function useSSE(serverUrl: string | null, authToken: string | null) {
 
             try {
                 const cleanUrl = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
-                const response = await fetch(`${cleanUrl}/api/events`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` },
+                const response = await fetch(`${cleanUrl}/api/events?token=${encodeURIComponent(authToken)}`, {
                     signal: controller.signal,
                 });
 
@@ -42,6 +41,12 @@ export function useSSE(serverUrl: string | null, authToken: string | null) {
                     if (done) break;
 
                     buffer += decoder.decode(value, { stream: true });
+
+                    // Cap buffer to prevent memory exhaustion from malformed server
+                    if (buffer.length > 1_048_576) {
+                        buffer = '';
+                    }
+
                     const messages = buffer.split('\n\n');
                     buffer = messages.pop() || '';
 
