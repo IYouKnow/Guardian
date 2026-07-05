@@ -60,6 +60,8 @@ function App() {
     setShowNotifications,
     setThemeSyncMode,
     setMiniMode,
+    setConnectionMode,
+    setLastServerUrl,
     loadFromVault,
   } = usePreferences();
 
@@ -486,7 +488,7 @@ function App() {
         setLastVaultPath(credentials.path);
       } else {
         vaultData = await loginToServer(credentials.url, credentials.username, credentials.password);
-        // Maybe save server URL to preferences?
+        setLastServerUrl(credentials.url);
       }
 
       loadPasswords(vaultData.entries, vaultData.folders);
@@ -539,6 +541,9 @@ function App() {
           onLogin={handleLogin}
           onRegister={(mode) => { setRegisterMode(mode); setShowRegister(true); }}
           lastVaultPath={preferences.lastVaultPath}
+          lastServerUrl={preferences.lastServerUrl}
+          defaultMode={preferences.connectionMode}
+          onModeChange={setConnectionMode}
           theme={activeTheme}
           accentColor={preferences.accentColor}
           mini={isMiniMode}

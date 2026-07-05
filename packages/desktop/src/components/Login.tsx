@@ -9,6 +9,9 @@ interface LoginProps {
   onLogin: (mode: "local" | "server", credentials: any) => Promise<void>;
   onRegister: (mode: "local" | "server") => void;
   lastVaultPath?: string | null;
+  lastServerUrl?: string;
+  defaultMode?: "local" | "server";
+  onModeChange?: (mode: "local" | "server") => void;
   theme?: Theme;
   accentColor?: AccentColor;
   mini?: boolean;
@@ -18,14 +21,17 @@ export default function Login({
   onLogin,
   onRegister,
   lastVaultPath,
+  lastServerUrl: savedServerUrl,
+  defaultMode = "local",
+  onModeChange,
   theme = "dark",
   accentColor = "yellow",
   mini = false
 }: LoginProps) {
-  const [mode, setMode] = useState<"local" | "server">("local");
+  const [mode, setMode] = useState<"local" | "server">(defaultMode);
   const [masterPassword, setMasterPassword] = useState("");
   const [vaultPath, setVaultPath] = useState<string>(lastVaultPath || "");
-  const [serverUrl, setServerUrl] = useState(localStorage.getItem("lastServerUrl") || "");
+  const [serverUrl, setServerUrl] = useState(savedServerUrl || "");
   const [username, setUsername] = useState("");
 
   const [showMasterPassword, setShowMasterPassword] = useState(false);
@@ -87,7 +93,6 @@ export default function Login({
       if (mode === "local") {
         await onLogin("local", { path: vaultPath, password: masterPassword });
       } else {
-        localStorage.setItem("lastServerUrl", serverUrl);
         await onLogin("server", { url: serverUrl, username, password: masterPassword });
       }
       setMasterPassword("");
@@ -119,22 +124,22 @@ export default function Login({
           >
             {mini ? (
               <>
-                <div className="flex p-0.5 mb-3 bg-black/20 rounded-lg">
-                  <button
-                    type="button"
-                    onClick={() => setMode("local")}
-                    className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "local" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
-                  >
-                    Local File
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("server")}
-                    className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "server" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
-                  >
-                    Server
-                  </button>
-                </div>
+                  <div className="flex p-0.5 mb-3 bg-black/20 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => { setMode("local"); onModeChange?.("local"); }}
+                      className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "local" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+                    >
+                      Local File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setMode("server"); onModeChange?.("server"); }}
+                      className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "server" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+                    >
+                      Server
+                    </button>
+                  </div>
 
                 <form onSubmit={handleLogin} className="space-y-2.5">
                   {mode === "local" ? (
@@ -237,14 +242,14 @@ export default function Login({
                 <div className={`flex p-1 mb-5 bg-black/20 rounded-xl`}>
                   <button
                     type="button"
-                    onClick={() => setMode("local")}
+                    onClick={() => { setMode("local"); onModeChange?.("local"); }}
                     className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "local" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
                   >
                     Local File
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMode("server")}
+                    onClick={() => { setMode("server"); onModeChange?.("server"); }}
                     className={`flex-1 py-2 text-[0.65rem] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === "server" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
                   >
                     Server

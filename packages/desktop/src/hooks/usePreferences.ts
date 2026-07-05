@@ -11,6 +11,8 @@ interface Preferences {
   itemSize: "small" | "medium" | "large";
   sidebarWidth: number;
   lastVaultPath: string | null;
+  lastServerUrl: string;
+  connectionMode: "local" | "server";
   clipboardClearSeconds: number;
   revealCensorSeconds: number;
   showNotifications: boolean;
@@ -25,6 +27,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   itemSize: "medium",
   sidebarWidth: 288,
   lastVaultPath: null,
+  lastServerUrl: "",
+  connectionMode: "local",
   clipboardClearSeconds: 10,
   revealCensorSeconds: 5,
   showNotifications: true,
@@ -85,6 +89,8 @@ export function usePreferences() {
         const savedSyncTheme = await store.get<boolean>("syncTheme"); // legacy
         const savedThemeSyncMode = await store.get<ThemeSyncMode>("themeSyncMode");
         const savedMiniMode = await store.get<boolean>("miniMode");
+        const savedConnectionMode = await store.get<"local" | "server">("connectionMode");
+        const savedLastServerUrl = await store.get<string>("lastServerUrl");
 
         const resolvedThemeSyncMode =
           savedThemeSyncMode ?? (savedSyncTheme ? "follow" : DEFAULT_PREFERENCES.themeSyncMode);
@@ -96,6 +102,8 @@ export function usePreferences() {
           itemSize: savedItemSize ?? DEFAULT_PREFERENCES.itemSize,
           sidebarWidth: savedSidebarWidth ?? DEFAULT_PREFERENCES.sidebarWidth,
           lastVaultPath: savedLastVaultPath ?? DEFAULT_PREFERENCES.lastVaultPath,
+          lastServerUrl: savedLastServerUrl ?? DEFAULT_PREFERENCES.lastServerUrl,
+          connectionMode: savedConnectionMode ?? DEFAULT_PREFERENCES.connectionMode,
           clipboardClearSeconds: savedClipboardClearSeconds ?? DEFAULT_PREFERENCES.clipboardClearSeconds,
           revealCensorSeconds: savedRevealCensorSeconds ?? DEFAULT_PREFERENCES.revealCensorSeconds,
           showNotifications: savedShowNotifications ?? DEFAULT_PREFERENCES.showNotifications,
@@ -183,6 +191,16 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const setConnectionMode = useCallback(
+    (mode: "local" | "server") => updatePreference("connectionMode", mode),
+    [updatePreference]
+  );
+
+  const setLastServerUrl = useCallback(
+    (url: string) => updatePreference("lastServerUrl", url),
+    [updatePreference]
+  );
+
   // Helper to persist settings to local store
   const persistSettings = useCallback(async (settings: Partial<Preferences>) => {
     try {
@@ -245,6 +263,8 @@ export function usePreferences() {
     setShowNotifications,
     setThemeSyncMode,
     setMiniMode,
+    setConnectionMode,
+    setLastServerUrl,
     loadFromVault,
   };
 }
