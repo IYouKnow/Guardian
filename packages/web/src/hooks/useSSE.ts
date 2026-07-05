@@ -10,92 +10,82 @@ type SSEEvent = {
 export function useSSE() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
-    const eventSourceRef = useRef<EventSource | null>(null);
+    const wsRef = useRef<WebSocket | null>(null);
     const location = useLocation();
     const reconnectTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
-        // Only connect if the user is authenticated (they have a token)
         const token = authApi.getToken();
+        if (!token || location.pathname === '/login') return;
 
-        // Don't connect on the login screen
-        if (!token || location.pathname === '/login') {
-            return;
-        }
+        const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+        const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws/events';
 
-        const connectSSE = () => {
-            // Close any existing connection
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
+        let isActive = true;
+        let retryDelay = 1000;
+        const maxRetryDelay = 30000;
+
+        const connect = () => {
+            if (!isActive) return;
+
+            try {
+                const ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'challenge') {
+                            ws.send(JSON.stringify({ type: 'auth', nonce: data.nonce, token }));
+                            return;
+                        }
+                        if (data.type === 'auth_ok') {
+                            console.log('[WS] Authenticated');
+                            retryDelay = 1000;
+                            return;
+                        }
+                        if (data.type === 'auth_error') {
+                            console.error('[WS] Auth failed');
+                            ws.close();
+                            return;
+                        }
+                        if (data.type === 'ping' || data.type === 'connected') return;
+
+                        console.log('[WS] Received event:', data);
+                        setLastEvent(data);
+                        setIsSyncing(true);
+                        setTimeout(() => setIsSyncing(false), 2000);
+                    } catch { /* skip */ }
+                };
+
+                ws.onclose = () => {
+                    wsRef.current = null;
+                    if (!isActive) return;
+                    reconnectTimeoutRef.current = window.setTimeout(connect, retryDelay);
+                    retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+                };
+
+                ws.onerror = () => {};
+            } catch {
+                if (isActive) {
+                    reconnectTimeoutRef.current = window.setTimeout(connect, retryDelay);
+                    retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+                }
             }
-
-            // The Web API EventSource does not support custom headers (like Authorization: Bearer).
-            // We must pass the token as a query parameter.
-            const sseUrl = `${import.meta.env.VITE_API_URL || ''}/api/events?token=${token}`;
-
-            const evtSource = new EventSource(sseUrl);
-            eventSourceRef.current = evtSource;
-
-            evtSource.onopen = () => {
-                console.log('[SSE] Connection established');
-            };
-
-            evtSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data) as SSEEvent;
-
-                    if (data.type === 'ping') {
-                        // Ignoring pings. They just keep the SSE connection alive through proxies.
-                        return;
-                    }
-
-                    if (data.type === 'connected') {
-                        return;
-                    }
-
-                    console.log('[SSE] Received event:', data);
-                    setLastEvent(data);
-
-                    // Show syncing indicator
-                    setIsSyncing(true);
-
-                    // Auto-hide the syncing indicator after 2 seconds
-                    setTimeout(() => {
-                        setIsSyncing(false);
-                    }, 2000);
-
-                } catch (err) {
-                    console.error('[SSE] Failed to parse message', err);
-                }
-            };
-
-            evtSource.onerror = (err) => {
-                console.error('[SSE] Connection error', err);
-                evtSource.close();
-
-                // Simple exponential backoff or fixed delay could be used here
-                // The browser's native EventSource attempts to reconnect automatically, 
-                // but if it completely fails, we try again in 5 seconds
-                if (reconnectTimeoutRef.current) {
-                    window.clearTimeout(reconnectTimeoutRef.current);
-                }
-
-                reconnectTimeoutRef.current = window.setTimeout(() => {
-                    console.log('[SSE] Attempting to reconnect...');
-                    connectSSE();
-                }, 5000);
-            };
         };
 
-        connectSSE();
+        connect();
 
-        // Cleanup on unmount or when token/location changes
         return () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
+            isActive = false;
+            if (wsRef.current) {
+                wsRef.current.onclose = null;
+                wsRef.current.close();
+                wsRef.current = null;
             }
-            if (reconnectTimeoutRef.current) {
+            if (reconnectTimeoutRef.current !== null) {
                 window.clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
             }
         };
     }, [location.pathname]);

@@ -231,9 +231,6 @@ func main() {
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
 	mux.HandleFunc("DELETE /vault/items/{id}", server.withUserAuth(server.handleDeleteItem))
 
-	// SSE Events
-	mux.HandleFunc("GET /api/events", server.handleEvents)
-
 	// WebSocket Events (challenge-response auth, no token in URL)
 	mux.HandleFunc("GET /ws/events", server.handleWebSocket)
 
