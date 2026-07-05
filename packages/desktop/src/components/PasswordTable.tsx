@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion } from "framer-motion";
@@ -125,6 +125,38 @@ export default function PasswordTable({
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartPos = useRef<{ x: number; y: number; id: string } | null>(null);
   const dragActive = useRef(false);
+  const [colWidths, setColWidths] = useState<Record<number, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('guardian-table-col-widths') || '{}');
+    } catch { return {}; }
+  });
+  const headerRowRef = useRef<HTMLTableRowElement | null>(null);
+  const colWidthsInit = useRef(false);
+
+  // Persist widths to localStorage
+  useEffect(() => {
+    localStorage.setItem('guardian-table-col-widths', JSON.stringify(colWidths));
+  }, [colWidths]);
+
+  // Capture natural widths on first render for columns not yet in localStorage
+  useEffect(() => {
+    if (colWidthsInit.current) return;
+    const row = headerRowRef.current;
+    if (!row) return;
+    const ths = row.querySelectorAll('th[data-col-index]');
+    if (ths.length === 0) return;
+    const current = { ...colWidths };
+    let changed = false;
+    ths.forEach((th) => {
+      const idx = parseInt((th as HTMLElement).getAttribute('data-col-index') || '0');
+      if (current[idx] === undefined) {
+        current[idx] = (th as HTMLElement).offsetWidth;
+        changed = true;
+      }
+    });
+    if (changed) setColWidths(current);
+    colWidthsInit.current = true;
+  }, []);
 
   const handleCopy = useCallback((id: string, field: 'username' | 'password', value: string, handler: (v: string) => void) => {
     handler(value);
@@ -141,15 +173,62 @@ export default function PasswordTable({
       data-table="password-table"
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse table-fixed">
               <thead>
-                <tr className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
-                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Service</th>
-                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Username</th>
-                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
-                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Password</th>
-                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
-                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest text-right`}>Actions</th>
+                <tr ref={headerRowRef} className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
+                  {['Service', 'Username', 'Website', 'Password', 'Website', 'Actions'].map((label, i) => (
+                    <th
+                      key={`col-${i}`}
+                      data-col-index={i}
+                      className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden ${i < 5 ? 'relative' : 'text-right'}`}
+                      style={colWidths[i] ? { width: colWidths[i], minWidth: 60 } : undefined}
+                    >
+                      {label}
+                      {i < 5 && (
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-5 cursor-col-resize z-20 flex items-center justify-center touch-none select-none"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const th = (e.currentTarget as HTMLElement).parentElement;
+                            if (!th || !th.hasAttribute('data-col-index')) return;
+                            const idx = parseInt(th.getAttribute('data-col-index') || '0');
+                            const startX = e.clientX;
+                            const startWidth = th.offsetWidth;
+
+                            // Lock all columns at their current widths
+                            const row = th.parentElement;
+                            if (row) {
+                              const locked: Record<number, number> = {};
+                              row.querySelectorAll('th[data-col-index]').forEach((c, i) => {
+                                const ci = parseInt((c as HTMLElement).getAttribute('data-col-index') || String(i));
+                                locked[ci] = (c as HTMLElement).offsetWidth;
+                              });
+                              setColWidths(locked);
+                            }
+
+                            document.body.style.userSelect = "none";
+                            document.body.style.cursor = "col-resize";
+
+                            const onMove = (ev: MouseEvent) => {
+                              const diff = ev.clientX - startX;
+                              setColWidths(prev => ({ ...prev, [idx]: Math.max(80, startWidth + diff) }));
+                            };
+                            const onUp = () => {
+                              document.removeEventListener('mousemove', onMove);
+                              document.removeEventListener('mouseup', onUp);
+                              document.body.style.userSelect = "";
+                              document.body.style.cursor = "";
+                            };
+                            document.addEventListener('mousemove', onMove);
+                            document.addEventListener('mouseup', onUp);
+                          }}
+                        >
+                          <span className="w-px h-5 bg-current opacity-15 pointer-events-none" />
+                        </div>
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
           <tbody>
@@ -176,7 +255,7 @@ export default function PasswordTable({
                 className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.lightClass}` : themeClasses.rowHover}`}
               >
                 {/* Service */}
-                <td className={sizeClasses.cellPadding}>
+                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
                   <div className={`flex items-center ${sizeClasses.gap}`}>
                     <div className={`${sizeClasses.iconSize} rounded-xl ${selectedId === password.id ? 'bg-black/10' : accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
                       {password.favicon && !failedFavicons.has(password.id) ? (
@@ -198,19 +277,19 @@ export default function PasswordTable({
                         </span>
                       )}
                     </div>
-                    <div>
-                      <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight`}>{password.title}</div>
+                    <div className="min-w-0">
+                      <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight truncate`}>{password.title}</div>
                       {password.favorite && (
-                        <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5`}>Favorite</div>
+                        <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5 truncate`}>Favorite</div>
                       )}
                     </div>
                   </div>
                 </td>
 
                 {/* Username */}
-                <td className={sizeClasses.cellPadding}>
+                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
                   <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
-                    <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors`}>
+                    <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors truncate`}>
                       {password.username}
                     </span>
                     {copiedField?.id === password.id && copiedField?.field === 'username' ? (
@@ -226,12 +305,12 @@ export default function PasswordTable({
                 </td>
 
                 {/* Website */}
-                <td className={sizeClasses.cellPadding}>
-                  <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70`}>{password.website}</span>
+                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
+                  <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70 truncate block`}>{password.website}</span>
                 </td>
 
                 {/* Password */}
-                <td className={sizeClasses.cellPadding}>
+                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
                   <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
                     <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
                       ••••••••
@@ -249,14 +328,14 @@ export default function PasswordTable({
                 </td>
 
                 {/* Website */}
-                <td className={sizeClasses.cellPadding}>
+                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
                   <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[150px]`}>
                     {password.website || "—"}
                   </span>
                 </td>
 
                 {/* Actions */}
-                <td className={sizeClasses.cellPadding}>
+                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
                   <div className="flex justify-end">
                     <button
                       onClick={(e) => {
