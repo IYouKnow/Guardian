@@ -155,18 +155,13 @@ export function useVault(): UseVaultReturn {
         throw new Error("Authentication failed");
       }
 
+      const text = await resp.text();
       let data;
       try {
-        data = await resp.json();
+        data = JSON.parse(text);
       } catch (parseErr) {
-        // If JSON fails, read text to see what we got (likely HTML)
-        const text = await resp.text(); // This might fail if body already consumed? No, .json() consumes it. 
-        // We can't read body twice properly unless we clone.
         console.error("Failed to parse JSON response. Status:", resp.status);
         console.error("Response body:", text);
-        // Note: resp.json() consumes body. If it failed, we can't easily read it again usually?
-        // Actually, if .json() fails, the stream might be partially read.
-        // Better approach: Get text first, then parse.
         throw new Error("Invalid server response (not JSON)");
       }
       const token = data.token;

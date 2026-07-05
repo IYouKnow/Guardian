@@ -1,7 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
-import { getAccentColorClasses } from "../utils/accentColors";
+import { getAccentColorClasses, getAccentColorHex } from "../utils/accentColors";
 import { motion } from "framer-motion";
+
+const COLUMNS = [
+  { key: 0, label: "Service" },
+  { key: 1, label: "Username" },
+  { key: 2, label: "Website" },
+  { key: 3, label: "Password" },
+  { key: 4, label: "Notes" },
+  { key: 5, label: "Actions" },
+] as const;
+
+const DEFAULT_COL_ORDER = [0, 1, 2, 3, 4, 5];
 
 interface PasswordTableProps {
   passwords: PasswordEntry[];
@@ -103,7 +114,7 @@ export default function PasswordTable({
           textTertiary: "text-[#4a3a6b]",
           badge: "bg-[#23173a]/50 text-[#c9a0dc] border-[#4a3a6b]/30",
         };
-      default: // dark
+      default:
         return {
           wrapper: "bg-[#0a0a0a]/60 backdrop-blur-xl border border-white/5 shadow-xl shadow-black/40",
           headerBg: "bg-white/[0.02]",
@@ -125,20 +136,40 @@ export default function PasswordTable({
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartPos = useRef<{ x: number; y: number; id: string } | null>(null);
   const dragActive = useRef(false);
+
   const [colWidths, setColWidths] = useState<Record<number, number>>(() => {
     try {
       return JSON.parse(localStorage.getItem('guardian-table-col-widths') || '{}');
     } catch { return {}; }
   });
+
+  const [colOrder, setColOrder] = useState<number[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('guardian-table-col-order') || 'null');
+      if (Array.isArray(saved) && saved.length === COLUMNS.length) return saved;
+    } catch { /* fall through */ }
+    return DEFAULT_COL_ORDER;
+  });
+
   const headerRowRef = useRef<HTMLTableRowElement | null>(null);
   const colWidthsInit = useRef(false);
 
-  // Persist widths to localStorage
+  const colDragRef = useRef<{ key: number } | null>(null);
+  const isDraggingCol = useRef(false);
+  const dropTargetRef = useRef<number | null>(null);
+  const [draggedColKey, setDraggedColKey] = useState<number | null>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const ghostOffsetRef = useRef({ x: 0, y: 0 });
+
   useEffect(() => {
     localStorage.setItem('guardian-table-col-widths', JSON.stringify(colWidths));
   }, [colWidths]);
 
-  // Capture natural widths on first render for columns not yet in localStorage
+  useEffect(() => {
+    if (isDraggingCol.current) return;
+    localStorage.setItem('guardian-table-col-order', JSON.stringify(colOrder));
+  }, [colOrder]);
+
   useEffect(() => {
     if (colWidthsInit.current) return;
     const row = headerRowRef.current;
@@ -165,72 +196,326 @@ export default function PasswordTable({
     copiedTimer.current = setTimeout(() => setCopiedField(null), 1500);
   }, []);
 
+  const renderCell = (colKey: number, password: PasswordEntry) => {
+    switch (colKey) {
+      case 0:
+        return (
+          <motion.td key={`${password.id}-col-0`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
+            <div className={`flex items-center ${sizeClasses.gap}`}>
+              <div className={`${sizeClasses.iconSize} rounded-xl flex-shrink-0 ${selectedId === password.id ? 'bg-black/10' : accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
+                {password.favicon && !failedFavicons.has(password.id) ? (
+                  <img
+                    src={password.favicon}
+                    alt=""
+                    className="w-full h-full object-cover rounded-xl"
+                    onError={() => {
+                      setFailedFavicons((current) => {
+                        const next = new Set(current);
+                        next.add(password.id);
+                        return next;
+                      });
+                    }}
+                  />
+                ) : (
+                  <span className={`font-bold ${accentClasses.onContrastClass} ${sizeClasses.iconText}`}>
+                    {password.title.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight truncate`}>{password.title}</div>
+                {password.favorite && (
+                  <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5 truncate`}>Favorite</div>
+                )}
+              </div>
+            </div>
+          </motion.td>
+        );
+      case 1:
+        return (
+          <motion.td key={`${password.id}-col-1`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
+            <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
+              <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors truncate`}>
+                {password.username}
+              </span>
+              {copiedField?.id === password.id && copiedField?.field === 'username' ? (
+                <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </div>
+          </motion.td>
+        );
+      case 2:
+        return (
+          <motion.td key={`${password.id}-col-2`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
+            <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70 truncate block`}>{password.website}</span>
+          </motion.td>
+        );
+      case 3:
+        return (
+          <motion.td key={`${password.id}-col-3`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
+            <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
+              <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
+                ••••••••
+              </span>
+              {copiedField?.id === password.id && copiedField?.field === 'password' ? (
+                <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </div>
+          </motion.td>
+        );
+      case 4:
+        return (
+          <motion.td key={`${password.id}-col-4`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
+            <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[150px]`}>
+              {password.notes || "—"}
+            </span>
+          </motion.td>
+        );
+      case 5:
+        return (
+          <motion.td key={`${password.id}-col-5`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
+            <div className="flex justify-end">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(password.id);
+                }}
+                className={`p-2 rounded-lg hover:bg-red-500/10 text-red-500/50 hover:text-red-500 transition-colors`}
+                title="Delete Entry"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </motion.td>
+        );
+    }
+  };
+
+  const saveColOrder = useCallback((order: number[]) => {
+    localStorage.setItem('guardian-table-col-order', JSON.stringify(order));
+  }, []);
+
+  const handleColDragStart = (e: React.MouseEvent, colKey: number) => {
+    e.stopPropagation();
+
+    const thEl = e.currentTarget as HTMLElement;
+    const rect = thEl.getBoundingClientRect();
+
+    colDragRef.current = { key: colKey };
+    isDraggingCol.current = true;
+    setDraggedColKey(colKey);
+
+    ghostOffsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+
+    if (ghostRef.current) {
+      ghostRef.current.style.width = `${rect.width}px`;
+      ghostRef.current.style.left = `${e.clientX - ghostOffsetRef.current.x}px`;
+      ghostRef.current.style.top = `${e.clientY - ghostOffsetRef.current.y}px`;
+    }
+
+    const accentHex = getAccentColorHex(accentColor, theme);
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    const positionIndicator = (clientX: number) => {
+      const row = headerRowRef.current;
+      if (!row) return;
+      const ths = Array.from(row.querySelectorAll<HTMLElement>('th[data-col-index]'));
+      if (ths.length === 0) return;
+
+      let targetIdx = 0;
+      for (let i = 0; i < ths.length; i++) {
+        const rect = ths[i].getBoundingClientRect();
+        const mid = rect.left + rect.width / 2;
+        if (clientX < mid) {
+          targetIdx = i;
+          break;
+        }
+        targetIdx = i + 1;
+      }
+
+      dropTargetRef.current = targetIdx;
+
+      // Reset all resize handle spans
+      row.querySelectorAll<HTMLElement>('.cursor-col-resize span').forEach(s => {
+        s.style.opacity = '';
+        s.style.width = '';
+        s.style.background = '';
+      });
+      ths.forEach(th => { th.style.borderRight = ''; th.style.borderLeft = ''; });
+      if (targetIdx === 0) {
+        ths[0].style.borderLeft = `2px solid ${accentHex}`;
+      } else if (targetIdx < ths.length) {
+        const prev = ths[targetIdx - 1];
+        const handle = prev.querySelector<HTMLElement>('.cursor-col-resize span');
+        if (handle) {
+          handle.style.opacity = '1';
+          handle.style.width = '2px';
+          handle.style.background = accentHex;
+        } else {
+          prev.style.borderRight = `2px solid ${accentHex}`;
+        }
+      }
+    };
+
+    positionIndicator(e.clientX);
+
+    const onMove = (ev: MouseEvent) => {
+      if (!colDragRef.current) return;
+
+      if (ghostRef.current) {
+        ghostRef.current.style.left = `${ev.clientX - ghostOffsetRef.current.x}px`;
+        ghostRef.current.style.top = `${ev.clientY - ghostOffsetRef.current.y}px`;
+      }
+
+      positionIndicator(ev.clientX);
+    };
+
+    const onUp = () => {
+      const key = colDragRef.current?.key;
+      const targetIdx = dropTargetRef.current;
+      colDragRef.current = null;
+      isDraggingCol.current = false;
+      dropTargetRef.current = null;
+      setDraggedColKey(null);
+
+      const row = headerRowRef.current;
+      if (row) {
+        row.querySelectorAll<HTMLElement>('th[data-col-index]').forEach(th => {
+          th.style.borderRight = '';
+          th.style.borderLeft = '';
+        });
+        row.querySelectorAll<HTMLElement>('.cursor-col-resize span').forEach(s => {
+          s.style.opacity = '';
+          s.style.width = '';
+          s.style.background = '';
+        });
+      }
+
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+
+      if (key !== undefined && targetIdx !== null) {
+        setColOrder(prev => {
+          const from = prev.indexOf(key);
+          if (from === -1 || targetIdx === from || targetIdx === from + 1) {
+            saveColOrder(prev);
+            return prev;
+          }
+          const next = [...prev];
+          next.splice(from, 1);
+          const insertAt = from < targetIdx ? targetIdx - 1 : targetIdx;
+          next.splice(insertAt, 0, key);
+          saveColOrder(next);
+          return next;
+        });
+      }
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
   return (
+    <>
+    {draggedColKey !== null && COLUMNS.find(c => c.key === draggedColKey) && (
+      <div
+        ref={ghostRef}
+        className={`fixed pointer-events-none z-50 ${sizeClasses.headerPadding} ${themeClasses.headerBg} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest truncate rounded-lg shadow-2xl border ${themeClasses.rowBorder} opacity-95 transition-all duration-200 ease-out`}
+      >
+        {COLUMNS.find(c => c.key === draggedColKey)!.label}
+      </div>
+    )}
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`w-full overflow-hidden rounded-2xl ${themeClasses.wrapper}`}
+      className={`w-full overflow-hidden rounded-2xl ${themeClasses.wrapper} relative`}
       data-table="password-table"
     >
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse table-fixed">
-              <thead>
-                <tr ref={headerRowRef} className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
-                  {['Service', 'Username', 'Website', 'Password', 'Website', 'Actions'].map((label, i) => (
-                    <th
-                      key={`col-${i}`}
-                      data-col-index={i}
-                      className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden ${i < 5 ? 'relative' : 'text-right'}`}
-                      style={colWidths[i] ? { width: colWidths[i], minWidth: 60 } : undefined}
-                    >
-                      {label}
-                      {i < 5 && (
-                        <div
-                          className="absolute right-0 top-0 bottom-0 w-5 cursor-col-resize z-20 flex items-center justify-center touch-none select-none"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const th = (e.currentTarget as HTMLElement).parentElement;
-                            if (!th || !th.hasAttribute('data-col-index')) return;
-                            const idx = parseInt(th.getAttribute('data-col-index') || '0');
-                            const startX = e.clientX;
-                            const startWidth = th.offsetWidth;
+          <thead>
+            <tr ref={headerRowRef} className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
+              {colOrder.map((colKey) => {
+                const col = COLUMNS.find(c => c.key === colKey)!;
+                const isResizable = colKey !== 5;
+                return (
+                  <motion.th
+                    key={colKey}
+                    layout
+                    data-col-index={colKey}
+                    className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden truncate ${!isResizable ? 'text-right' : 'relative'} cursor-grab active:cursor-grabbing select-none ${draggedColKey === colKey ? `${accentClasses.textClass} opacity-90` : ''}`}
+                    style={colWidths[colKey] ? { width: colWidths[colKey], minWidth: 60 } : undefined}
+                    onMouseDown={(e) => handleColDragStart(e, colKey)}
+                  >
+                    {col.label}
+                    {isResizable && (
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-5 cursor-col-resize z-20 flex items-center justify-center touch-none select-none"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const th = (e.currentTarget as HTMLElement).parentElement;
+                          if (!th || !th.hasAttribute('data-col-index')) return;
+                          const idx = parseInt(th.getAttribute('data-col-index') || '0');
+                          const startX = e.clientX;
+                          const startWidth = th.offsetWidth;
 
-                            // Lock all columns at their current widths
-                            const row = th.parentElement;
-                            if (row) {
-                              const locked: Record<number, number> = {};
-                              row.querySelectorAll('th[data-col-index]').forEach((c, i) => {
-                                const ci = parseInt((c as HTMLElement).getAttribute('data-col-index') || String(i));
-                                locked[ci] = (c as HTMLElement).offsetWidth;
-                              });
-                              setColWidths(locked);
-                            }
+                          const row = th.parentElement;
+                          if (row) {
+                            const locked: Record<number, number> = {};
+                            row.querySelectorAll('th[data-col-index]').forEach((c, i) => {
+                              const ci = parseInt((c as HTMLElement).getAttribute('data-col-index') || String(i));
+                              locked[ci] = (c as HTMLElement).offsetWidth;
+                            });
+                            setColWidths(locked);
+                          }
 
-                            document.body.style.userSelect = "none";
-                            document.body.style.cursor = "col-resize";
+                          document.body.style.userSelect = "none";
+                          document.body.style.cursor = "col-resize";
 
-                            const onMove = (ev: MouseEvent) => {
-                              const diff = ev.clientX - startX;
-                              setColWidths(prev => ({ ...prev, [idx]: Math.max(80, startWidth + diff) }));
-                            };
-                            const onUp = () => {
-                              document.removeEventListener('mousemove', onMove);
-                              document.removeEventListener('mouseup', onUp);
-                              document.body.style.userSelect = "";
-                              document.body.style.cursor = "";
-                            };
-                            document.addEventListener('mousemove', onMove);
-                            document.addEventListener('mouseup', onUp);
-                          }}
-                        >
-                          <span className="w-px h-5 bg-current opacity-15 pointer-events-none" />
-                        </div>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+                          const onMove = (ev: MouseEvent) => {
+                            const diff = ev.clientX - startX;
+                            setColWidths(prev => ({ ...prev, [idx]: Math.max(50, startWidth + diff) }));
+                          };
+                          const onUp = () => {
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                            document.body.style.userSelect = "";
+                            document.body.style.cursor = "";
+                          };
+                          document.addEventListener('mousemove', onMove);
+                          document.addEventListener('mouseup', onUp);
+                        }}
+                      >
+                        <span className="w-px h-5 bg-current opacity-15 pointer-events-none" />
+                      </div>
+                    )}
+                  </motion.th>
+                );
+              })}
+            </tr>
+          </thead>
           <tbody>
             {passwords.map((password) => (
               <tr
@@ -254,108 +539,13 @@ export default function PasswordTable({
                 onPointerUp={() => { dragStartPos.current = null; }}
                 className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.lightClass}` : themeClasses.rowHover}`}
               >
-                {/* Service */}
-                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
-                  <div className={`flex items-center ${sizeClasses.gap}`}>
-                    <div className={`${sizeClasses.iconSize} rounded-xl ${selectedId === password.id ? 'bg-black/10' : accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
-                      {password.favicon && !failedFavicons.has(password.id) ? (
-                        <img
-                          src={password.favicon}
-                          alt=""
-                          className="w-full h-full object-cover rounded-xl"
-                          onError={() => {
-                            setFailedFavicons((current) => {
-                              const next = new Set(current);
-                              next.add(password.id);
-                              return next;
-                            });
-                          }}
-                        />
-                      ) : (
-                        <span className={`font-bold ${accentClasses.onContrastClass} ${sizeClasses.iconText}`}>
-                          {password.title.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight truncate`}>{password.title}</div>
-                      {password.favorite && (
-                        <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5 truncate`}>Favorite</div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-
-                {/* Username */}
-                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
-                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
-                    <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors truncate`}>
-                      {password.username}
-                    </span>
-                    {copiedField?.id === password.id && copiedField?.field === 'username' ? (
-                      <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    )}
-                  </div>
-                </td>
-
-                {/* Website */}
-                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
-                  <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70 truncate block`}>{password.website}</span>
-                </td>
-
-                {/* Password */}
-                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
-                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
-                    <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
-                      ••••••••
-                    </span>
-                    {copiedField?.id === password.id && copiedField?.field === 'password' ? (
-                      <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    )}
-                  </div>
-                </td>
-
-                {/* Website */}
-                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
-                  <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[150px]`}>
-                    {password.website || "—"}
-                  </span>
-                </td>
-
-                {/* Actions */}
-                <td className={`${sizeClasses.cellPadding} overflow-hidden`}>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(password.id);
-                      }}
-                      className={`p-2 rounded-lg hover:bg-red-500/10 text-red-500/50 hover:text-red-500 transition-colors`}
-                      title="Delete Entry"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
+                {colOrder.map((colKey) => renderCell(colKey, password))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </motion.div>
+    </>
   );
 }
