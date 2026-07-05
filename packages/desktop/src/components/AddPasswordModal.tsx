@@ -6,15 +6,17 @@ interface AddPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddPassword: (password: PasswordEntry) => Promise<void>;
+  onUpdatePassword?: (id: string, updates: Partial<PasswordEntry>) => Promise<void>;
   folders: Folder[];
   defaultFolderId?: string | null;
+  existingPassword?: PasswordEntry | null;
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
   return folders.filter((f) => f.parentId === parentId);
 }
 
-export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folders, defaultFolderId }: AddPasswordModalProps) {
+export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpdatePassword, folders, defaultFolderId, existingPassword }: AddPasswordModalProps) {
   const [title, setTitle] = useState("");
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
@@ -31,16 +33,26 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folde
 
   useEffect(() => {
     if (isOpen) {
-      setTitle("");
-      setUsername("");
-      setWebsite("");
-      setPassword("");
-      setFavicon(undefined);
-      setFolderId(defaultFolderId ?? undefined);
-      setNotes("");
+      if (existingPassword) {
+        setTitle(existingPassword.title);
+        setUsername(existingPassword.username);
+        setWebsite(existingPassword.website);
+        setPassword(existingPassword.password);
+        setFavicon(existingPassword.favicon);
+        setFolderId(existingPassword.folderId);
+        setNotes(existingPassword.notes || "");
+      } else {
+        setTitle("");
+        setUsername("");
+        setWebsite("");
+        setPassword("");
+        setFavicon(undefined);
+        setFolderId(defaultFolderId ?? undefined);
+        setNotes("");
+      }
       setError("");
     }
-  }, [isOpen, defaultFolderId]);
+  }, [isOpen, defaultFolderId, existingPassword]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -69,24 +81,36 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folde
     setIsSubmitting(true);
 
     try {
-      const newPassword: PasswordEntry = {
-        id: crypto.randomUUID(),
-        title: title.trim(),
-        username: username.trim(),
-        website: website.trim(),
-        password: password,
-        favicon,
-        folderId,
-        favorite: false,
-        lastModified: new Date().toISOString(),
-        notes: notes.trim() || undefined,
-        breached: false,
-      };
+      if (existingPassword) {
+        await onUpdatePassword!(existingPassword.id, {
+          title: title.trim(),
+          username: username.trim(),
+          website: website.trim(),
+          password,
+          favicon,
+          folderId,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        const newPassword: PasswordEntry = {
+          id: crypto.randomUUID(),
+          title: title.trim(),
+          username: username.trim(),
+          website: website.trim(),
+          password: password,
+          favicon,
+          folderId,
+          favorite: false,
+          lastModified: new Date().toISOString(),
+          notes: notes.trim() || undefined,
+          breached: false,
+        };
 
-      await onAddPassword(newPassword);
+        await onAddPassword(newPassword);
+      }
       onClose();
     } catch (err) {
-      console.error("Error adding password:", err);
+      console.error("Error saving password:", err);
       setError("Failed to save password. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -159,7 +183,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folde
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-white">Add New Password</h3>
+          <h3 className="text-xl font-bold text-white">{existingPassword ? "Edit Password" : "Add New Password"}</h3>
           <button
             onClick={onClose}
             disabled={isSubmitting}
@@ -331,7 +355,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, folde
                   Saving...
                 </>
               ) : (
-                "Add Password"
+                existingPassword ? "Save Changes" : "Add Password"
               )}
             </button>
           </div>

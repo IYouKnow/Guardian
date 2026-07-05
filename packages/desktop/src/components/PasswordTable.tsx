@@ -9,6 +9,10 @@ interface PasswordTableProps {
   onCopyPassword: (password: string) => void;
   onDelete: (id: string) => void;
   onContextMenu?: (x: number, y: number, password: PasswordEntry) => void;
+  onDoubleClick?: (password: PasswordEntry) => void;
+  onDragStart?: (passwordId: string, e: React.PointerEvent) => void;
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
   theme: Theme;
   itemSize: "small" | "medium" | "large";
   accentColor: AccentColor;
@@ -20,6 +24,10 @@ export default function PasswordTable({
   onCopyPassword,
   onDelete,
   onContextMenu,
+  onDoubleClick,
+  onDragStart,
+  selectedId,
+  onSelect,
   theme,
   itemSize,
   accentColor,
@@ -122,28 +130,41 @@ export default function PasswordTable({
     >
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Service</th>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Username</th>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Password</th>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
-              <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest text-right`}>Actions</th>
-            </tr>
-          </thead>
+              <thead>
+                <tr className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
+                  <th className={`w-8 ${sizeClasses.headerPadding} ${themeClasses.headerText}`}></th>
+                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Service</th>
+                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Username</th>
+                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
+                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Password</th>
+                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest`}>Website</th>
+                  <th className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest text-right`}>Actions</th>
+                </tr>
+              </thead>
           <tbody>
-            {passwords.map((password, index) => (
-              <motion.tr
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
+            {passwords.map((password) => (
+              <tr
                 key={password.id}
+                onClick={() => onSelect?.(selectedId === password.id ? null : password.id)}
+                onDoubleClick={() => onDoubleClick?.(password)}
                 onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY, password); } : undefined}
-                className={`group border-b last:border-0 ${themeClasses.rowBorder} ${themeClasses.rowHover} transition-all duration-200`}
+                className={`group border-b last:border-0 ${themeClasses.rowBorder} ${themeClasses.rowHover} transition-all duration-200 cursor-pointer ${selectedId === password.id ? 'bg-white/[0.06]' : ''}`}
               >
+                {/* Drag Handle */}
+                <td className={`${sizeClasses.cellPadding} w-8 select-none cursor-grab`}
+                  onPointerDown={(e) => { e.preventDefault(); onDragStart?.(password.id, e); }}
+                >
+                  <div className={`flex items-center justify-center ${themeClasses.textTertiary} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                    </svg>
+                  </div>
+                </td>
                 {/* Service */}
-                <td className={sizeClasses.cellPadding}>
+                <td className={`${sizeClasses.cellPadding} relative ${selectedId === password.id ? '' : ''}`}>
+                  {selectedId === password.id && (
+                    <div className={`absolute left-0 top-1 bottom-1 w-0.5 rounded-full ${accentClasses.bgClass}`} />
+                  )}
                   <div className={`flex items-center ${sizeClasses.gap}`}>
                     <div className={`${sizeClasses.iconSize} rounded-xl ${accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
                       {password.favicon && !failedFavicons.has(password.id) ? (
@@ -176,7 +197,7 @@ export default function PasswordTable({
 
                 {/* Username */}
                 <td className={sizeClasses.cellPadding}>
-                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={() => onCopyUsername(password.username)}>
+                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); onCopyUsername(password.username); }}>
                     <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} group-hover/field:${themeClasses.text} transition-colors`}>
                       {password.username}
                     </span>
@@ -193,7 +214,7 @@ export default function PasswordTable({
 
                 {/* Password */}
                 <td className={sizeClasses.cellPadding}>
-                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={() => onCopyPassword(password.password)}>
+                  <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); onCopyPassword(password.password); }}>
                     <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 group-hover/field:${themeClasses.text} transition-colors`}>
                       ••••••••
                     </span>
@@ -227,7 +248,7 @@ export default function PasswordTable({
                     </button>
                   </div>
                 </td>
-              </motion.tr>
+              </tr>
             ))}
           </tbody>
         </table>

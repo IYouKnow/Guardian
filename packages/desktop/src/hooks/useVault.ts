@@ -179,6 +179,7 @@ export function useVault(): UseVaultReturn {
       const items: VaultItem[] = await itemsResp.json();
       const entries: VaultEntry[] = [];
       let settings: VaultSettings | undefined;
+      let folders: FolderNode[] | undefined;
 
       // 4. Decrypt Items
       for (const item of items) {
@@ -196,6 +197,8 @@ export function useVault(): UseVaultReturn {
 
           if (item.id === "settings") {
             settings = JSON.parse(jsonStr);
+          } else if (item.id === "folders") {
+            folders = JSON.parse(jsonStr);
           } else {
             entries.push(JSON.parse(jsonStr));
           }
@@ -225,6 +228,7 @@ export function useVault(): UseVaultReturn {
 
       return {
         entries,
+        folders,
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
         settings: (Object.keys(finalSettings).length > 0 ? finalSettings : { theme: 'dark' }) as VaultSettings
@@ -239,7 +243,7 @@ export function useVault(): UseVaultReturn {
     }
   }, []);
 
-  const saveToServer = async (entries: VaultEntry[], settings?: VaultSettings) => {
+  const saveToServer = async (entries: VaultEntry[], settings?: VaultSettings, folders?: FolderNode[]) => {
     if (!serverUrl || !authToken || !serverKey) throw new Error("Not connected to server");
 
     const itemsToSync: any[] = [];
@@ -275,6 +279,16 @@ export function useVault(): UseVaultReturn {
       const b64 = await encryptItem(settings);
       itemsToSync.push({
         id: "settings",
+        encrypted_blob: b64,
+        revision: 1
+      });
+    }
+
+    // 3. Process Folders (Special ID 'folders')
+    if (folders) {
+      const b64 = await encryptItem(folders);
+      itemsToSync.push({
+        id: "folders",
         encrypted_blob: b64,
         revision: 1
       });
@@ -321,7 +335,7 @@ export function useVault(): UseVaultReturn {
           await writeFile(vaultPath, encryptedVault);
         } else {
           // Server Mode Save
-          await saveToServer(entries, settings);
+          await saveToServer(entries, settings, folders);
         }
       } catch (err) {
         const errorMessage =
@@ -352,6 +366,7 @@ export function useVault(): UseVaultReturn {
       const items: VaultItem[] = await itemsResp.json();
       const entries: VaultEntry[] = [];
       let settings: VaultSettings | undefined;
+      let folders: FolderNode[] | undefined;
 
       for (const item of items) {
         const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
@@ -364,6 +379,8 @@ export function useVault(): UseVaultReturn {
 
           if (item.id === "settings") {
             settings = JSON.parse(jsonStr);
+          } else if (item.id === "folders") {
+            folders = JSON.parse(jsonStr);
           } else {
             entries.push(JSON.parse(jsonStr));
           }
@@ -395,6 +412,7 @@ export function useVault(): UseVaultReturn {
 
       return {
         entries,
+        folders,
         createdAt: new Date().toISOString(),
         lastModified: new Date().toISOString(),
         settings: (Object.keys(finalSettings).length > 0 ? finalSettings : { theme: 'dark' }) as VaultSettings

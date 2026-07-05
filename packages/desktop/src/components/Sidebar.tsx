@@ -20,6 +20,7 @@ interface SidebarProps {
   onSearchChange: (query: string) => void;
   connectionMode: "local" | "server";
   vaultName: string;
+  dragTargetFolderId?: string | null;
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
@@ -43,6 +44,7 @@ export default function Sidebar({
   onSearchChange,
   connectionMode,
   vaultName,
+  dragTargetFolderId,
 }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string | null } | null>(null);
@@ -107,11 +109,14 @@ export default function Sidebar({
     return (
       <li key={folder.id}>
         <div
+          data-folder-id={folder.id}
           className={`group relative flex items-center gap-1 w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
             isActive && !showSettings
               ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
-              : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
-          }`}
+              : dragTargetFolderId === folder.id
+                ? `${accentClasses.borderClass} ${accentClasses.lightClass}`
+                : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
+          } ${dragTargetFolderId === folder.id ? `ring-2 ${accentClasses.focusRingClass}` : ''}`}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
           onClick={() => onFolderChange(folder.id)}
           onContextMenu={(e) => handleContextMenu(e, folder.id)}
@@ -228,11 +233,14 @@ export default function Sidebar({
             {/* Root "All" node */}
             <li>
               <div
+                data-folder-id="root"
                 className={`flex items-center gap-2 w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                   activeFolderId === null && !showSettings
                     ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
-                    : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
-                }`}
+                    : dragTargetFolderId === null
+                      ? `${accentClasses.borderClass} ${accentClasses.lightClass}`
+                      : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
+                } ${dragTargetFolderId === null ? `ring-2 ${accentClasses.focusRingClass}` : ''}`}
                 onClick={() => onFolderChange(null)}
                 onContextMenu={(e) => handleContextMenu(e, null)}
               >

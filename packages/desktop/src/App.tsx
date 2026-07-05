@@ -23,6 +23,7 @@ import { useSSE } from "./hooks/useSSE";
 import { SyncIndicator } from "@guardian/shared";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Theme, AccentColor, ThemeSyncMode } from "@guardian/shared";
+import type { PasswordEntry } from "./types";
 
 function App() {
   const [showRegister, setShowRegister] = useState(false);
@@ -79,8 +80,14 @@ function App() {
   const { isSyncing, lastEvent, setIsSyncing } = useSSE(serverUrl, authToken);
 
   const { toasts, removeToast, success, error: showError } = useToast();
+  const [selectedPasswordId, setSelectedPasswordId] = useState<string | null>(null);
+  const [editingPassword, setEditingPassword] = useState<PasswordEntry | null>(null);
   const [passwordContextMenu, setPasswordContextMenu] = useState<{ x: number; y: number; passwordId: string; passwordTitle: string; username: string; password: string } | null>(null);
   const [areaContextMenu, setAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const [dragPasswordId, setDragPasswordId] = useState<string | null>(null);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [dragTargetFolderId, setDragTargetFolderId] = useState<string | null | undefined>(undefined);
 
   const handleSync = async () => {
     try {
@@ -216,6 +223,7 @@ function App() {
     setSearchQuery,
     setActiveFolderId,
     addPassword,
+    updatePassword,
     deletePassword,
     loadPasswords,
     getVaultEntries,
@@ -223,6 +231,7 @@ function App() {
     addFolder,
     renameFolder,
     deleteFolder,
+    movePassword,
   } = usePasswords({
     onSave: handleSavePasswords,
     onSaveFolders: handleSaveFolders,
@@ -307,6 +316,54 @@ function App() {
     }
     return () => document.removeEventListener("mousedown", handleClick);
   }, [passwordContextMenu, areaContextMenu]);
+
+  // Pointer-based drag system
+  useEffect(() => {
+    if (!dragPasswordId) return;
+
+    const sidebar = sidebarRef.current;
+    const handlePointerMove = (e: PointerEvent) => {
+      setDragPosition({ x: e.clientX, y: e.clientY });
+
+      if (sidebar) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        if (e.clientX < sidebarRect.right && e.clientX > sidebarRect.left) {
+          const elements = document.elementsFromPoint(e.clientX, e.clientY);
+          const folderEl = elements.find((el) => el.hasAttribute('data-folder-id'));
+          const fid = folderEl?.getAttribute('data-folder-id');
+          setDragTargetFolderId(fid !== undefined ? fid : undefined);
+        } else {
+          setDragTargetFolderId(undefined);
+        }
+      }
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      if (sidebar) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        if (e.clientX < sidebarRect.right && e.clientX > sidebarRect.left) {
+          const elements = document.elementsFromPoint(e.clientX, e.clientY);
+          const folderEl = elements.find((el) => el.hasAttribute('data-folder-id'));
+          const fid = folderEl?.getAttribute('data-folder-id');
+          const targetFolderId = fid === 'root' ? null : fid ?? null;
+          if (dragPasswordId) {
+            movePassword(dragPasswordId, targetFolderId);
+          }
+        }
+      }
+      setDragPasswordId(null);
+      setDragPosition(null);
+      setDragTargetFolderId(undefined);
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [dragPasswordId, movePassword]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -533,6 +590,7 @@ function App() {
             onAddFolder={(parentId) => setFolderModalParentId(parentId)}
             onRenameFolder={renameFolder}
             onDeleteFolder={deleteFolder}
+            dragTargetFolderId={dragTargetFolderId}
             onAddPassword={() => setShowAddModal(true)}
             onLogout={handleLogout}
             onSettings={() => setShowSettings(!showSettings)}
@@ -632,6 +690,13 @@ function App() {
                       onCopyUsername={handleCopyUsername}
                       onCopyPassword={handleCopyPassword}
                       onDelete={handleDeletePassword}
+                      selectedId={selectedPasswordId}
+                      onSelect={setSelectedPasswordId}
+                      onDoubleClick={(pw) => setEditingPassword(pw)}
+                      onDragStart={(passwordId, e) => {
+                        setDragPasswordId(passwordId);
+                        setDragPosition({ x: e.clientX, y: e.clientY });
+                      }}
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
@@ -645,7 +710,15 @@ function App() {
         </main>
       </div>
 
-      <AddPasswordModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAddPassword={handleAddPassword} folders={folders} defaultFolderId={activeFolderId} />
+      <AddPasswordModal
+        isOpen={showAddModal || editingPassword !== null}
+        onClose={() => { setShowAddModal(false); setEditingPassword(null); }}
+        onAddPassword={handleAddPassword}
+        onUpdatePassword={updatePassword}
+        folders={folders}
+        defaultFolderId={activeFolderId}
+        existingPassword={editingPassword}
+      />
 
       {/* Password Context Menu */}
       {/* Area Context Menu */}
@@ -701,6 +774,16 @@ function App() {
             </svg>
             Delete
           </button>
+        </div>
+      )}
+
+      {/* Drag Indicator */}
+      {dragPosition && dragPasswordId && (
+        <div
+          className="fixed z-[300] pointer-events-none bg-yellow-400/10 border border-yellow-400/30 rounded-lg px-3 py-1.5 text-xs text-yellow-400 font-semibold shadow-xl backdrop-blur-sm whitespace-nowrap"
+          style={{ left: dragPosition.x + 12, top: dragPosition.y - 24 }}
+        >
+          {passwords.find((p) => p.id === dragPasswordId)?.title || 'Move entry'}
         </div>
       )}
 
