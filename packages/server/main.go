@@ -95,8 +95,9 @@ type User struct {
 	IsAdmin      bool       `json:"is_admin"`
 	DBPath       string     `json:"db_path"`
 	FriendlyName string     `json:"friendly_name"`
-	Status       string     `json:"status"` // "ACTIVE", "INACTIVE", "SUSPENDED"
-	Role         string     `json:"role"`   // "Admin", "User"
+	Status       string     `json:"status"`
+	Role         string     `json:"role"`
+	MaxWsPerIP   int        `json:"max_ws_per_ip"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastLogin    *time.Time `json:"last_login"`
 }
@@ -108,6 +109,7 @@ type AdminUserResponse struct {
 	FriendlyName      string     `json:"friendly_name"`
 	Status            string     `json:"status"`
 	Role              string     `json:"role"`
+	MaxWsPerIP        int        `json:"max_ws_per_ip"`
 	VaultItems        int        `json:"vault_items"`
 	UsedSpace         string     `json:"used_space"`
 	UsedSpaceOverhead string     `json:"used_space_overhead"`
@@ -225,6 +227,11 @@ func main() {
 	mux.HandleFunc("POST /api/admin/invites", server.withAdminAuth(server.handleGenerateInvite))
 	mux.HandleFunc("DELETE /api/admin/invites/{id}", server.withAdminAuth(server.handleDeleteInvite))
 	mux.HandleFunc("GET /api/admin/users", server.withAdminAuth(server.handleListUsers))
+	mux.HandleFunc("PUT /api/admin/users/{id}", server.withAdminAuth(server.handleUpdateUser))
+
+	// Admin / Settings
+	mux.HandleFunc("GET /api/admin/settings", server.withAdminAuth(server.handleListSettings))
+	mux.HandleFunc("PUT /api/admin/settings", server.withAdminAuth(server.handleUpdateSetting))
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
@@ -444,6 +451,15 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE users ADD COLUMN last_login DATETIME")
 	db.Exec("ALTER TABLE users ADD COLUMN preferences TEXT DEFAULT '{}'")
 	db.Exec("ALTER TABLE users ADD COLUMN salt TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN max_ws_per_ip INTEGER DEFAULT 0")
+
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS server_settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)
+	`)
+	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('max_ws_per_ip_default', '0')")
 
 	return db, err
 }
@@ -1180,7 +1196,7 @@ func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	s.logger.Println("handleListUsers: starting")
 	rows, err := s.systemDB.Query(`
-		SELECT id, username, is_admin, friendly_name, status, role, db_path, created_at, last_login 
+		SELECT id, username, is_admin, friendly_name, status, role, db_path, created_at, last_login, max_ws_per_ip
 		FROM users ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -1195,7 +1211,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		var u User
 		err := rows.Scan(
 			&u.ID, &u.Username, &u.IsAdmin, &u.FriendlyName,
-			&u.Status, &u.Role, &u.DBPath, &u.CreatedAt, &u.LastLogin,
+			&u.Status, &u.Role, &u.DBPath, &u.CreatedAt, &u.LastLogin, &u.MaxWsPerIP,
 		)
 		if err != nil {
 			s.logger.Println("User scan error:", err)
@@ -1224,7 +1240,8 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 			FriendlyName:      u.FriendlyName,
 			Status:            u.Status,
 			Role:              u.Role,
-			VaultItems:        0, // Skip for now to avoid blocking
+			MaxWsPerIP:        u.MaxWsPerIP,
+			VaultItems:        0,
 			UsedSpace:         formatBytes(dbSize),
 			UsedSpaceOverhead: formatBytes(overheadSize),
 			CreatedAt:         u.CreatedAt,
@@ -1239,6 +1256,119 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Printf("handleListUsers: processed %d users, sending response", len(users))
 	writeJSON(w, http.StatusOK, users)
+}
+
+// handleListSettings returns all key-value pairs from the server_settings table
+func (s *Server) handleListSettings(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.systemDB.Query("SELECT key, value FROM server_settings ORDER BY key")
+	if err != nil {
+		s.logger.Println("handleListSettings: query error:", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	settings := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			continue
+		}
+		settings[k] = v
+	}
+
+	writeJSON(w, http.StatusOK, settings)
+}
+
+// handleUpdateSetting creates or updates a single key-value pair in server_settings
+type updateSettingRequest struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (s *Server) handleUpdateSetting(w http.ResponseWriter, r *http.Request) {
+	var req updateSettingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if req.Key == "" {
+		http.Error(w, "Key is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := s.systemDB.Exec(`
+		INSERT INTO server_settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, req.Key, req.Value)
+	if err != nil {
+		s.logger.Println("handleUpdateSetting: exec error:", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Setting updated"})
+}
+
+// handleUpdateUser updates fields on a user by ID
+type updateUserRequest struct {
+	MaxWsPerIP *int `json:"max_ws_per_ip"`
+	Status     *string `json:"status"`
+	Role       *string `json:"role"`
+}
+
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var req updateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.MaxWsPerIP != nil {
+		_, err := s.systemDB.Exec("UPDATE users SET max_ws_per_ip = ? WHERE id = ?", *req.MaxWsPerIP, id)
+		if err != nil {
+			s.logger.Println("handleUpdateUser: max_ws_per_ip error:", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Status != nil {
+		validStatuses := map[string]bool{"ACTIVE": true, "DISABLED": true, "SUSPENDED": true}
+		if !validStatuses[*req.Status] {
+			http.Error(w, "Invalid status. Must be ACTIVE, DISABLED, or SUSPENDED", http.StatusBadRequest)
+			return
+		}
+		_, err := s.systemDB.Exec("UPDATE users SET status = ? WHERE id = ?", *req.Status, id)
+		if err != nil {
+			s.logger.Println("handleUpdateUser: status error:", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.Role != nil {
+		validRoles := map[string]bool{"User": true, "Admin": true}
+		if !validRoles[*req.Role] {
+			http.Error(w, "Invalid role. Must be User or Admin", http.StatusBadRequest)
+			return
+		}
+		_, err := s.systemDB.Exec("UPDATE users SET role = ?, is_admin = ? WHERE id = ?", *req.Role, *req.Role == "Admin", id)
+		if err != nil {
+			s.logger.Println("handleUpdateUser: role error:", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "User updated"})
 }
 
 // --- Helpers ---

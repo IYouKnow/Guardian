@@ -2,8 +2,10 @@ package main
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +19,7 @@ const (
 	wsAuthTimeout    = 10 * time.Second
 	wsWriteTimeout   = 10 * time.Second
 	wsNonceCleanup   = 15 * time.Second
-	wsMaxConnsPerIP  = 5
+	wsDefaultMaxPerIP = 5
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -77,16 +79,43 @@ func getClientIP(r *http.Request) string {
 	return r.RemoteAddr[:idx]
 }
 
+func (s *Server) getMaxWsPerIP() int {
+	var val string
+	err := s.systemDB.QueryRow("SELECT value FROM server_settings WHERE key = 'max_ws_per_ip_default'").Scan(&val)
+	if err != nil || err == sql.ErrNoRows {
+		return wsDefaultMaxPerIP
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n <= 0 {
+		return wsDefaultMaxPerIP
+	}
+	return n
+}
+
+func (s *Server) getUserMaxWsPerIP(userID int) int {
+	var val int
+	err := s.systemDB.QueryRow("SELECT max_ws_per_ip FROM users WHERE id = ?", userID).Scan(&val)
+	if err != nil || val <= 0 {
+		return 0
+	}
+	return val
+}
+
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Per-IP rate limiting
+	// Read global default from DB
+	maxConns := s.getMaxWsPerIP()
+
 	clientIP := getClientIP(r)
+
+	// Pre-auth: check against global default
 	wsConnCountsMu.Lock()
-	if wsConnCounts[clientIP] >= wsMaxConnsPerIP {
+	currentCount := wsConnCounts[clientIP]
+	if maxConns > 0 && currentCount >= maxConns {
 		wsConnCountsMu.Unlock()
 		http.Error(w, "Too many connections", http.StatusTooManyRequests)
 		return
 	}
-	wsConnCounts[clientIP]++
+	wsConnCounts[clientIP] = currentCount + 1
 	wsConnCountsMu.Unlock()
 
 	// Periodic cleanup of stale nonces (runs once)
@@ -176,6 +205,21 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		cleanupConn()
 		conn.Close()
 		return
+	}
+
+	// Post-auth: check per-user override (if set, it always applies)
+	userMax := s.getUserMaxWsPerIP(userID)
+	if userMax > 0 {
+		wsConnCountsMu.Lock()
+		if wsConnCounts[clientIP] > userMax {
+			wsConnCountsMu.Unlock()
+			conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+			conn.WriteJSON(wsMessage{Type: "auth_error"})
+			cleanupConn()
+			conn.Close()
+			return
+		}
+		wsConnCountsMu.Unlock()
 	}
 
 	conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))

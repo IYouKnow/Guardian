@@ -23,9 +23,10 @@ import { useTheme } from '../../context/ThemeContext';
 interface UserTableProps {
   users: AdminUser[];
   loading: boolean;
+  onEditUser: (user: AdminUser) => void;
 }
 
-export default function UserTable({ users, loading }: UserTableProps) {
+export default function UserTable({ users, loading, onEditUser }: UserTableProps) {
   const { themeClasses, accentClasses } = useTheme();
 
   const statusStyles: Record<string, string> = {
@@ -73,6 +74,7 @@ export default function UserTable({ users, loading }: UserTableProps) {
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Status</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Vault Items</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Used Space</TableHead>
+              <TableHead className={`${themeClasses.textSecondary} font-medium`}>WS Limit</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium`}>Last Active</TableHead>
               <TableHead className={`${themeClasses.textSecondary} font-medium text-right`}>Actions</TableHead>
             </TableRow>
@@ -125,6 +127,17 @@ export default function UserTable({ users, loading }: UserTableProps) {
                     )}
                   </div>
                 </TableCell>
+                <TableCell>
+                  <div className={`${themeClasses.text}`}>
+                    {user.max_ws_per_ip > 0 ? (
+                      <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/20 font-medium">
+                        {user.max_ws_per_ip}
+                      </Badge>
+                    ) : (
+                      <span className={`${themeClasses.textTertiary} text-sm`}>Default</span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className={`${themeClasses.textSecondary}`}>
                   {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
                 </TableCell>
@@ -136,7 +149,7 @@ export default function UserTable({ users, loading }: UserTableProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className={`${themeClasses.sectionBg} border ${themeClasses.border} ${themeClasses.text} backdrop-blur-xl`}>
-                      <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer`}>
+                      <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer`} onClick={() => onEditUser(user)}>
                         <Pencil className="w-4 h-4 mr-2" /> Edit User
                       </DropdownMenuItem>
                       <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer`}>

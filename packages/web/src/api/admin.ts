@@ -34,10 +34,17 @@ export interface AdminUser {
     status: string;
     role: string;
     vault_items: number;
+    max_ws_per_ip: number;
     created_at: string;
     last_login: string | null;
     used_space?: string;
     used_space_overhead?: string;
+}
+
+export interface UpdateUserRequest {
+    max_ws_per_ip?: number;
+    status?: string;
+    role?: string;
 }
 
 export interface CreateInviteRequest {
@@ -69,6 +76,19 @@ export const adminApi = {
     async getUsers(): Promise<AdminUser[]> {
         const response = await apiClient.get<AdminUser[]>('/api/admin/users');
         return response.data;
+    },
+
+    async updateUser(id: number, data: UpdateUserRequest): Promise<void> {
+        await apiClient.put(`/api/admin/users/${id}`, data);
+    },
+
+    async getSettings(): Promise<Record<string, string>> {
+        const response = await apiClient.get<Record<string, string>>('/api/admin/settings');
+        return response.data;
+    },
+
+    async updateSetting(key: string, value: string): Promise<void> {
+        await apiClient.put('/api/admin/settings', { key, value });
     },
 
     // Mock endpoints - to be implemented later

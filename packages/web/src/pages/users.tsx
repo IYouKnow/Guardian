@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Filter, Download } from 'lucide-react';
 import UserTable from '@/components/users/UserTable';
+import EditUserModal from '@/components/users/EditUserModal';
 import ExportUsersModal from '@/components/users/ExportUsersModal';
 import { adminApi, type AdminUser } from '@/api/admin';
 import { useTheme } from '../context/ThemeContext';
@@ -15,6 +16,25 @@ export default function Users() {
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await adminApi.getUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      const err = error as { response?: { data?: string } };
+      toast.error(err.response?.data || 'Failed to fetch users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -109,7 +129,7 @@ export default function Users() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <UserTable users={filteredUsers} loading={loading} />
+        <UserTable users={filteredUsers} loading={loading} onEditUser={setEditUser} />
       </motion.div>
 
       {/* Pagination (Simplified for now) */}
@@ -150,6 +170,14 @@ export default function Users() {
       )}
 
 
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        open={editUser !== null}
+        onOpenChange={(open) => { if (!open) setEditUser(null); }}
+        user={editUser}
+        onUpdated={fetchUsers}
+      />
 
       {/* Export Users Modal */}
       <ExportUsersModal
