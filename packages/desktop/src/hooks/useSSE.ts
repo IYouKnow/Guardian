@@ -8,78 +8,74 @@ type SSEEvent = {
 export function useSSE(serverUrl: string | null, authToken: string | null) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
-    const eventSourceRef = useRef<EventSource | null>(null);
-    const reconnectTimeoutRef = useRef<number | null>(null);
+    const reconnectTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
-        // Only connect if we have a url and token
-        if (!serverUrl || !authToken) {
-            return;
-        }
+        if (!serverUrl || !authToken) return;
 
-        const connectSSE = () => {
-            // Close any existing connection
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
+        const controller = new AbortController();
+        let retryDelay = 1000;
+        const maxRetryDelay = 30000;
+        let isActive = true;
+
+        const connect = async () => {
+            if (!isActive) return;
+
+            try {
+                const cleanUrl = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
+                const response = await fetch(`${cleanUrl}/api/events`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) throw new Error(`SSE connection failed: ${response.status}`);
+                if (!response.body) throw new Error('No response body');
+
+                retryDelay = 1000;
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (isActive) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const messages = buffer.split('\n\n');
+                    buffer = messages.pop() || '';
+
+                    for (const msg of messages) {
+                        const dataLine = msg.split('\n').find(l => l.startsWith('data:'));
+                        if (!dataLine) continue;
+
+                        const jsonStr = dataLine.slice(5).trim();
+                        try {
+                            const data = JSON.parse(jsonStr) as SSEEvent;
+                            if (data.type === 'ping' || data.type === 'connected') continue;
+                            console.log('[SSE] Received event:', data);
+                            setLastEvent(data);
+                        } catch { /* skip malformed */ }
+                    }
+                }
+            } catch (err) {
+                if (!isActive) return;
+                console.error('[SSE] Connection error', err);
             }
 
-            // The Web API EventSource does not support custom headers (like Authorization: Bearer).
-            // We must pass the token as a query parameter.
-            const cleanUrl = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
-            const sseUrl = `${cleanUrl}/api/events?token=${authToken}`;
-
-            const evtSource = new EventSource(sseUrl);
-            eventSourceRef.current = evtSource;
-
-            evtSource.onopen = () => {
-                console.log('[SSE] Connection established');
-            };
-
-            evtSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data) as SSEEvent;
-
-                    if (data.type === 'ping') {
-                        return;
-                    }
-
-                    if (data.type === 'connected') {
-                        return;
-                    }
-
-                    console.log('[SSE] Received event:', data);
-                    setLastEvent(data);
-
-                } catch (err) {
-                    console.error('[SSE] Failed to parse message', err);
-                }
-            };
-
-            evtSource.onerror = (err) => {
-                console.error('[SSE] Connection error', err);
-                evtSource.close();
-
-                // Simple exponential backoff or fixed delay could be used here
-                if (reconnectTimeoutRef.current) {
-                    window.clearTimeout(reconnectTimeoutRef.current);
-                }
-
-                reconnectTimeoutRef.current = window.setTimeout(() => {
-                    console.log('[SSE] Attempting to reconnect...');
-                    connectSSE();
-                }, 5000);
-            };
+            if (!isActive) return;
+            reconnectTimerRef.current = window.setTimeout(connect, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
         };
 
-        connectSSE();
+        connect();
 
-        // Cleanup on unmount or when token/url changes
         return () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-            }
-            if (reconnectTimeoutRef.current) {
-                window.clearTimeout(reconnectTimeoutRef.current);
+            isActive = false;
+            controller.abort();
+            if (reconnectTimerRef.current !== null) {
+                window.clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
             }
         };
     }, [serverUrl, authToken]);

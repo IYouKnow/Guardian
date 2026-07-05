@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { VaultEntry, VaultData, VaultSettings, FolderNode, loadVault, createVault } from "../../../shared/crypto/vault";
 import { deriveKey } from "../../../shared/crypto/argon2";
@@ -64,7 +64,7 @@ export function useVault(): UseVaultReturn {
   // Server State
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [serverKey, setServerKey] = useState<Uint8Array | null>(null);
+  const serverKeyRef = useRef<Uint8Array | null>(null);
   const [username, setUsername] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -171,7 +171,7 @@ export function useVault(): UseVaultReturn {
 
       // 2. Derive Key (Once)
       const key = await deriveServerKey(password, username);
-      setServerKey(key);
+      serverKeyRef.current = key;
 
       // 3. Fetch Items
       const itemsResp = await fetch(`${url}/vault/items`, {
@@ -248,7 +248,7 @@ export function useVault(): UseVaultReturn {
   }, []);
 
   const saveToServer = async (entries: VaultEntry[], settings?: VaultSettings, folders?: FolderNode[]) => {
-    if (!serverUrl || !authToken || !serverKey) throw new Error("Not connected to server");
+    if (!serverUrl || !authToken || !serverKeyRef.current) throw new Error("Not connected to server");
 
     const itemsToSync: any[] = [];
 
@@ -257,7 +257,7 @@ export function useVault(): UseVaultReturn {
       const json = JSON.stringify(data);
       const plaintext = new TextEncoder().encode(json);
       const nonce = generateNonce();
-      const encrypted = await encrypt(serverKey, nonce, plaintext);
+      const encrypted = await encrypt(serverKeyRef.current, nonce, plaintext);
 
       // Pack: Nonce + Encrypted
       const finalObj = new Uint8Array(nonce.length + encrypted.length);
@@ -350,12 +350,12 @@ export function useVault(): UseVaultReturn {
         setIsLoading(false);
       }
     },
-    [vaultPath, masterPassword, connectionMode, serverUrl, authToken, serverKey]
+    [vaultPath, masterPassword, connectionMode, serverUrl, authToken]
   );
 
   // --- SYNC HANDLER ---
   const syncVault = useCallback(async (): Promise<VaultData> => {
-    if (!serverUrl || !authToken || !serverKey) throw new Error("Not connected to server");
+    if (!serverUrl || !authToken || !serverKeyRef.current) throw new Error("Not connected to server");
 
     setIsLoading(true);
     setError(null);
@@ -378,7 +378,7 @@ export function useVault(): UseVaultReturn {
         const ciphertext = raw.slice(12);
 
         try {
-          const plaintext = await decrypt(serverKey, nonce, ciphertext);
+          const plaintext = await decrypt(serverKeyRef.current, nonce, ciphertext);
           const jsonStr = new TextDecoder().decode(plaintext);
 
           if (item.id === "settings") {
@@ -429,13 +429,16 @@ export function useVault(): UseVaultReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [serverUrl, authToken, serverKey]);
+  }, [serverUrl, authToken]);
 
   const logout = useCallback(() => {
     setVaultPath(null);
     setMasterPassword("");
     setAuthToken(null);
-    setServerKey(null);
+    if (serverKeyRef.current) {
+      serverKeyRef.current.fill(0);
+      serverKeyRef.current = null;
+    }
     setUsername(null);
     setError(null);
   }, []);
