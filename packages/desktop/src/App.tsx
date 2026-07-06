@@ -22,6 +22,8 @@ import { useToast } from "./hooks/useToast";
 import { useSSE } from "./hooks/useSSE";
 import { SyncIndicator } from "@guardian/shared";
 import { motion, AnimatePresence } from "framer-motion";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import type { Theme, AccentColor, ThemeSyncMode } from "@guardian/shared";
 import type { PasswordEntry } from "./types";
 
@@ -85,13 +87,37 @@ function App() {
   const { toasts, removeToast, success, error: showError } = useToast();
   const [selectedPasswordId, setSelectedPasswordId] = useState<string | null>(null);
   const [editingPassword, setEditingPassword] = useState<PasswordEntry | null>(null);
-  const [passwordContextMenu, setPasswordContextMenu] = useState<{ x: number; y: number; passwordId: string; passwordTitle: string; username: string; password: string } | null>(null);
+  const [passwordContextMenu, setPasswordContextMenu] = useState<{ x: number; y: number; passwordId: string; passwordTitle: string; username: string; password: string; website: string } | null>(null);
   const [areaContextMenu, setAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const [dragPasswordId, setDragPasswordId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [dragTargetFolderId, setDragTargetFolderId] = useState<string | null | undefined>(undefined);
   const [dropIndicatorStyle, setDropIndicatorStyle] = useState<{ left: number; top: number; width: number } | null>(null);
+
+  const [updateVersion, setUpdateVersion] = useState<string | undefined>(undefined);
+  const [dismissUpdate, setDismissUpdate] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
+
+  useEffect(() => {
+    import("@tauri-apps/api/app").then(({ getVersion }) => getVersion().then(setAppVersion)).catch(() => {});
+    check().then(u => { if (u?.available) { setUpdateVersion(u.version); setDismissUpdate(false); } }).catch(() => {});
+  }, []);
+
+  const handleUpdate = async () => {
+    setUpdating(true);
+    try {
+      const update = await check();
+      if (update?.available) {
+        await update.download();
+        await update.install();
+        await relaunch();
+      }
+    } catch {
+      setUpdating(false);
+    }
+  };
 
   const handleSync = async () => {
     try {
@@ -487,6 +513,15 @@ function App() {
     }
   };
 
+  const handlePasteLink = (website: string) => {
+    copyToClipboard(website);
+    if (preferences.clipboardClearSeconds > 0) {
+      setTimeout(() => {
+        navigator.clipboard.writeText("");
+      }, preferences.clipboardClearSeconds * 1000);
+    }
+  };
+
   const handleAddPassword = async (newPassword: any) => {
     try {
       await addPassword(newPassword);
@@ -653,6 +688,34 @@ function App() {
       <TitleBar theme={activeTheme} accentColor={preferences.accentColor} />
       <SyncIndicator isSyncing={isSyncing} variant="subtle" />
 
+      {updateVersion && !dismissUpdate && (
+        <div className={`flex items-center justify-between px-5 py-2.5 border-b ${themeClasses.border} ${themeClasses.sectionBg}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${accentClasses.bgClass}`} />
+            <span className={`text-xs font-medium ${themeClasses.text}`}>
+              Update <span className={accentClasses.textClass}>v{updateVersion}</span> available
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleUpdate}
+              disabled={updating}
+              className={`text-[10px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-lg ${accentClasses.bgClass} ${accentClasses.onContrastClass} hover:opacity-90 transition-all disabled:opacity-50 shadow-sm`}
+            >
+              {updating ? "Updating..." : "Update Now"}
+            </button>
+            <button
+              onClick={() => setDismissUpdate(true)}
+              className={`opacity-40 hover:opacity-80 transition-opacity ${themeClasses.textMuted}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden relative">
         {/* Modern Background Layers */}
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
@@ -747,6 +810,10 @@ function App() {
                     miniMode={preferences.miniMode}
                     onMiniModeChange={setMiniMode}
                     connectionMode={connectionMode}
+                    appVersion={appVersion}
+                    updateVersion={updateVersion}
+                    updating={updating}
+                    onUpdate={handleUpdate}
                   />
               </motion.div>
             ) : (
@@ -783,7 +850,7 @@ function App() {
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
-                      onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password })}
+                      onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password, website: pw.website })}
                     />
                   ) : (
                     <PasswordTable
@@ -801,7 +868,7 @@ function App() {
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
-                      onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password })}
+                      onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password, website: pw.website })}
                     />
                   )}
                 </div>
@@ -855,6 +922,36 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
             </svg>
             Copy Username
+          </button>
+          {passwordContextMenu.password && (
+            <button
+              className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+              onClick={() => { copyToClipboard(passwordContextMenu.password); setPasswordContextMenu(null); }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              Copy Password
+            </button>
+          )}
+          <button
+            className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+            onClick={() => { handlePasteLink(passwordContextMenu.website || ''); setPasswordContextMenu(null); }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.353a1 1 0 00-1.416-1.416L6.5 14.5" />
+            </svg>
+            Paste Link
+          </button>
+          <div className="h-px bg-[#333] my-1" />
+          <button
+            className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+            onClick={() => { handleDeletePassword(passwordContextMenu.passwordId); setPasswordContextMenu(null); }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
           </button>
           <button
             className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"

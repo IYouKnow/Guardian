@@ -2,16 +2,16 @@
 
 ## What's New
 
-- **Real-time Sync (SSE)**: New Server-Sent Events endpoint pushes live vault and preference updates to connected desktop, extension, and web clients — no more polling. Includes a 30-second heartbeat to keep connections alive through reverse proxies and load balancers.
-- **Preferences API**: New endpoints to store per-user preferences (theme, connection mode, and more) so settings follow the user across every device.
-- **Admin Dashboard Polish**: Redesigned invite management, new command palette (Ctrl/Cmd+K), breadcrumb navigation, reworked dashboard cards and activity charts, and a visible server version indicator in the footer.
-- **Docker Compose Cleanup**: The bundled `docker-compose.yml` is now a single-service file. The experimental Cloudflare Tunnel profile and the `TUNNEL_TOKEN` variable have been removed — a first-class, dashboard-integrated remote access option will be introduced in a future release.
-- **Release Workflow Fixes**: Corrected the Docker pull commands and release title shown on the GitHub Releases page (previously double-prefixed with `server-v`).
+- **WebSocket Migration**: Replaced Server-Sent Events (SSE) with full-duplex WebSocket connections for real-time sync. Includes challenge-response authentication for secure client-server handshakes, automatic reconnection with exponential backoff, and 30-second heartbeats to keep connections alive through reverse proxies.
+- **Connection Limits**: Added configurable per-user WebSocket connection limits in server settings to prevent resource exhaustion.
+- **Server-Provided Salt**: The server now provides a per-vault salt for key derivation, improving cryptographic isolation between vaults without requiring client changes.
+- **Enhanced Admin Dashboard**: User management improvements, updated security settings panel, and refined activity monitoring.
+- **Security & Stability**: Improved connection handling, better error recovery, and hardening of WebSocket endpoints against abuse.
 
 ## Upgrade Notes
 
-- If your previous install used `docker compose --profile tunnel up -d`, the `cloudflared` service is no longer part of the template. Keep running your own `cloudflared` container on the same Docker network, or wait for the upcoming built-in option.
-- The Docker image tag format is unchanged on the registry (`1.0.2`, `1.0`, `1`). Only the release notes and release title have been cleaned up.
+- This release replaces the SSE-based sync with WebSockets. All client packages (desktop, extension, mobile) have been updated to use the new WebSocket protocol — update all clients to a compatible version.
+- If you use a reverse proxy (nginx, Caddy, etc.), ensure WebSocket upgrade headers are forwarded (`Upgrade`, `Connection`) for the `/ws` path.
 
 ## Docker Installation
 Pull the latest image from the GitHub Container Registry:

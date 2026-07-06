@@ -26,6 +26,10 @@ interface SettingsProps {
   themeSyncMode: "off" | "follow" | "sync";
   onThemeSyncModeChange: (mode: "off" | "follow" | "sync") => void;
   connectionMode: "local" | "server";
+  appVersion: string;
+  updateVersion?: string;
+  updating: boolean;
+  onUpdate: () => void;
 }
 
 type SettingsSection = "account" | "appearance" | "security";
@@ -69,7 +73,11 @@ export default function Settings({
   onShowNotificationsChange,
   themeSyncMode,
   onThemeSyncModeChange,
-  connectionMode
+  connectionMode,
+  appVersion,
+  updateVersion,
+  updating,
+  onUpdate
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -160,6 +168,31 @@ export default function Settings({
                 </button>
               </div>
             </section>
+
+              <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${accentClasses.bgClass}`} />
+                    <span className={`text-xs font-semibold ${themeClasses.text}`}>Guardian</span>
+                    <span className={`text-xs font-mono ${themeClasses.textMuted}`}>v{appVersion}</span>
+                  </div>
+                  {updateVersion && (
+                    <span className={`text-[9px] font-bold uppercase tracking-wider ${accentClasses.textClass}`}>Update Available</span>
+                  )}
+                </div>
+                {updateVersion && (
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs ${themeClasses.textSecondary}`}>v{updateVersion} ready to install</span>
+                    <button
+                      onClick={onUpdate}
+                      disabled={updating}
+                      className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-lg ${accentClasses.bgClass} ${accentClasses.onContrastClass} hover:opacity-90 transition-colors disabled:opacity-50`}
+                    >
+                      {updating ? "Updating..." : "Update"}
+                    </button>
+                  </div>
+                )}
+              </div>
           </motion.div>
         )}
 

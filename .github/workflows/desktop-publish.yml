@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           TAG_NAME=${{ github.ref_name }}
-          VERSION=${TAG_NAME#desktop-v}
+          VERSION=${TAG_NAME#desktop-}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: install pnpm
@@ -48,18 +48,22 @@ jobs:
       - name: install frontend dependencies
         run: pnpm install
 
-      - name: Update version in tauri.conf.json
-        shell: bash
-        run: |
-          cd packages/desktop/src-tauri
-          node -e "const fs = require('fs'); const t = JSON.parse(fs.readFileSync('tauri.conf.json', 'utf8')); t.version = '${{ steps.get_version.outputs.version }}'; fs.writeFileSync('tauri.conf.json', JSON.stringify(t, null, 2));"
+       - name: Update version in tauri.conf.json
+         shell: bash
+         run: |
+           cd packages/desktop/src-tauri
+           node -e "const fs = require('fs'); const t = JSON.parse(fs.readFileSync('tauri.conf.json', 'utf8')); t.version = '${{ steps.get_version.outputs.version }}'; fs.writeFileSync('tauri.conf.json', JSON.stringify(t, null, 2));"
+           echo "Updated app version to ${{ steps.get_version.outputs.version }}"
 
       - name: Build Desktop App
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: packages/desktop
+          includeUpdaterJson: true
 
       - name: Rename and Collect Artifacts
         shell: bash
