@@ -65,6 +65,8 @@ export function useVault(): UseVaultReturn {
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const serverKeyRef = useRef<Uint8Array | null>(null);
+  const serverUrlRef = useRef<string | null>(null);
+  const authTokenRef = useRef<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -198,7 +200,9 @@ export function useVault(): UseVaultReturn {
       const token = data.token;
       const saltBase64: string | undefined = data.salt;
       setAuthToken(token);
+      authTokenRef.current = token;
       setServerUrl(url);
+      serverUrlRef.current = url;
       setUsername(username);
 
       // 2. Derive Key — use server-provided salt, fall back to legacy username hash
@@ -221,11 +225,15 @@ export function useVault(): UseVaultReturn {
       let decryptResult = await decryptItemsFromServer(items, key);
       let usedLegacyFallback = false;
 
-      // If nothing decrypted, try legacy username-based salt (migration for existing vaults)
-      if (decryptResult.successCount === 0 && items.some(i => i.id !== "settings" && i.id !== "folders")) {
+      console.log(`[useVault] Login: new key decrypted ${decryptResult.successCount}/${items.length} items`);
+
+      // If not all items decrypted, try legacy username-based salt (migration for existing vaults)
+      if (decryptResult.successCount < items.length && items.some(i => i.id !== "settings" && i.id !== "folders")) {
         const legacyKey = await deriveLegacyKey(password, username);
-        decryptResult = await decryptItemsFromServer(items, legacyKey);
-        if (decryptResult.successCount > 0) {
+        const legacyResult = await decryptItemsFromServer(items, legacyKey);
+        console.log(`[useVault] Login: legacy key decrypted ${legacyResult.successCount}/${items.length} items`);
+        if (legacyResult.successCount > decryptResult.successCount) {
+          decryptResult = legacyResult;
           key = legacyKey;
           usedLegacyFallback = true;
           console.log("[useVault] Used legacy key derivation (username-based salt). Will migrate.");
@@ -296,7 +304,7 @@ export function useVault(): UseVaultReturn {
   }, []);
 
   const saveToServer = async (entries: VaultEntry[], settings?: VaultSettings, folders?: FolderNode[]) => {
-    if (!serverUrl || !authToken || !serverKeyRef.current) throw new Error("Not connected to server");
+    if (!serverUrlRef.current || !authTokenRef.current || !serverKeyRef.current) throw new Error("Not connected to server");
     const key = serverKeyRef.current;
 
     const itemsToSync: any[] = [];
@@ -347,23 +355,28 @@ export function useVault(): UseVaultReturn {
       });
     }
 
-    await fetch(`${serverUrl}/vault/items`, {
+    const vaultResp = await fetch(`${serverUrlRef.current}/vault/items`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
+        "Authorization": `Bearer ${authTokenRef.current}`
       },
       body: JSON.stringify(itemsToSync)
     });
+    if (!vaultResp.ok) {
+      const errText = await vaultResp.text();
+      console.error(`[useVault] Vault push failed: ${vaultResp.status} ${errText}`);
+      throw new Error(`Vault push failed: ${vaultResp.status}`);
+    }
 
     // Save preferences to API (Web Sync)
     if (settings) {
       try {
-        await fetch(`${serverUrl}/api/preferences`, {
+        await fetch(`${serverUrlRef.current}/api/preferences`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${authToken}`
+            "Authorization": `Bearer ${authTokenRef.current}`
           },
           body: JSON.stringify({ theme: settings.theme, accentColor: settings.accentColor })
         });
@@ -399,25 +412,27 @@ export function useVault(): UseVaultReturn {
         setIsLoading(false);
       }
     },
-    [vaultPath, masterPassword, connectionMode, serverUrl, authToken]
+    [vaultPath, masterPassword, connectionMode]
   );
 
   // --- SYNC HANDLER ---
   const syncVault = useCallback(async (): Promise<VaultData> => {
-    if (!serverUrl || !authToken || !serverKeyRef.current) throw new Error("Not connected to server");
+    if (!serverUrlRef.current || !authTokenRef.current || !serverKeyRef.current) throw new Error("Not connected to server");
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const itemsResp = await fetch(`${serverUrl}/vault/items`, {
-        headers: { "Authorization": `Bearer ${authToken}` }
+      const itemsResp = await fetch(`${serverUrlRef.current}/vault/items`, {
+        headers: { "Authorization": `Bearer ${authTokenRef.current}` }
       });
 
       if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
 
       const items: VaultItem[] = await itemsResp.json();
+      console.log(`[useVault] Sync fetched ${items.length} items from server`);
       const decryptResult = await decryptItemsFromServer(items, serverKeyRef.current);
+      console.log(`[useVault] Sync decrypted ${decryptResult.successCount}/${items.length} items, returning ${decryptResult.entries.length} entries`);
       const { entries, folders, settings } = decryptResult;
 
       // Clean up junk items with invalid encrypted blobs
@@ -428,9 +443,9 @@ export function useVault(): UseVaultReturn {
         })
         .map(i => i.id);
       if (shortBlobIds.length > 0) {
-        const cleanupResp = await fetch(`${serverUrl}/vault/items`, {
+        const cleanupResp = await fetch(`${serverUrlRef.current}/vault/items`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authTokenRef.current}` },
           body: JSON.stringify(shortBlobIds.map(id => ({ id, encrypted_blob: "", revision: 0 }))),
         }).catch(() => null);
         console.log(`[useVault] Removed ${shortBlobIds.length} junk items from server`, cleanupResp?.ok ? "OK" : "FAILED", shortBlobIds);
@@ -439,9 +454,9 @@ export function useVault(): UseVaultReturn {
       // Fetch Preferences (Web Sync)
       let remotePrefs: Partial<VaultSettings> = {};
       try {
-        console.log("[useVault] Fetching preferences from:", `${serverUrl}/api/preferences`);
-        const prefResp = await fetch(`${serverUrl}/api/preferences`, {
-          headers: { "Authorization": `Bearer ${authToken}` }
+        console.log("[useVault] Fetching preferences from:", `${serverUrlRef.current}/api/preferences`);
+        const prefResp = await fetch(`${serverUrlRef.current}/api/preferences`, {
+          headers: { "Authorization": `Bearer ${authTokenRef.current}` }
         });
         if (prefResp.ok) {
           try {
@@ -472,12 +487,15 @@ export function useVault(): UseVaultReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [serverUrl, authToken]);
+  }, []);
 
   const logout = useCallback(() => {
     setVaultPath(null);
     setMasterPassword("");
     setAuthToken(null);
+    authTokenRef.current = null;
+    setServerUrl(null);
+    serverUrlRef.current = null;
     setUsername(null);
     setError(null);
     if (serverKeyRef.current) {
