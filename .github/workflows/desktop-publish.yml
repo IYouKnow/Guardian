@@ -48,12 +48,12 @@ jobs:
       - name: install frontend dependencies
         run: pnpm install
 
-       - name: Update version in tauri.conf.json
-         shell: bash
-         run: |
-           cd packages/desktop/src-tauri
-           node -e "const fs = require('fs'); const t = JSON.parse(fs.readFileSync('tauri.conf.json', 'utf8')); t.version = '${{ steps.get_version.outputs.version }}'; fs.writeFileSync('tauri.conf.json', JSON.stringify(t, null, 2));"
-           echo "Updated app version to ${{ steps.get_version.outputs.version }}"
+      - name: Update version in tauri.conf.json
+        shell: bash
+        run: |
+          cd packages/desktop/src-tauri
+          node -e "const fs = require('fs'); const t = JSON.parse(fs.readFileSync('tauri.conf.json', 'utf8')); t.version = '${{ steps.get_version.outputs.version }}'; fs.writeFileSync('tauri.conf.json', JSON.stringify(t, null, 2));"
+          echo "Updated app version to ${{ steps.get_version.outputs.version }}"
 
       - name: Build Desktop App
         uses: tauri-apps/tauri-action@v0
