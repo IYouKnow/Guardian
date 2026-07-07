@@ -323,7 +323,7 @@ export default function RegisterWizard({ mode, onRegister, onBackToLogin, initia
                       {mode === "server" && (
                         <>
                           {currentStep === 1 && (
-                            <InputField label="Server URL" placeholder="http://localhost:8080" value={serverUrl} onChange={(v: string) => { setServerUrl(v); setError(""); setServerStatus("CHECKING"); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
+                            <InputField label="Server URL" placeholder="https://your-server.com" value={serverUrl} onChange={(v: string) => { setServerUrl(v); setError(""); setServerStatus("CHECKING"); }} theme={themeClasses} accent={accentClasses} autoFocus error={error} />
                           )}
                           {currentStep === 2 && (
                             <div className="space-y-4">

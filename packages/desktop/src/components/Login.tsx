@@ -163,7 +163,7 @@ export default function Login({
                         type="text"
                         value={serverUrl}
                         onChange={(e) => setServerUrl(e.target.value)}
-                        placeholder="http://localhost:8080"
+                        placeholder="https://your-server.com"
                         className={`w-full ${themeClasses.input} border ${themeClasses.border} focus:${accentClasses.borderClass} rounded-lg px-3 py-2.5 text-sm ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-2 ${accentClasses.focusRingClass}`}
                       />
                       <input
@@ -288,7 +288,7 @@ export default function Login({
                           type="text"
                           value={serverUrl}
                           onChange={(e) => setServerUrl(e.target.value)}
-                          placeholder="http://localhost:8080"
+                          placeholder="https://your-server.com"
                           className={`w-full ${themeClasses.input} border ${themeClasses.border} focus:${accentClasses.borderClass} rounded-xl px-4 py-3 ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-4 ${accentClasses.focusRingClass}`}
                         />
                       </div>

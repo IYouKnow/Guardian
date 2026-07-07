@@ -835,13 +835,7 @@ function App() {
               >
 
 
-                <div className="flex-1 overflow-y-auto p-8 relative" onContextMenu={(e) => { e.preventDefault(); setAreaContextMenu({ x: e.clientX, y: e.clientY }); }}>
-                  <div className="fixed bottom-2 right-2 text-[10px] text-zinc-600 z-50 bg-zinc-900/80 px-2 py-0.5 rounded text-left whitespace-pre font-mono leading-tight">
-pw:{passwords.length} f:{filteredPasswords.length}
-s:{searchQuery?1:0} a:{isAuthenticated?1:0}
-k:{(window as any).__keyDerivation||'?'} e:{(window as any).__argon2Error||''}
-vd:{(window as any).__vaultDebug?.step}|n:{(window as any).__vaultDebug?.newKeySuccess}|l:{(window as any).__vaultDebug?.legacySuccess}|e:{(window as any).__vaultDebug?.chosenEntries}
-                  </div>
+                  <div className="flex-1 overflow-y-auto p-8 relative" onContextMenu={(e) => { e.preventDefault(); setAreaContextMenu({ x: e.clientX, y: e.clientY }); }}>
                   {filteredPasswords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-20">
                       <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>
