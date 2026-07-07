@@ -220,12 +220,19 @@ export function useVault(): UseVaultReturn {
 
       const items: VaultItem[] = await itemsResp.json();
 
+      // Debug: store item count for production debugging
+      const loginDebug = (window as any).__vaultDebug || {};
+      loginDebug.itemsFetched = items.length;
+      (window as any).__vaultDebug = loginDebug;
+
       // 4. Try new salted key first
       let key = await deriveKey(password, saltBytes);
       let decryptResult = await decryptItemsFromServer(items, key);
       let usedLegacyFallback = false;
 
-      console.log(`[useVault] Login: new key decrypted ${decryptResult.successCount}/${items.length} items`);
+      const di = { newKeySuccess: decryptResult.successCount, newKeyEntries: decryptResult.entries.length, itemsLen: items.length, legacySuccess: 0, chosenEntries: decryptResult.entries.length, step: 'after-new' };
+      (window as any).__vaultDebug = di;
+      console.log(`[useVault] Login: new key decrypted ${decryptResult.successCount}/${items.length} items, entries: ${decryptResult.entries.length}`);
 
       // If not all items decrypted, try legacy username-based salt (migration for existing vaults)
       if (decryptResult.successCount < items.length && items.some(i => i.id !== "settings" && i.id !== "folders")) {
@@ -236,10 +243,18 @@ export function useVault(): UseVaultReturn {
           decryptResult = legacyResult;
           key = legacyKey;
           usedLegacyFallback = true;
+          di.legacySuccess = legacyResult.successCount;
+          di.chosenEntries = legacyResult.entries.length;
+          di.step = 'chose-legacy';
           console.log("[useVault] Used legacy key derivation (username-based salt). Will migrate.");
+        } else {
+          di.legacySuccess = legacyResult.successCount;
+          di.step = 'stayed-new';
         }
       }
 
+      di.chosenEntries = decryptResult.entries.length;
+      di.step = di.step + '|before-return';
       serverKeyRef.current = key;
 
       // If legacy fallback was used, re-encrypt everything with the new salted key and save

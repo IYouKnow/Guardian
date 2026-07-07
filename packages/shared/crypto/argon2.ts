@@ -1,7 +1,9 @@
+// Import the base64 WASM directly (Vite ?raw ensures correct hashed path)
+import wasmBase64Content from './argon2.b64.txt?raw';
+
 // Cache for the instantiated WASM module
 let wasmModule: WebAssembly.Instance | null = null;
 let wasmModulePromise: Promise<WebAssembly.Instance> | null = null;
-let wasmBase64Cache: string | null = null;
 
 // Flag to indicate if Argon2 is working
 let argon2Available: boolean | null = null;
@@ -49,34 +51,20 @@ async function loadArgon2Module(): Promise<WebAssembly.Instance> {
   }
 
   wasmModulePromise = (async () => {
-    // Loads the argon2.b64.txt file if not already loaded
-    if (!wasmBase64Cache) {
-      try {
-        // Uses import.meta.url to get the relative file path
-        const wasmFilePath = new URL('./argon2.b64.txt', import.meta.url);
-        const response = await fetch(wasmFilePath);
-        if (!response.ok) {
-          throw new Error(`Failed to load argon2.b64.txt: ${response.statusText}`);
-        }
-        const rawContent = await response.text();
+    // Use the imported raw base64 content directly
+    let b64Content = wasmBase64Content;
 
-        // Cleans the content by removing PEM headers and line breaks
-        wasmBase64Cache = cleanBase64(rawContent);
+    // Cleans the content by removing PEM headers and line breaks
+    b64Content = cleanBase64(b64Content);
 
-        if (!wasmBase64Cache || wasmBase64Cache.length === 0) {
-          throw new Error('argon2.b64.txt file is empty after cleaning.');
-        }
-      } catch (error) {
-        throw new Error(
-          `Failed to load argon2.b64.txt: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
+    if (!b64Content || b64Content.length === 0) {
+      throw new Error('argon2.b64.txt file is empty after cleaning.');
     }
 
     // Decodes base64 to ArrayBuffer
     let binaryString: string;
     try {
-      binaryString = atob(wasmBase64Cache);
+      binaryString = atob(b64Content);
     } catch (error) {
       throw new Error(
         'Failed to decode WASM base64. Check if the base64 string is correct.'
@@ -484,12 +472,16 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Uin
   const memoryCost = 32 * 1024; // 32 MiB - current standard
 
   try {
-    return await deriveKeyWithParams(password, salt, memoryCost);
+    const key = await deriveKeyWithParams(password, salt, memoryCost);
+    (window as any).__keyDerivation = 'argon2';
+    return key;
   } catch (error) {
     // Marks Argon2 as unavailable
     argon2Available = false;
 
     // Fallback to PBKDF2 if WASM fails
+    (window as any).__keyDerivation = 'pbkdf2';
+    (window as any).__argon2Error = error instanceof Error ? error.message : String(error);
     const fallbackKey = await deriveKeyFallback(password, salt);
     return fallbackKey;
   }

@@ -45,6 +45,7 @@ function App() {
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const debug = useRef({ step: 'init', loginCalled: false, entries: 0, loadPwCalled: false, loadPwEntries: 0, foldersLen: 0 });
 
   // Custom hooks
   const {
@@ -611,6 +612,7 @@ function App() {
 
   const handleLogin = async (mode: "local" | "server", credentials: any) => {
     try {
+      debug.current.step = 'login-start';
       let vaultData;
 
       if (mode === "local") {
@@ -622,11 +624,18 @@ function App() {
         setLastServerUrl(finalUrl);
       }
 
+      debug.current.step = 'login-done';
+      debug.current.loginCalled = true;
+      debug.current.entries = vaultData?.entries?.length ?? -1;
+      debug.current.loadPwCalled = true;
+      debug.current.loadPwEntries = vaultData?.entries?.length ?? -1;
+      debug.current.foldersLen = vaultData?.folders?.length ?? -1;
       loadPasswords(vaultData.entries, vaultData.folders);
       if (vaultData.settings) {
         await loadFromVault(vaultData.settings as any);
       }
     } catch (err) {
+      debug.current.step = 'login-error';
       console.error("Failed to load vault:", err);
       showError(
         err instanceof Error ? err.message : "Failed to unlock vault."
@@ -827,6 +836,12 @@ function App() {
 
 
                 <div className="flex-1 overflow-y-auto p-8 relative" onContextMenu={(e) => { e.preventDefault(); setAreaContextMenu({ x: e.clientX, y: e.clientY }); }}>
+                  <div className="fixed bottom-2 right-2 text-[10px] text-zinc-600 z-50 bg-zinc-900/80 px-2 py-0.5 rounded text-left whitespace-pre font-mono leading-tight">
+pw:{passwords.length} f:{filteredPasswords.length}
+s:{searchQuery?1:0} a:{isAuthenticated?1:0}
+k:{(window as any).__keyDerivation||'?'} e:{(window as any).__argon2Error||''}
+vd:{(window as any).__vaultDebug?.step}|n:{(window as any).__vaultDebug?.newKeySuccess}|l:{(window as any).__vaultDebug?.legacySuccess}|e:{(window as any).__vaultDebug?.chosenEntries}
+                  </div>
                   {filteredPasswords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-20">
                       <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>

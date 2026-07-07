@@ -148,6 +148,7 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
 
     setEntryCreatedAtMap(createdAtMap);
     setPasswords(loadedPasswords);
+    console.log(`[usePasswords] loadPasswords: setPasswords with ${loadedPasswords.length} passwords`);
     if (vaultFolders) {
       setFolders(
         vaultFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }))
