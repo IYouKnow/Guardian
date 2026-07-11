@@ -1,5 +1,4 @@
 import { Theme, AccentColor } from "../types";
-import { getAccentColorClasses } from "../utils/accentColors";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
@@ -11,7 +10,7 @@ interface TitleBarProps {
 
 const appWindow = getCurrentWindow();
 
-export default function TitleBar({ theme, accentColor, compact }: TitleBarProps) {
+export default function TitleBar({ theme, compact }: TitleBarProps) {
     const [isMac, setIsMac] = useState(false);
 
     useEffect(() => {
@@ -60,7 +59,6 @@ export default function TitleBar({ theme, accentColor, compact }: TitleBarProps)
     };
 
     const themeClasses = getThemeClasses();
-    const accentClasses = getAccentColorClasses(accentColor, theme);
 
     const WindowControls = () => (
         <div className={`flex h-full relative z-[102] ${isMac ? 'flex-row-reverse' : ''}`}>
@@ -113,8 +111,10 @@ export default function TitleBar({ theme, accentColor, compact }: TitleBarProps)
             } : undefined}
             className={`${compact ? 'h-7' : 'h-8'} flex items-center justify-between ${isMac ? 'flex-row-reverse' : ''} ${themeClasses.bg} backdrop-blur-xl border-b ${themeClasses.border} select-none relative z-[100] cursor-default`}
         >
-            <div className={`flex items-center ${compact ? 'px-3 gap-1.5' : 'px-4 gap-2'} pointer-events-none ${isMac ? 'flex-row-reverse' : ''}`}>
-                <div className={`${compact ? 'w-2 h-2' : 'w-3 h-3'} rounded-full ${accentClasses.bgClass} shadow-sm`} />
+            <div className={`flex items-center ${compact ? 'px-3 gap-1.5' : 'px-3 gap-2'} pointer-events-none ${isMac ? 'flex-row-reverse' : ''}`}>
+                <svg className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${themeClasses.text} opacity-40`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
                 <span className={`${compact ? 'text-[8px]' : 'text-[10px]'} font-black uppercase tracking-[0.2em] ${themeClasses.text} opacity-40`}>
                     Guardian
                 </span>
