@@ -46,6 +46,7 @@ function App() {
   });
   const [isDeleting, setIsDeleting] = useState(false);
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
+  const [showMoveTo, setShowMoveTo] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const debug = useRef({ step: 'init', loginCalled: false, entries: 0, loadPwCalled: false, loadPwEntries: 0, foldersLen: 0 });
 
@@ -339,10 +340,13 @@ function App() {
   // Close context menus on outside click
   const passwordContextRef = useRef<HTMLDivElement>(null);
   const areaContextRef = useRef<HTMLDivElement>(null);
+  const closeMoveToRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (passwordContextRef.current && !passwordContextRef.current.contains(e.target as Node)) {
+        if (closeMoveToRef.current) clearTimeout(closeMoveToRef.current);
         setPasswordContextMenu(null);
+        setShowMoveTo(false);
       }
       if (areaContextRef.current && !areaContextRef.current.contains(e.target as Node)) {
         setAreaContextMenu(null);
@@ -524,15 +528,6 @@ function App() {
   const handleCopyPassword = (password: string) => {
     copyToClipboard(password);
 
-    if (preferences.clipboardClearSeconds > 0) {
-      setTimeout(() => {
-        navigator.clipboard.writeText("");
-      }, preferences.clipboardClearSeconds * 1000);
-    }
-  };
-
-  const handlePasteLink = (website: string) => {
-    copyToClipboard(website);
     if (preferences.clipboardClearSeconds > 0) {
       setTimeout(() => {
         navigator.clipboard.writeText("");
@@ -938,7 +933,7 @@ function App() {
       {passwordContextMenu && (
         <div
           ref={passwordContextRef}
-          className="fixed z-[200] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden"
+          className="fixed z-[200] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px]"
           style={{ left: passwordContextMenu.x, top: passwordContextMenu.y }}
         >
           <button
@@ -961,15 +956,49 @@ function App() {
               Copy Password
             </button>
           )}
-          <button
-            className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
-            onClick={() => { handlePasteLink(passwordContextMenu.website || ''); setPasswordContextMenu(null); }}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.353a1 1 0 00-1.416-1.416L6.5 14.5" />
-            </svg>
-            Paste Link
-          </button>
+          <div className="h-px bg-[#333] my-1" />
+          <div className="relative" onMouseEnter={() => { if (closeMoveToRef.current) clearTimeout(closeMoveToRef.current); setShowMoveTo(true); }} onMouseLeave={() => { closeMoveToRef.current = setTimeout(() => setShowMoveTo(false), 200); }}>
+            <button
+              className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Move to
+              <svg className="w-3 h-3 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+              {showMoveTo && (
+                <div
+                  onMouseEnter={() => { if (closeMoveToRef.current) clearTimeout(closeMoveToRef.current); }}
+                  className="absolute left-full top-0 ml-1 z-[210] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px] max-h-[300px] overflow-y-auto"
+                >
+                  {(() => {
+                  const flatten = (parentId: string | null, depth: number): { id: string; name: string; depth: number }[] => {
+                    return folders
+                      .filter(f => f.parentId === parentId)
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .flatMap(f => [{ id: f.id, name: f.name, depth }, ...flatten(f.id, depth + 1)]);
+                  };
+                  const flatList = flatten(null, 0);
+                  return flatList.map(f => (
+                    <button
+                      key={f.id}
+                      className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+                      onClick={() => { movePassword(passwordContextMenu.passwordId, f.id); setPasswordContextMenu(null); setShowMoveTo(false); }}
+                      style={{ paddingLeft: `${16 + f.depth * 16}px` }}
+                    >
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                      <span className="truncate">{f.name}</span>
+                    </button>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
           <div className="h-px bg-[#333] my-1" />
           <button
             className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
@@ -980,25 +1009,7 @@ function App() {
             </svg>
             Delete
           </button>
-          <button
-            className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
-            onClick={() => { copyToClipboard(passwordContextMenu.password); setPasswordContextMenu(null); }}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-            Copy Password
-          </button>
-          <div className="h-px bg-[#333] my-1" />
-          <button
-            className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
-            onClick={() => { handleDeletePassword(passwordContextMenu.passwordId); setPasswordContextMenu(null); }}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete
-          </button>
+
         </div>
       )}
 

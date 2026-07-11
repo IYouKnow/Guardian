@@ -95,8 +95,7 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
         (p.username || "").toLowerCase().includes(q) ||
         (p.website || "").toLowerCase().includes(q);
       const matchesFolder =
-        activeFolderId === null ||
-        (p.folderId != null && collectDescendantIds(folders, activeFolderId).includes(p.folderId));
+        activeFolderId === null || p.folderId === activeFolderId;
       return matchesSearch && matchesFolder;
     }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [passwords, searchQuery, activeFolderId, folders]);
