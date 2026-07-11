@@ -227,11 +227,11 @@ export default function Sidebar({
           data-folder-id={folder.id}
           className={`group relative flex items-center gap-1 w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer touch-none select-none ${
             isActive && !showSettings
-              ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
+              ? `${accentClasses.textClass} ${accentClasses.lightClass}`
               : dragTargetFolderId === folder.id
                 ? `${accentClasses.borderClass} ${accentClasses.lightClass}`
                 : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
-          } ${dragTargetFolderId === folder.id ? `ring-2 ${accentClasses.focusRingClass}` : ''} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? dropPosition === 'into' ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} ring-2 ring-white/30` : `${accentClasses.lightClass}` : ''}`}
+          } ${dragTargetFolderId === folder.id ? `ring-2 ${accentClasses.focusRingClass}` : ''} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? dropPosition === 'into' ? `${accentClasses.textClass} ${accentClasses.lightClass}` : `${accentClasses.lightClass}` : ''}`}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
           onClick={() => onFolderChange(folder.id)}
           onContextMenu={(e) => handleContextMenu(e, folder.id)}
@@ -496,15 +496,15 @@ export default function Sidebar({
         if (!f) return null;
         return (
           <div
-            className="fixed z-[300] pointer-events-none flex items-center gap-2 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 shadow-2xl shadow-black/60 whitespace-nowrap"
-            style={{ left: folderDragPos.x, top: folderDragPos.y - 22, width: 200 }}
+            className="fixed z-[300] pointer-events-none flex items-center gap-1.5 bg-[#0a0a0a] border border-white/10 rounded-lg px-2 py-1.5 shadow-2xl shadow-black/60 whitespace-nowrap"
+            style={{ left: folderDragPos.x, top: folderDragPos.y - 22, width: 140 }}
           >
-            <div className={`w-5 h-5 rounded-md ${accentClasses.bgClass} flex items-center justify-center flex-shrink-0`}>
-              <svg className={`w-3 h-3 ${accentClasses.onContrastClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className={`w-4 h-4 rounded ${accentClasses.bgClass} flex items-center justify-center flex-shrink-0`}>
+              <svg className={`w-2.5 h-2.5 ${accentClasses.onContrastClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
               </svg>
             </div>
-            <span className="text-xs font-semibold text-white truncate">{f.name}</span>
+            <span className="text-[0.65rem] font-semibold text-white truncate">{f.name}</span>
           </div>
         );
       })()}
