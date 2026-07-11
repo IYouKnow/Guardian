@@ -73,6 +73,7 @@ export interface FolderNode {
   id: string;
   name: string;
   parentId: string | null;
+  order?: number;
 }
 
 export interface VaultEntry {

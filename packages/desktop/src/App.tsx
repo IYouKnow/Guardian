@@ -266,6 +266,9 @@ function App() {
     deleteFolder,
     movePassword,
     reorderPassword,
+    reorderFolder,
+    moveFolder,
+    reorderFolderCrossParent,
   } = usePasswords({
     onSave: handleSavePasswords,
     onSaveFolders: handleSaveFolders,
@@ -777,6 +780,9 @@ function App() {
             onRenameFolder={renameFolder}
             onDeleteFolder={deleteFolder}
             dragTargetFolderId={dragTargetFolderId}
+            onReorderFolder={reorderFolder}
+            onMoveFolder={moveFolder}
+            onReorderFolderCrossParent={reorderFolderCrossParent}
             onAddPassword={() => setShowAddModal(true)}
             onLogout={handleLogout}
             onSettings={() => setShowSettings(!showSettings)}

@@ -28,6 +28,9 @@ interface UsePasswordsReturn {
   deleteFolder: (id: string) => void;
   movePassword: (passwordId: string, folderId: string | null) => Promise<void>;
   reorderPassword: (passwordId: string, targetIndex: number) => Promise<void>;
+  reorderFolder: (folderId: string, targetIndex: number) => void;
+  moveFolder: (folderId: string, newParentId: string | null) => void;
+  reorderFolderCrossParent: (folderId: string, newParentId: string | null, targetIndex: number) => void;
 }
 
 function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
@@ -150,8 +153,9 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
     setPasswords(loadedPasswords);
     console.log(`[usePasswords] loadPasswords: setPasswords with ${loadedPasswords.length} passwords`);
     if (vaultFolders) {
+      const needsFolderOrder = vaultFolders.some(f => f.order === undefined);
       setFolders(
-        vaultFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }))
+        vaultFolders.map((f, i) => ({ id: f.id, name: f.name, parentId: f.parentId, order: needsFolderOrder ? i : f.order }))
       );
     }
   }, []);
@@ -281,6 +285,58 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
     [passwords, savePasswords]
   );
 
+  const reorderFolder = useCallback(
+    (folderId: string, targetIndex: number) => {
+      const sorted = [...folders].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const draggedIndex = sorted.findIndex(f => f.id === folderId);
+      if (draggedIndex === -1) return;
+
+      const [dragged] = sorted.splice(draggedIndex, 1);
+      const adjustedTarget = draggedIndex < targetIndex
+        ? Math.min(targetIndex, sorted.length)
+        : targetIndex;
+      sorted.splice(adjustedTarget, 0, dragged);
+
+      const reordered = sorted.map((f, i) => ({ ...f, order: i }));
+      setFolders(reordered);
+      persistFolders(reordered);
+    },
+    [folders, persistFolders]
+  );
+
+  const moveFolder = useCallback(
+    (folderId: string, newParentId: string | null) => {
+      const updated = folders.map((f) =>
+        f.id === folderId ? { ...f, parentId: newParentId } : f
+      );
+      setFolders(updated);
+      persistFolders(updated);
+    },
+    [folders, persistFolders]
+  );
+
+  const reorderFolderCrossParent = useCallback(
+    (folderId: string, newParentId: string | null, targetIndex: number) => {
+      const withNewParent = folders.map((f) =>
+        f.id === folderId ? { ...f, parentId: newParentId } : f
+      );
+      const sorted = [...withNewParent].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const draggedIndex = sorted.findIndex(f => f.id === folderId);
+      if (draggedIndex === -1) return;
+
+      const [dragged] = sorted.splice(draggedIndex, 1);
+      const adjustedTarget = draggedIndex < targetIndex
+        ? Math.min(targetIndex, sorted.length)
+        : targetIndex;
+      sorted.splice(adjustedTarget, 0, dragged);
+
+      const reordered = sorted.map((f, i) => ({ ...f, order: i }));
+      setFolders(reordered);
+      persistFolders(reordered);
+    },
+    [folders, persistFolders]
+  );
+
   return {
     passwords,
     entryCreatedAtMap,
@@ -313,5 +369,8 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
     deleteFolder,
     movePassword,
     reorderPassword,
+    reorderFolder,
+    moveFolder,
+    reorderFolderCrossParent,
   };
 }
