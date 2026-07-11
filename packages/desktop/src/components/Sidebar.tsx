@@ -16,8 +16,6 @@ interface SidebarProps {
   showSettings: boolean;
   theme: Theme;
   accentColor: AccentColor;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   connectionMode: "local" | "server";
   vaultName: string;
   username?: string | null;
@@ -41,8 +39,6 @@ export default function Sidebar({
   showSettings,
   theme,
   accentColor,
-  searchQuery,
-  onSearchChange,
   connectionMode,
   vaultName,
   username,
@@ -188,25 +184,6 @@ export default function Sidebar({
 
       {/* Navigation */}
       <nav className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-6">
-        {/* Search */}
-        <div className="px-1">
-          <div className="relative group">
-            <svg
-              className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${themeClasses.textMuted} transition-colors group-focus-within:${accentClasses.textClass}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 ${themeClasses.input} rounded-xl text-xs font-medium ${themeClasses.text} placeholder-white/20 outline-none transition-all duration-200 ring-0 focus:ring-1 ${accentClasses.focusRingClass} border border-transparent focus:${accentClasses.borderClass}`}
-            />
-          </div>
-        </div>
-
         <div>
           <div className="flex items-center justify-between mb-3 px-3">
             <h3 className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em]`}>

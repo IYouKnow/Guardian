@@ -15,6 +15,7 @@ import DeleteConfirmModal from "./components/DeleteConfirmModal";
 import Settings from "./components/Settings";
 import ToastContainer from "./components/ToastContainer";
 import FolderModal from "./components/FolderModal";
+import SearchOverlay from "./components/SearchOverlay";
 import { usePreferences } from "./hooks/usePreferences";
 import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
@@ -44,6 +45,7 @@ function App() {
     passwordTitle: "",
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const debug = useRef({ step: 'init', loginCalled: false, entries: 0, loadPwCalled: false, loadPwEntries: 0, foldersLen: 0 });
 
@@ -468,6 +470,18 @@ function App() {
     };
   }, [dragPasswordId, movePassword, reorderPassword]);
 
+  // Ctrl+F search overlay
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setShowSearchOverlay(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Keyboard reorder: Alt+Up/Down
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -769,8 +783,6 @@ function App() {
             showSettings={showSettings}
             theme={activeTheme}
             accentColor={preferences.accentColor}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
             connectionMode={connectionMode}
             vaultName={
               connectionMode === "server"
@@ -1042,6 +1054,20 @@ function App() {
         onCancel={() => setDeleteModal({ isOpen: false, passwordId: null, passwordTitle: "" })}
         isDeleting={isDeleting}
       />
+      <AnimatePresence>
+        {showSearchOverlay && (
+          <SearchOverlay
+            isOpen={showSearchOverlay}
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            onClose={() => { setShowSearchOverlay(false); setSearchQuery(""); }}
+            passwords={passwords}
+            onCopyUsername={handleCopyUsername}
+            onCopyPassword={handleCopyPassword}
+            theme={activeTheme}
+          />
+        )}
+      </AnimatePresence>
       <ToastContainer toasts={toasts} onRemove={removeToast} theme={activeTheme} accentColor={preferences.accentColor} />
     </div>
   );
