@@ -1,31 +1,21 @@
 # Release Notes
 
-## v1.0.0 — Initial Release
+## v1.1.0
 
-Guardian Desktop is a native password manager that keeps your vault encrypted at all times — your master password and decrypted data never leave your device.
+Guardian Desktop v1.1.0 brings KeePass import, customizable shortcuts, and major performance improvements.
 
 ### Features
 
-- **Local vaults** — create and open encrypted `.guardian` vault files stored anywhere on disk
-- **Server sync** — connect to a self‑hosted Guardian server for cross‑device access with real‑time WebSocket push
-- **Strong encryption** — Argon2id key derivation + ChaCha20‑Poly1305, all client‑side
-- **Clipboard auto‑clear** — copied passwords are wiped from the clipboard after a configurable delay
-- **Frameless window** — custom titlebar with native window controls (minimize, maximize, close), drag support, double‑click to toggle maximize
-- **Mini mode** — compact layout for quick unlocks
-- **Folder organization** — nested folders with drag support, move items between folders
-- **Search & filter** — real‑time filtering across titles, usernames, URLs, notes, and tags
-- **Grid or table view** — toggle between card grid and resizable, reorderable table
-- **Multiple themes** — dark, light, slate, violet, and editor themes with accent color customization
-- **Theme sync** — preferences persist locally and optionally sync across devices
-- **Custom entry icons** — add a custom icon to any entry
-- **Entry metadata** — each entry stores title, username, password, website URL, icon, folder, notes, tags, and breached password indicator
-- **Item sizes** — compact, default, or large display in grid mode
-- **Reveal timer** — passwords auto‑censor after a configurable delay
-- **Drag‑and‑drop** — reorder entries and move between folders
-- **Toast notifications** — feedback for save, delete, and sync events
-- **Right‑click menus** — context menus for entries and empty areas for quick actions
- - **Sync indicator** — visual connection and sync state indicator
- - **Auto‑reconnect** — WebSocket connections retry with exponential backoff
+- **KeePass import** — import entries and folders from `.kdbx` and KeePass `.csv` files with full folder structure preservation
+- **Custom field templates** — define reusable field templates in Settings → Fields, assign to entries alongside standard fields
+- **Virtualized password table** — table view rewritten with `@tanstack/react-virtual` for smooth performance with large vaults
+- **Folder icons** — upload custom icons for folders, open/closed folder states in sidebar
+- **Folder delete modal** — dedicated confirmation dialog showing affected entry count
+- **Keybind rebinding** — customize keyboard shortcuts with capture UI, persisted in encrypted vault
+- **Search overlay** — press Ctrl+F for quick search access
+- **Move to** — move passwords between folders from the context menu
+- **Folder drag-and-drop** — reorder and move folders with drag
+- **UI refinements** — improved sidebar styling, TitleBar updates, and general polish
 
 ### Platforms
 
