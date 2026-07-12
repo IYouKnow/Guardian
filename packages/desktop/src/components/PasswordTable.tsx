@@ -177,7 +177,8 @@ export default function PasswordTable({
     return def;
   });
 
-  const headerRowRef = useRef<HTMLTableRowElement | null>(null);
+  const headerRowRef = useRef<HTMLDivElement | null>(null);
+  const colMinWidthsRef = useRef<Record<string, number>>({});
   const colWidthsInit = useRef(false);
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -233,6 +234,32 @@ export default function PasswordTable({
     if (changed) setColWidths(current);
     colWidthsInit.current = true;
   }, [allColumns.length, colWidths]);
+
+  useEffect(() => {
+    const el = document.createElement('span');
+    const sample = headerRowRef.current?.querySelector<HTMLElement>('[data-col-index]');
+    if (sample) {
+      const style = getComputedStyle(sample);
+      el.style.font = style.font;
+      el.style.fontSize = style.fontSize;
+      el.style.fontWeight = style.fontWeight;
+      el.style.letterSpacing = style.letterSpacing;
+      el.style.textTransform = style.textTransform;
+      el.style.visibility = 'hidden';
+      el.style.position = 'fixed';
+      el.style.whiteSpace = 'nowrap';
+      el.style.paddingLeft = style.paddingLeft;
+      el.style.paddingRight = style.paddingRight;
+      document.body.appendChild(el);
+    }
+    const widths: Record<string, number> = {};
+    allColumns.forEach((col) => {
+      el.textContent = String(col.label);
+      widths[String(col.key)] = el.offsetWidth;
+    });
+    colMinWidthsRef.current = widths;
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }, [allColumns]);
 
   const handleCopy = useCallback((id: string, field: 'username' | 'password', value: string, handler: (v: string) => void) => {
     handler(value);
@@ -507,7 +534,7 @@ export default function PasswordTable({
                   key={colKey}
                   data-col-index={colKey}
                   className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden truncate flex-shrink-0 flex items-center ${!isResizable ? 'justify-end' : 'relative'} cursor-grab active:cursor-grabbing select-none ${draggedColKey === colKey ? `${accentClasses.textClass} opacity-90` : ''}`}
-                  style={{ width: colWidths[String(colKey)] || 120, minWidth: 60 }}
+                  style={{ width: colWidths[String(colKey)] || 120, minWidth: colMinWidthsRef.current[String(colKey)] || 60 }}
                   onMouseDown={(e) => handleColDragStart(e, colKey)}
                 >
                   {col.label}
@@ -538,7 +565,7 @@ export default function PasswordTable({
 
                         const onMove = (ev: MouseEvent) => {
                           const diff = ev.clientX - startX;
-                          setColWidths(prev => ({ ...prev, [idx]: Math.max(50, startWidth + diff) }));
+                          setColWidths(prev => ({ ...prev, [idx]: Math.max(colMinWidthsRef.current[idx] || 60, startWidth + diff) }));
                         };
                         const onUp = () => {
                           document.removeEventListener('mousemove', onMove);
@@ -595,7 +622,7 @@ export default function PasswordTable({
                   <div
                     key={`${password.id}-${colKey}`}
                     className={`${sizeClasses.cellPadding} overflow-hidden flex-shrink-0 flex items-center`}
-                    style={{ width: colWidths[String(colKey)] || 120, minWidth: 60 }}
+                    style={{ width: colWidths[String(colKey)] || 120, minWidth: colMinWidthsRef.current[String(colKey)] || 60 }}
                   >
                     {renderCell(colKey, password)}
                   </div>

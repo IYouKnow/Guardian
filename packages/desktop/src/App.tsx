@@ -1201,8 +1201,8 @@ function App() {
         <FolderModal
           parentId={folderModalParentId}
           onClose={() => setFolderModalParentId(undefined)}
-          onCreate={(name) => {
-            addFolder(name, folderModalParentId);
+          onCreate={(name, icon) => {
+            addFolder(name, folderModalParentId, icon);
             setFolderModalParentId(undefined);
           }}
           theme={activeTheme}

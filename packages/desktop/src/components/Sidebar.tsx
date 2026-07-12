@@ -277,9 +277,17 @@ export default function Sidebar({
           ) : (
             <div className="w-4 h-4 flex-shrink-0" />
           )}
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-          </svg>
+          {folder.icon ? (
+            <img src={folder.icon} alt="" className="w-4 h-4 flex-shrink-0 rounded object-cover" />
+          ) : children.length > 0 ? (
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v1.586A1.98 1.98 0 0019.414 10H4.586A1.98 1.98 0 002 11.586V18a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-9l-2-2H4a2 2 0 00-2 2z" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+          )}
           {isRenaming ? (
             <input
               ref={renameInputRef}

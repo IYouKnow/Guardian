@@ -23,7 +23,7 @@ interface UsePasswordsReturn {
   loadPasswords: (vaultEntries: VaultEntry[], vaultFolders?: FolderNode[]) => void;
   getVaultEntries: () => VaultEntry[];
   getFolders: () => FolderNode[];
-  addFolder: (name: string, parentId: string | null) => Folder;
+  addFolder: (name: string, parentId: string | null, icon?: string) => Folder;
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
   movePassword: (passwordId: string, folderId: string | null) => Promise<void>;
@@ -215,8 +215,8 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
   );
 
   const addFolder = useCallback(
-    (name: string, parentId: string | null): Folder => {
-      const folder: Folder = { id: crypto.randomUUID(), name, parentId };
+    (name: string, parentId: string | null, icon?: string): Folder => {
+      const folder: Folder = { id: crypto.randomUUID(), name, parentId, icon };
       const updated = [...folders, folder];
       setFolders(updated);
       persistFolders(updated);
