@@ -44,15 +44,17 @@ function flattenGroup(
   group: any,
   parentId: string | null,
   folderMap: Map<string, { id: string; name: string; parentId: string | null; order: number }>,
+  groupToId: Map<any, string>,
   order: { value: number }
 ): string | null {
   const name = group.name?.trim() || "Unnamed";
   const id = crypto.randomUUID();
   folderMap.set(id, { id, name, parentId, order: order.value++ });
+  groupToId.set(group, id);
 
   if (group.groups) {
     for (const child of group.groups) {
-      flattenGroup(child, id, folderMap, order);
+      flattenGroup(child, id, folderMap, groupToId, order);
     }
   }
   return id;
@@ -60,18 +62,11 @@ function flattenGroup(
 
 function collectKdbxEntries(
   group: any,
-  folderMap: Map<string, { id: string; name: string; parentId: string | null; order: number }>,
+  groupToId: Map<any, string>,
 ): PasswordEntry[] {
   const entries: PasswordEntry[] = [];
 
-  // Find the folder id for this group
-  let folderId: string | undefined;
-  for (const [fid, f] of folderMap) {
-    if (f.name === (group.name || "")) {
-      folderId = fid;
-      break;
-    }
-  }
+  const folderId = groupToId.get(group);
 
   if (group.entries) {
     for (const entry of group.entries) {
@@ -108,7 +103,7 @@ function collectKdbxEntries(
 
   if (group.groups) {
     for (const child of group.groups) {
-      entries.push(...collectKdbxEntries(child, folderMap));
+      entries.push(...collectKdbxEntries(child, groupToId));
     }
   }
 
@@ -124,21 +119,22 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
 
   const keePassFolderId = crypto.randomUUID();
   const folderMap = new Map<string, { id: string; name: string; parentId: string | null; order: number }>();
+  const groupToId = new Map<any, string>();
   folderMap.set(keePassFolderId, { id: keePassFolderId, name: "KeePass", parentId: null, order: 0 });
 
   const order = { value: 1 };
 
   if (kdbx.groups) {
     for (const group of kdbx.groups) {
-      // Skip the root group itself, process its children
-      if (group.name === undefined || group.parentGroup === null) {
+      const isRoot = group.name === undefined || group.parentGroup === null;
+      if (isRoot) {
         if (group.groups) {
           for (const child of group.groups) {
-            flattenGroup(child, keePassFolderId, folderMap, order);
+            flattenGroup(child, keePassFolderId, folderMap, groupToId, order);
           }
         }
       } else {
-        flattenGroup(group, keePassFolderId, folderMap, order);
+        flattenGroup(group, keePassFolderId, folderMap, groupToId, order);
       }
     }
   }
@@ -147,14 +143,31 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
 
   if (kdbx.groups) {
     for (const group of kdbx.groups) {
-      if (group.name === undefined || group.parentGroup === null) {
+      const isRoot = group.name === undefined || group.parentGroup === null;
+      if (isRoot) {
+        if (group.entries) {
+          for (const entry of group.entries) {
+            if (entry.fields) {
+              entries.push({
+                id: crypto.randomUUID(),
+                title: getFieldValue(entry.fields, "Title") || "Imported Entry",
+                username: getFieldValue(entry.fields, "UserName"),
+                password: getFieldValue(entry.fields, "Password"),
+                website: getFieldValue(entry.fields, "URL"),
+                notes: getFieldValue(entry.fields, "Notes") || undefined,
+                folderId: keePassFolderId,
+                lastModified: new Date().toISOString(),
+              });
+            }
+          }
+        }
         if (group.groups) {
           for (const child of group.groups) {
-            entries.push(...collectKdbxEntries(child, folderMap));
+            entries.push(...collectKdbxEntries(child, groupToId));
           }
         }
       } else {
-        entries.push(...collectKdbxEntries(group, folderMap));
+        entries.push(...collectKdbxEntries(group, groupToId));
       }
     }
   }

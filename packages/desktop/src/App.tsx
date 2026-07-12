@@ -3,6 +3,8 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import "./App.css";
+import { Folder } from "./types";
+import type { VaultEntry, FolderNode } from "../../shared/crypto";
 
 import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
 import Login from "./components/Login";
@@ -352,46 +354,65 @@ function App() {
     if (!importPreview) return;
 
     try {
-      const { entries, folders, rootFolderId } = importPreview;
+      const { entries, folders: importFolders, rootFolderId } = importPreview;
 
-      // Build old-ID → new-ID mapping
-      const folderIdMap = new Map<string, string | null>();
+      const folderIdMap = new Map<string, string>();
+      const rootFolderId_new = crypto.randomUUID();
+      folderIdMap.set(rootFolderId, rootFolderId_new);
 
-      // Create root folder with user's name
-      const rootFolder = addFolder(rootFolderName, null);
-      folderIdMap.set(rootFolderId, rootFolder.id);
+      const newFolders: Folder[] = [{ id: rootFolderId_new, name: rootFolderName, parentId: null }];
 
-      // Create sub-folders with remapped parent IDs
-      for (const f of folders) {
-        if (f.id === rootFolderId || f.parentId === null) continue;
-        const newParentId = folderIdMap.get(f.parentId) ?? f.parentId;
-        const created = addFolder(f.name, newParentId);
-        folderIdMap.set(f.id, created.id);
-      }
-
-      // Handle any folder that still has a null parentId but isn't the root
-      for (const f of folders) {
+      for (const f of importFolders) {
         if (f.id === rootFolderId) continue;
-        if (f.parentId === null && !folderIdMap.has(f.id)) {
-          const created = addFolder(f.name, rootFolder.id);
-          folderIdMap.set(f.id, created.id);
-        }
+        const newParentId = f.parentId ? (folderIdMap.get(f.parentId) ?? rootFolderId_new) : rootFolderId_new;
+        const newId = crypto.randomUUID();
+        folderIdMap.set(f.id, newId);
+        newFolders.push({ id: newId, name: f.name, parentId: newParentId });
       }
 
-      // Add entries with remapped folder IDs
-      for (const entry of entries) {
-        const newFolderId = entry.folderId ? (folderIdMap.get(entry.folderId) ?? entry.folderId) : rootFolder.id;
-        await addPassword({ ...entry, folderId: newFolderId });
-      }
+      const newEntries: PasswordEntry[] = entries.map((entry: any) => ({
+        id: crypto.randomUUID(),
+        title: entry.title || "Imported Entry",
+        username: entry.username || "",
+        website: entry.website || "",
+        password: entry.password || "",
+        notes: entry.notes || undefined,
+        folderId: entry.folderId ? (folderIdMap.get(entry.folderId) ?? rootFolderId_new) : rootFolderId_new,
+        lastModified: new Date().toISOString(),
+        customFields: entry.customFields,
+      }));
 
-      success(`Imported ${entries.length} entr${entries.length === 1 ? "y" : "ies"} into "${rootFolderName}"`);
+      const mergedFolders = [...folders, ...newFolders];
+
+      const vaultEntries: VaultEntry[] = [
+        ...getVaultEntries(),
+        ...newEntries.map(e => ({
+          id: e.id,
+          name: e.title,
+          username: e.username || undefined,
+          password: e.password,
+          url: e.website || undefined,
+          notes: e.notes || undefined,
+          folderId: e.folderId,
+          order: e.order,
+          createdAt: new Date().toISOString(),
+          lastModified: e.lastModified || new Date().toISOString(),
+          customFields: e.customFields,
+        })),
+      ];
+      const vaultFolders: FolderNode[] = mergedFolders.map(f => ({ id: f.id, name: f.name, parentId: f.parentId }));
+
+      await saveVaultFile(vaultEntries, preferences, vaultFolders);
+      loadPasswords(vaultEntries, vaultFolders);
+
+      success(`Imported ${newEntries.length} entr${newEntries.length === 1 ? "y" : "ies"} into "${rootFolderName}"`);
     } catch (err) {
       console.error("Import failed:", err);
       showError(err instanceof Error ? err.message : "Import failed");
     } finally {
       setImportPreview(null);
     }
-  }, [importPreview, success, showError, addFolder, addPassword]);
+  }, [importPreview, success, showError, saveVaultFile, preferences, passwords, folders, getVaultEntries, loadPasswords]);
 
   // Debounced save for preferences
   useEffect(() => {
