@@ -50,6 +50,6 @@ jobs:
           projectPath: packages/desktop
           tagName: desktop-v__VERSION__
           releaseName: "Guardian Desktop v__VERSION__"
-          releaseBodyFile: .github/DESKTOP_RELEASE_NOTES.md
+          releaseBodyFile: ${{ github.workspace }}/.github/DESKTOP_RELEASE_NOTES.md
           releaseDraft: false
           prerelease: false
