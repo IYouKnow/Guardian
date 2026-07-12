@@ -32,6 +32,7 @@ interface SettingsProps {
   onUpdate: () => void;
   customFieldTemplates: { name: string; type: string }[];
   onCustomFieldTemplatesChange: (templates: { name: string; type: string }[]) => void;
+  onImport?: () => void;
 }
 
 type SettingsSection = "account" | "appearance" | "security" | "fields";
@@ -81,7 +82,8 @@ export default function Settings({
   updating,
   onUpdate,
   customFieldTemplates,
-  onCustomFieldTemplatesChange
+  onCustomFieldTemplatesChange,
+  onImport
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -173,6 +175,26 @@ export default function Settings({
                 </button>
               </div>
             </section>
+
+              {onImport && (
+                <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border}`}>
+                  <div>
+                    <h3 className={`text-sm font-bold ${themeClasses.text} mb-1`}>Import from KeePass</h3>
+                    <p className={`text-xs ${themeClasses.textSecondary} mb-3`}>
+                      Import entries from a KeePass .kdbx database or CSV export.
+                    </p>
+                    <button
+                      onClick={onImport}
+                      className={`px-4 py-2 rounded-xl font-bold uppercase tracking-wider text-xs ${accentClasses.bgClass} ${accentClasses.onContrastClass} hover:opacity-90 transition-all flex items-center gap-2`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Import
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className={`p-4 rounded-xl ${themeClasses.sectionBg} border ${themeClasses.border}`}>
                 <div className="flex items-center justify-between mb-3">

@@ -249,13 +249,20 @@ export function usePreferences() {
 
   const loadFromVault = useCallback(async (vaultSettings: Partial<Preferences>) => {
     console.log("[usePreferences] loadFromVault called with:", vaultSettings);
-    // 1. Always update our knowledge of what the server has
-    setServerSettings(vaultSettings);
 
-    // 2. If sync is ALREADY on (e.g. at boot), we want to apply these immediately
-    // The useEffect above will handle this automatically because serverSettings changes!
-    // So we don't need to do anything else here.
-  }, []);
+    // Apply vault-bound settings that always travel with the vault
+    const vaultBound: Partial<Preferences> = {};
+    if (vaultSettings.customFieldTemplates) {
+      vaultBound.customFieldTemplates = vaultSettings.customFieldTemplates;
+    }
+    if (Object.keys(vaultBound).length > 0) {
+      setPreferences(prev => ({ ...prev, ...vaultBound }));
+      persistSettings(vaultBound);
+    }
+
+    // Update server settings for theme sync (handled by the useEffect above)
+    setServerSettings(vaultSettings);
+  }, [persistSettings]);
 
   return {
     preferences,

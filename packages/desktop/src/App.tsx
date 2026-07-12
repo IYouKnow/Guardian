@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
 import "./App.css";
 
 import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
@@ -15,6 +17,8 @@ import DeleteConfirmModal from "./components/DeleteConfirmModal";
 import Settings from "./components/Settings";
 import ToastContainer from "./components/ToastContainer";
 import FolderModal from "./components/FolderModal";
+import ImportConfirmModal from "./components/ImportConfirmModal";
+import KdbxPasswordModal from "./components/KdbxPasswordModal";
 import SearchOverlay from "./components/SearchOverlay";
 import { usePreferences } from "./hooks/usePreferences";
 import { useVault } from "./hooks/useVault";
@@ -22,6 +26,7 @@ import { usePasswords } from "./hooks/usePasswords";
 import { useToast } from "./hooks/useToast";
 import { useSSE } from "./hooks/useSSE";
 import { SyncIndicator } from "@guardian/shared";
+import { parseKeePassCsv, parseKeePassKdbx } from "./utils/keepass";
 import { motion, AnimatePresence } from "framer-motion";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -47,6 +52,15 @@ function App() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const [showMoveTo, setShowMoveTo] = useState(false);
+  const [folderDeleteConfirmId, setFolderDeleteConfirmId] = useState<string | null>(null);
+  const [kdbxUnlock, setKdbxUnlock] = useState<{ data: ArrayBuffer; filePath: string } | null>(null);
+  const [kdbxUnlockError, setKdbxUnlockError] = useState<string | undefined>(undefined);
+  const [importPreview, setImportPreview] = useState<{
+    entries: any[];
+    folders: any[];
+    rootFolderId: string;
+    filePath: string;
+  } | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const debug = useRef({ step: 'init', loginCalled: false, entries: 0, loadPwCalled: false, loadPwEntries: 0, foldersLen: 0 });
 
@@ -275,6 +289,109 @@ function App() {
     onSave: handleSavePasswords,
     onSaveFolders: handleSaveFolders,
   });
+
+  const handleImport = useCallback(async () => {
+    try {
+      const filePath = await open({
+        title: "Import from KeePass",
+        filters: [
+          { name: "KeePass Files", extensions: ["kdbx", "csv"] },
+        ],
+        multiple: false,
+      });
+
+      if (!filePath || typeof filePath !== "string") return;
+
+      const isKdbx = filePath.toLowerCase().endsWith(".kdbx");
+      const bytes = await readFile(filePath);
+
+      if (isKdbx) {
+        setKdbxUnlock({ data: bytes.buffer, filePath });
+        setKdbxUnlockError(undefined);
+      } else {
+        const encoder = new TextDecoder("utf-8");
+        const text = encoder.decode(bytes);
+        const result = parseKeePassCsv(text);
+
+        if (result.entries.length === 0 && result.folders.length === 0) {
+          success("No entries or folders found in file");
+          return;
+        }
+        setImportPreview({ entries: result.entries, folders: result.folders, rootFolderId: result.rootFolderId, filePath });
+      }
+    } catch (err) {
+      console.error("Import failed:", err);
+      const msg = err instanceof Error ? err.message : "Import failed";
+      showError(msg);
+    }
+  }, [success, showError]);
+
+  const handleKdbxUnlock = useCallback(async (password: string, keyFilePath?: string) => {
+    if (!kdbxUnlock) return;
+    try {
+      let keyFileData: Uint8Array | undefined;
+      if (keyFilePath) {
+        keyFileData = await readFile(keyFilePath);
+      }
+      const result = await parseKeePassKdbx(kdbxUnlock.data, password, keyFileData);
+      setKdbxUnlock(null);
+      setKdbxUnlockError(undefined);
+
+      if (result.entries.length === 0 && result.folders.length === 0) {
+        success("No entries or folders found in file");
+        return;
+      }
+      setImportPreview({ entries: result.entries, folders: result.folders, rootFolderId: result.rootFolderId, filePath: kdbxUnlock.filePath });
+    } catch (err) {
+      console.error("Failed to unlock .kdbx:", err);
+      setKdbxUnlockError("Wrong password or key file. Please try again.");
+    }
+  }, [kdbxUnlock, success, showError]);
+
+  const handleConfirmImport = useCallback(async (rootFolderName: string) => {
+    if (!importPreview) return;
+
+    try {
+      const { entries, folders, rootFolderId } = importPreview;
+
+      // Build old-ID → new-ID mapping
+      const folderIdMap = new Map<string, string | null>();
+
+      // Create root folder with user's name
+      const rootFolder = addFolder(rootFolderName, null);
+      folderIdMap.set(rootFolderId, rootFolder.id);
+
+      // Create sub-folders with remapped parent IDs
+      for (const f of folders) {
+        if (f.id === rootFolderId || f.parentId === null) continue;
+        const newParentId = folderIdMap.get(f.parentId) ?? f.parentId;
+        const created = addFolder(f.name, newParentId);
+        folderIdMap.set(f.id, created.id);
+      }
+
+      // Handle any folder that still has a null parentId but isn't the root
+      for (const f of folders) {
+        if (f.id === rootFolderId) continue;
+        if (f.parentId === null && !folderIdMap.has(f.id)) {
+          const created = addFolder(f.name, rootFolder.id);
+          folderIdMap.set(f.id, created.id);
+        }
+      }
+
+      // Add entries with remapped folder IDs
+      for (const entry of entries) {
+        const newFolderId = entry.folderId ? (folderIdMap.get(entry.folderId) ?? entry.folderId) : rootFolder.id;
+        await addPassword({ ...entry, folderId: newFolderId });
+      }
+
+      success(`Imported ${entries.length} entr${entries.length === 1 ? "y" : "ies"} into "${rootFolderName}"`);
+    } catch (err) {
+      console.error("Import failed:", err);
+      showError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImportPreview(null);
+    }
+  }, [importPreview, success, showError, addFolder, addPassword]);
 
   // Debounced save for preferences
   useEffect(() => {
@@ -775,6 +892,7 @@ function App() {
             onAddFolder={(parentId) => setFolderModalParentId(parentId)}
             onRenameFolder={renameFolder}
             onDeleteFolder={deleteFolder}
+            onRequestFolderDelete={setFolderDeleteConfirmId}
             dragTargetFolderId={dragTargetFolderId}
             onReorderFolder={reorderFolder}
             onMoveFolder={moveFolder}
@@ -839,6 +957,7 @@ function App() {
                     onUpdate={handleUpdate}
                     customFieldTemplates={preferences.customFieldTemplates}
                     onCustomFieldTemplatesChange={setCustomFieldTemplates}
+                    onImport={handleImport}
                   />
               </motion.div>
             ) : (
@@ -1090,6 +1209,60 @@ function App() {
           />
         )}
       </AnimatePresence>
+      {folderDeleteConfirmId && (() => {
+        const descendantIds = new Set<string>();
+        const collectIds = (parentId: string) => {
+          for (const f of folders) {
+            if (f.parentId === parentId) {
+              descendantIds.add(f.id);
+              collectIds(f.id);
+            }
+          }
+        };
+        descendantIds.add(folderDeleteConfirmId);
+        collectIds(folderDeleteConfirmId);
+        const entryCount = passwords.filter(p => p.folderId && descendantIds.has(p.folderId)).length;
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-2xl p-6 w-full max-w-sm">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 border-2 border-red-500/30 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-300">
+                    Delete <span className="text-white font-semibold">{folders.find(f => f.id === folderDeleteConfirmId)?.name || "folder"}</span>?
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">{entryCount} entr{entryCount === 1 ? 'y' : 'ies'} will be moved to root.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setFolderDeleteConfirmId(null)} className="flex-1 px-4 py-2.5 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg text-sm font-medium transition-all">Cancel</button>
+                <button onClick={() => { deleteFolder(folderDeleteConfirmId); setFolderDeleteConfirmId(null); }} className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-bold transition-all">Delete</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {importPreview && (
+        <ImportConfirmModal
+          entryCount={importPreview.entries.length}
+          folderCount={importPreview.folders.length}
+          filePath={importPreview.filePath}
+          onConfirm={handleConfirmImport}
+          onCancel={() => setImportPreview(null)}
+        />
+      )}
+      {kdbxUnlock && (
+        <KdbxPasswordModal
+          error={kdbxUnlockError}
+          onConfirm={handleKdbxUnlock}
+          onCancel={() => { setKdbxUnlock(null); setKdbxUnlockError(undefined); }}
+        />
+      )}
       <ToastContainer toasts={toasts} onRemove={removeToast} theme={activeTheme} accentColor={preferences.accentColor} />
     </div>
   );

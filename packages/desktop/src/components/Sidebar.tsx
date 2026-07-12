@@ -10,6 +10,7 @@ interface SidebarProps {
   onAddFolder: (parentId: string | null) => void;
   onRenameFolder: (id: string, name: string) => void;
   onDeleteFolder: (id: string) => void;
+  onRequestFolderDelete?: (id: string) => void;
   onAddPassword: () => void;
   onLogout: () => void;
   onSettings: () => void;
@@ -36,6 +37,7 @@ export default function Sidebar({
   onAddFolder,
   onRenameFolder,
   onDeleteFolder,
+  onRequestFolderDelete,
   onAddPassword,
   onLogout,
   onSettings,
@@ -408,7 +410,9 @@ export default function Sidebar({
               <button
                 className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
                 onClick={() => {
-                  if (confirm(`Delete folder and move all entries to root?`)) {
+                  if (onRequestFolderDelete) {
+                    onRequestFolderDelete(contextMenu.folderId!);
+                  } else if (confirm(`Delete folder and move all entries to root?`)) {
                     onDeleteFolder(contextMenu.folderId!);
                   }
                   setContextMenu(null);
@@ -508,7 +512,6 @@ export default function Sidebar({
           </div>
         );
       })()}
-
 
     </aside>
   );
