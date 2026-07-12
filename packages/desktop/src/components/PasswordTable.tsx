@@ -580,6 +580,7 @@ export default function PasswordTable({
                   }
                 }}
                 onPointerUp={() => { dragStartPos.current = null; }}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }}
                 className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.lightClass}` : themeClasses.rowHover}`}
               >
                 {colOrder.map((colKey) => renderCell(colKey, password))}

@@ -87,6 +87,28 @@ export default function Sidebar({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const requestDeleteRef = useRef(onRequestFolderDelete);
+  const deleteFolderRef = useRef(onDeleteFolder);
+  requestDeleteRef.current = onRequestFolderDelete;
+  deleteFolderRef.current = onDeleteFolder;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && activeFolderId && !renamingFolderId) {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) return;
+        e.preventDefault();
+        if (requestDeleteRef.current) {
+          requestDeleteRef.current(activeFolderId);
+        } else {
+          deleteFolderRef.current(activeFolderId);
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [activeFolderId, renamingFolderId]);
+
   const toggleExpand = (folderId: string) => {
     setExpandedFolders((prev) => {
       const next = new Set(prev);
@@ -236,6 +258,7 @@ export default function Sidebar({
           } ${dragTargetFolderId === folder.id ? `ring-2 ${accentClasses.focusRingClass}` : ''} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? dropPosition === 'into' ? `${accentClasses.textClass} ${accentClasses.lightClass}` : `${accentClasses.lightClass}` : ''}`}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
           onClick={() => onFolderChange(folder.id)}
+          onDoubleClick={() => { if (children.length > 0) toggleExpand(folder.id); }}
           onContextMenu={(e) => handleContextMenu(e, folder.id)}
           onPointerDown={(e) => handleFolderPointerDown(e, folder.id)}
           onPointerMove={(e) => handleFolderPointerMove(e, folder.id)}
@@ -276,7 +299,7 @@ export default function Sidebar({
             </span>
           )}
           {isActive && !showSettings && (
-            <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full ml-auto flex-shrink-0 ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
+            <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
           )}
         </div>
         {children.length > 0 && isExpanded && (

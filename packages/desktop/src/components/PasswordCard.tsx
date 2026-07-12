@@ -121,6 +121,7 @@ export default function PasswordCard({
     <motion.div
       layout
       onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY); } : undefined}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 120px' }}
       className={`relative group ${themeClasses.card} backdrop-blur-xl rounded-[1.5rem] border ${themeClasses.border} ${accentClasses.hoverBorderClass} transition-all duration-300 overflow-hidden shadow-xl hover:shadow-2xl ${accentClasses.hoverShadowClass}`}
     >
       <div className={sizeClasses.padding}>

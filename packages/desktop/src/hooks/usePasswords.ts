@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, startTransition } from "react";
 import { PasswordEntry, Folder } from "../types";
 import { VaultEntry, FolderNode } from "../../../shared/crypto";
 
@@ -248,7 +248,7 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
       persistFolders(remainingFolders);
       savePasswords(updatedPasswords);
       if (activeFolderId && descendantIds.includes(activeFolderId)) {
-        setActiveFolderId(null);
+        startTransition(() => setActiveFolderId(null));
       }
     },
     [folders, passwords, activeFolderId, persistFolders, savePasswords]
