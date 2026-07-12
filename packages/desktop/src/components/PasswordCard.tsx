@@ -107,6 +107,7 @@ export default function PasswordCard({
   const accentClasses = getAccentColorClasses(accentColor, theme);
   const [faviconFailed, setFaviconFailed] = useState(false);
   const [copiedField, setCopiedField] = useState<'username' | 'password' | null>(null);
+  const [showCustom, setShowCustom] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = useCallback((field: 'username' | 'password', handler: () => void) => {
@@ -202,6 +203,31 @@ export default function PasswordCard({
             </button>
           </div>
         </div>
+
+        {/* Custom Fields Toggle */}
+        {password.customFields && password.customFields.length > 0 && (
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowCustom(!showCustom); }}
+              className={`mt-3 w-full flex items-center justify-between px-3 py-1.5 rounded-lg ${themeClasses.item} ${themeClasses.textMuted} text-[0.55rem] font-bold uppercase tracking-widest transition-all`}
+            >
+              <span>{password.customFields.length} custom {password.customFields.length === 1 ? 'field' : 'fields'}</span>
+              <svg className={`w-3 h-3 transition-transform ${showCustom ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showCustom && (
+              <div className={`mt-2 space-y-1.5 px-3 py-2 rounded-lg ${themeClasses.item}`}>
+                {password.customFields.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className={`text-[0.55rem] font-bold uppercase tracking-widest ${themeClasses.textMuted}`}>{f.name}</span>
+                    <span className={`text-xs ${themeClasses.text} font-medium truncate ml-2 max-w-[60%]`}>{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </motion.div>
   );

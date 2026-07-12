@@ -18,6 +18,7 @@ interface Preferences {
   showNotifications: boolean;
   themeSyncMode: ThemeSyncMode;
   miniMode: boolean;
+  customFieldTemplates: { name: string; type: string }[];
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -34,6 +35,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   showNotifications: true,
   themeSyncMode: "off",
   miniMode: false,
+  customFieldTemplates: [],
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -91,6 +93,7 @@ export function usePreferences() {
         const savedMiniMode = await store.get<boolean>("miniMode");
         const savedConnectionMode = await store.get<"local" | "server">("connectionMode");
         const savedLastServerUrl = await store.get<string>("lastServerUrl");
+        const savedCustomFieldTemplates = await store.get<{ name: string; type: string }[]>("customFieldTemplates");
 
         const resolvedThemeSyncMode =
           savedThemeSyncMode ?? (savedSyncTheme ? "follow" : DEFAULT_PREFERENCES.themeSyncMode);
@@ -109,6 +112,7 @@ export function usePreferences() {
           showNotifications: savedShowNotifications ?? DEFAULT_PREFERENCES.showNotifications,
           themeSyncMode: resolvedThemeSyncMode,
           miniMode: savedMiniMode ?? DEFAULT_PREFERENCES.miniMode,
+          customFieldTemplates: savedCustomFieldTemplates ?? DEFAULT_PREFERENCES.customFieldTemplates,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -191,6 +195,11 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const setCustomFieldTemplates = useCallback(
+    (templates: { name: string; type: string }[]) => updatePreference("customFieldTemplates", templates),
+    [updatePreference]
+  );
+
   const setConnectionMode = useCallback(
     (mode: "local" | "server") => updatePreference("connectionMode", mode),
     [updatePreference]
@@ -263,6 +272,7 @@ export function usePreferences() {
     setShowNotifications,
     setThemeSyncMode,
     setMiniMode,
+    setCustomFieldTemplates,
     setConnectionMode,
     setLastServerUrl,
     loadFromVault,

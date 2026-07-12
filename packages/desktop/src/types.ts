@@ -5,6 +5,12 @@ export interface Folder {
   order?: number;
 }
 
+export interface CustomField {
+  name: string;
+  value: string;
+  type: string;
+}
+
 export interface PasswordEntry {
   id: string;
   title: string;
@@ -20,6 +26,7 @@ export interface PasswordEntry {
   notes?: string;
   tags?: string[];
   breached?: boolean;
+  customFields?: CustomField[];
 }
 
 export type { Theme, AccentColor } from "@guardian/shared";

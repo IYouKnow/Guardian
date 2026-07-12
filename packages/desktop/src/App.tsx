@@ -66,6 +66,7 @@ function App() {
     setShowNotifications,
     setThemeSyncMode,
     setMiniMode,
+    setCustomFieldTemplates,
     setConnectionMode,
     setLastServerUrl,
     loadFromVault,
@@ -836,6 +837,8 @@ function App() {
                     updateVersion={updateVersion}
                     updating={updating}
                     onUpdate={handleUpdate}
+                    customFieldTemplates={preferences.customFieldTemplates}
+                    onCustomFieldTemplatesChange={setCustomFieldTemplates}
                   />
               </motion.div>
             ) : (
@@ -890,6 +893,7 @@ function App() {
                       theme={activeTheme}
                       itemSize={preferences.itemSize}
                       accentColor={preferences.accentColor}
+                      customFieldTemplates={preferences.customFieldTemplates}
                       onContextMenu={(x, y, pw) => setPasswordContextMenu({ x, y, passwordId: pw.id, passwordTitle: pw.title, username: pw.username, password: pw.password, website: pw.website })}
                     />
                   )}
@@ -908,6 +912,7 @@ function App() {
         folders={folders}
         defaultFolderId={activeFolderId}
         existingPassword={editingPassword}
+        customFieldTemplates={preferences.customFieldTemplates}
       />
 
       {/* Password Context Menu */}

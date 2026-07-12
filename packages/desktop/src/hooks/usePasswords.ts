@@ -49,6 +49,7 @@ function vaultEntryToPasswordEntry(vaultEntry: VaultEntry): PasswordEntry {
     notes: vaultEntry.notes,
     tags: undefined,
     breached: false,
+    customFields: vaultEntry.customFields,
   };
 }
 
@@ -65,6 +66,7 @@ function passwordEntryToVaultEntry(passwordEntry: PasswordEntry): VaultEntry {
     order: passwordEntry.order,
     createdAt: new Date().toISOString(),
     lastModified: passwordEntry.lastModified || new Date().toISOString(),
+    customFields: passwordEntry.customFields,
   };
 }
 

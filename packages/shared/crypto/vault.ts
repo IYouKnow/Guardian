@@ -67,6 +67,7 @@ export interface VaultSettings {
   clipboardClearSeconds?: number;
   revealCensorSeconds?: number;
   syncTheme?: boolean;
+  customFieldTemplates?: { name: string; type: string }[];
 }
 
 export interface FolderNode {
@@ -74,6 +75,12 @@ export interface FolderNode {
   name: string;
   parentId: string | null;
   order?: number;
+}
+
+export interface CustomField {
+  name: string;
+  value: string;
+  type: string;
 }
 
 export interface VaultEntry {
@@ -91,6 +98,7 @@ export interface VaultEntry {
   favicon?: string;
   folderId?: string;
   order?: number;
+  customFields?: CustomField[];
 }
 
 export interface VaultData {

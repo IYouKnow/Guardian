@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect, useRef, type ChangeEvent } from "react";
-import { PasswordEntry, Folder } from "../types";
+import { PasswordEntry, Folder, CustomField } from "../types";
 import { normalizeIcon } from "@guardian/shared";
 
 interface AddPasswordModalProps {
@@ -10,13 +10,14 @@ interface AddPasswordModalProps {
   folders: Folder[];
   defaultFolderId?: string | null;
   existingPassword?: PasswordEntry | null;
+  customFieldTemplates?: { name: string; type: string }[];
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
   return folders.filter((f) => f.parentId === parentId);
 }
 
-export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpdatePassword, folders, defaultFolderId, existingPassword }: AddPasswordModalProps) {
+export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpdatePassword, folders, defaultFolderId, existingPassword, customFieldTemplates }: AddPasswordModalProps) {
   const [title, setTitle] = useState("");
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
@@ -24,15 +25,18 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
   const [favicon, setFavicon] = useState<string | undefined>(undefined);
   const [folderId, setFolderId] = useState<string | undefined>(undefined);
   const [notes, setNotes] = useState("");
+  const [page, setPage] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNormalizingIcon, setIsNormalizingIcon] = useState(false);
   const [error, setError] = useState("");
+  const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
+      setPage(0);
       if (existingPassword) {
         setTitle(existingPassword.title);
         setUsername(existingPassword.username);
@@ -41,6 +45,11 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
         setFavicon(existingPassword.favicon);
         setFolderId(existingPassword.folderId);
         setNotes(existingPassword.notes || "");
+        const values: Record<string, string> = {};
+        for (const f of (existingPassword.customFields || [])) {
+          values[f.name] = f.value;
+        }
+        setTemplateFieldValues(values);
       } else {
         setTitle("");
         setUsername("");
@@ -49,6 +58,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
         setFavicon(undefined);
         setFolderId(defaultFolderId ?? undefined);
         setNotes("");
+        setTemplateFieldValues({});
       }
       setError("");
     }
@@ -64,17 +74,32 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const buildCustomFields = (): CustomField[] => {
+    const result: CustomField[] = [];
+    if (customFieldTemplates) {
+      for (const tmpl of customFieldTemplates) {
+        if (tmpl.name.trim()) {
+          result.push({ name: tmpl.name.trim(), value: templateFieldValues[tmpl.name] || "", type: tmpl.type });
+        }
+      }
+    }
+    return result;
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!title.trim()) {
-      setError("Title is required");
-      return;
-    }
-
-    if (!password.trim()) {
-      setError("Password is required");
+    if (page === 0) {
+      if (!title.trim()) {
+        setError("Title is required");
+        return;
+      }
+      if (!password.trim()) {
+        setError("Password is required");
+        return;
+      }
+      setPage(1);
       return;
     }
 
@@ -90,6 +115,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
           favicon,
           folderId,
           notes: notes.trim() || undefined,
+          customFields: buildCustomFields(),
         });
       } else {
         const newPassword: PasswordEntry = {
@@ -104,6 +130,7 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
           lastModified: new Date().toISOString(),
           notes: notes.trim() || undefined,
           breached: false,
+          customFields: buildCustomFields(),
         };
 
         await onAddPassword(newPassword);
@@ -332,33 +359,83 @@ export default function AddPasswordModal({ isOpen, onClose, onAddPassword, onUpd
               className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all resize-none"
             />
           </div>
-          <div className="flex items-center gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                existingPassword ? "Save Changes" : "Add Password"
-              )}
-            </button>
-          </div>
+
+          {page === 0 && customFieldTemplates && customFieldTemplates.length > 0 && (
+            <div className="flex justify-end pt-2">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500 opacity-50">
+                {customFieldTemplates.length} custom field{customFieldTemplates.length !== 1 ? 's' : ''} on next page
+              </span>
+            </div>
+          )}
+
+          {page === 1 && customFieldTemplates && customFieldTemplates.length > 0 && (
+            <div>
+              <label className="block text-sm text-gray-400 mb-3">Custom Fields</label>
+              <div className="space-y-3">
+                {customFieldTemplates.map((tmpl, i) => (
+                  <div key={i}>
+                    <label className="block text-xs text-gray-500 mb-1">{tmpl.name}</label>
+                    <input
+                      type="text"
+                      value={templateFieldValues[tmpl.name] || ""}
+                      onChange={(e) => setTemplateFieldValues(prev => ({ ...prev, [tmpl.name]: e.target.value }))}
+                      placeholder={`Enter ${tmpl.name}`}
+                      className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400/50 transition-all"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {page === 0 && (
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+              >
+                {customFieldTemplates && customFieldTemplates.length > 0 ? "Next →" : (existingPassword ? "Save Changes" : "Add Password")}
+              </button>
+            </div>
+          )}
+
+          {page === 1 && (
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPage(0)}
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-3 bg-[#1a1a1a] hover:bg-[#222222] text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ← Back
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-3 bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  existingPassword ? "Save Changes" : "Add Password"
+                )}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses, getAccentColorHex } from "../utils/accentColors";
 import { motion } from "framer-motion";
 
-const COLUMNS = [
+const STATIC_COLUMNS = [
   { key: 0, label: "Service" },
   { key: 1, label: "Username" },
   { key: 2, label: "Website" },
@@ -11,8 +11,6 @@ const COLUMNS = [
   { key: 4, label: "Notes" },
   { key: 5, label: "Actions" },
 ] as const;
-
-const DEFAULT_COL_ORDER = [0, 1, 2, 3, 4, 5];
 
 interface PasswordTableProps {
   passwords: PasswordEntry[];
@@ -27,6 +25,7 @@ interface PasswordTableProps {
   theme: Theme;
   itemSize: "small" | "medium" | "large";
   accentColor: AccentColor;
+  customFieldTemplates?: { name: string; type: string }[];
 }
 
 export default function PasswordTable({
@@ -42,6 +41,7 @@ export default function PasswordTable({
   theme,
   itemSize,
   accentColor,
+  customFieldTemplates,
 }: PasswordTableProps) {
   const getSizeClasses = () => {
     if (itemSize === "small") {
@@ -131,33 +131,51 @@ export default function PasswordTable({
 
   const themeClasses = getThemeClasses();
   const accentClasses = getAccentColorClasses(accentColor, theme);
+
+  const allColumns: { key: string | number; label: string }[] = useMemo(() => {
+    const cols: { key: string | number; label: string }[] = STATIC_COLUMNS.map(c => ({ key: c.key, label: c.label }));
+    if (customFieldTemplates) {
+      customFieldTemplates.forEach((tmpl, i) => {
+        cols.push({ key: `cf_${i}`, label: tmpl.name });
+      });
+    }
+    return cols;
+  }, [customFieldTemplates]);
+
+  const staticCount = STATIC_COLUMNS.length;
+
   const [failedFavicons, setFailedFavicons] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<{ id: string; field: 'username' | 'password' } | null>(null);
+  const [expandedCustomId, setExpandedCustomId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartPos = useRef<{ x: number; y: number; id: string } | null>(null);
   const dragActive = useRef(false);
 
-  const [colWidths, setColWidths] = useState<Record<number, number>>(() => {
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
     try {
       return JSON.parse(localStorage.getItem('guardian-table-col-widths') || '{}');
     } catch { return {}; }
   });
 
-  const [colOrder, setColOrder] = useState<number[]>(() => {
+  const [colOrder, setColOrder] = useState<(string | number)[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('guardian-table-col-order') || 'null');
-      if (Array.isArray(saved) && saved.length === COLUMNS.length) return saved;
+      if (Array.isArray(saved) && saved.length >= staticCount) return saved;
     } catch { /* fall through */ }
-    return DEFAULT_COL_ORDER;
+    const def: (string | number)[] = [0, 1, 2, 3, 4, 5];
+    if (customFieldTemplates) {
+      customFieldTemplates.forEach((_, i) => def.push(`cf_${i}`));
+    }
+    return def;
   });
 
   const headerRowRef = useRef<HTMLTableRowElement | null>(null);
   const colWidthsInit = useRef(false);
 
-  const colDragRef = useRef<{ key: number } | null>(null);
+  const colDragRef = useRef<{ key: string | number } | null>(null);
   const isDraggingCol = useRef(false);
   const dropTargetRef = useRef<number | null>(null);
-  const [draggedColKey, setDraggedColKey] = useState<number | null>(null);
+  const [draggedColKey, setDraggedColKey] = useState<string | number | null>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const ghostOffsetRef = useRef({ x: 0, y: 0 });
 
@@ -170,24 +188,37 @@ export default function PasswordTable({
     localStorage.setItem('guardian-table-col-order', JSON.stringify(colOrder));
   }, [colOrder]);
 
+  // Sync colOrder when customFieldTemplates change (add new CF columns)
+  useEffect(() => {
+    setColOrder(prev => {
+      const cfKeys = new Set(
+        (customFieldTemplates || []).map((_, i) => `cf_${i}`)
+      );
+      const existing = new Set(prev);
+      const missing = [...cfKeys].filter(k => !existing.has(k));
+      if (missing.length === 0) return prev;
+      return [...prev, ...missing];
+    });
+  }, [customFieldTemplates]);
+
   useEffect(() => {
     if (colWidthsInit.current) return;
     const row = headerRowRef.current;
     if (!row) return;
-    const ths = row.querySelectorAll('th[data-col-index]');
+    const ths = row.querySelectorAll<HTMLElement>('th[data-col-index]');
     if (ths.length === 0) return;
     const current = { ...colWidths };
     let changed = false;
     ths.forEach((th) => {
-      const idx = parseInt((th as HTMLElement).getAttribute('data-col-index') || '0');
+      const idx = th.getAttribute('data-col-index') || '0';
       if (current[idx] === undefined) {
-        current[idx] = (th as HTMLElement).offsetWidth;
+        current[idx] = th.offsetWidth;
         changed = true;
       }
     });
     if (changed) setColWidths(current);
     colWidthsInit.current = true;
-  }, []);
+  }, [allColumns.length]);
 
   const handleCopy = useCallback((id: string, field: 'username' | 'password', value: string, handler: (v: string) => void) => {
     handler(value);
@@ -196,7 +227,19 @@ export default function PasswordTable({
     copiedTimer.current = setTimeout(() => setCopiedField(null), 1500);
   }, []);
 
-  const renderCell = (colKey: number, password: PasswordEntry) => {
+  const renderCell = (colKey: string | number, password: PasswordEntry) => {
+    if (typeof colKey === 'string' && colKey.startsWith('cf_')) {
+      const idx = parseInt(colKey.slice(3), 10);
+      const tmpl = customFieldTemplates?.[idx];
+      const cf = tmpl ? password.customFields?.find(f => f.name === tmpl.name) : undefined;
+      return (
+        <td key={`${password.id}-${colKey}`} className={`${sizeClasses.cellPadding} overflow-hidden`}>
+          <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} truncate block`}>
+            {cf?.value || "—"}
+          </span>
+        </td>
+      );
+    }
     switch (colKey) {
       case 0:
         return (
@@ -278,7 +321,7 @@ export default function PasswordTable({
       case 4:
         return (
           <motion.td key={`${password.id}-col-4`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[150px]`}>
+            <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[100px]`}>
               {password.notes || "—"}
             </span>
           </motion.td>
@@ -305,11 +348,11 @@ export default function PasswordTable({
     }
   };
 
-  const saveColOrder = useCallback((order: number[]) => {
+  const saveColOrder = useCallback((order: (string | number)[]) => {
     localStorage.setItem('guardian-table-col-order', JSON.stringify(order));
   }, []);
 
-  const handleColDragStart = (e: React.MouseEvent, colKey: number) => {
+  const handleColDragStart = (e: React.MouseEvent, colKey: string | number) => {
     e.stopPropagation();
 
     const thEl = e.currentTarget as HTMLElement;
@@ -438,12 +481,12 @@ export default function PasswordTable({
 
   return (
     <>
-    {draggedColKey !== null && COLUMNS.find(c => c.key === draggedColKey) && (
+    {draggedColKey !== null && allColumns.find(c => c.key === draggedColKey) && (
       <div
         ref={ghostRef}
         className={`fixed pointer-events-none z-50 ${sizeClasses.headerPadding} ${themeClasses.headerBg} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest truncate rounded-lg shadow-2xl border ${themeClasses.rowBorder} opacity-95 transition-all duration-200 ease-out`}
       >
-        {COLUMNS.find(c => c.key === draggedColKey)!.label}
+        {allColumns.find(c => c.key === draggedColKey)!.label}
       </div>
     )}
     <motion.div
@@ -457,7 +500,7 @@ export default function PasswordTable({
           <thead>
             <tr ref={headerRowRef} className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
               {colOrder.map((colKey) => {
-                const col = COLUMNS.find(c => c.key === colKey)!;
+                const col = allColumns.find(c => c.key === colKey)!;
                 const isResizable = colKey !== 5;
                 return (
                   <motion.th
@@ -465,7 +508,7 @@ export default function PasswordTable({
                     layout
                     data-col-index={colKey}
                     className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden truncate ${!isResizable ? 'text-right' : 'relative'} cursor-grab active:cursor-grabbing select-none ${draggedColKey === colKey ? `${accentClasses.textClass} opacity-90` : ''}`}
-                    style={colWidths[colKey] ? { width: colWidths[colKey], minWidth: 60 } : undefined}
+                    style={colWidths[colKey] ? { width: colWidths[colKey], minWidth: 60 } : { width: 120, minWidth: 80 }}
                     onMouseDown={(e) => handleColDragStart(e, colKey)}
                   >
                     {col.label}
@@ -477,16 +520,16 @@ export default function PasswordTable({
                           e.stopPropagation();
                           const th = (e.currentTarget as HTMLElement).parentElement;
                           if (!th || !th.hasAttribute('data-col-index')) return;
-                          const idx = parseInt(th.getAttribute('data-col-index') || '0');
+                          const idx = th.getAttribute('data-col-index') || '0';
                           const startX = e.clientX;
                           const startWidth = th.offsetWidth;
 
                           const row = th.parentElement;
                           if (row) {
-                            const locked: Record<number, number> = {};
-                            row.querySelectorAll('th[data-col-index]').forEach((c, i) => {
-                              const ci = parseInt((c as HTMLElement).getAttribute('data-col-index') || String(i));
-                              locked[ci] = (c as HTMLElement).offsetWidth;
+                            const locked: Record<string, number> = {};
+                            row.querySelectorAll<HTMLElement>('th[data-col-index]').forEach((c) => {
+                              const ci = c.getAttribute('data-col-index') || '0';
+                              locked[ci] = c.offsetWidth;
                             });
                             setColWidths(locked);
                           }
@@ -518,8 +561,8 @@ export default function PasswordTable({
           </thead>
           <tbody>
             {passwords.map((password, idx) => (
+              <React.Fragment key={password.id ?? idx}>
               <tr
-                key={password.id ?? idx}
                 data-password-id={password.id}
                 onClick={() => { if (!dragActive.current) onSelect?.(selectedId === password.id ? null : password.id); dragActive.current = false; }}
                 onDoubleClick={() => { if (!dragActive.current) onDoubleClick?.(password); }}
@@ -541,6 +584,24 @@ export default function PasswordTable({
               >
                 {colOrder.map((colKey) => renderCell(colKey, password))}
               </tr>
+              {password.customFields && password.customFields.length > 0 && (!customFieldTemplates || customFieldTemplates.length === 0) && (
+                <tr
+                  onClick={() => setExpandedCustomId(expandedCustomId === password.id ? null : password.id)}
+                  className={`border-b last:border-0 ${themeClasses.rowBorder} cursor-pointer ${expandedCustomId === password.id ? '' : 'hidden'}`}
+                >
+                  <td colSpan={colOrder.length + (customFieldTemplates?.length || 0)} className="px-6 py-3">
+                    <div className="flex flex-wrap gap-3">
+                      {password.customFields.map((f, i) => (
+                        <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${themeClasses.badge} text-[0.6rem]`}>
+                          <span className={`font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>{f.name}</span>
+                          <span className={`font-medium ${themeClasses.text}`}>{f.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
