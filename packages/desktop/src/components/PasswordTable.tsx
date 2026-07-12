@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { PasswordEntry, Theme, AccentColor } from "../types";
 import { getAccentColorClasses, getAccentColorHex } from "../utils/accentColors";
 import { motion } from "framer-motion";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 const STATIC_COLUMNS = [
   { key: 0, label: "Service" },
@@ -55,7 +56,7 @@ export default function PasswordTable({
       };
     } else if (itemSize === "large") {
       return {
-        headerPadding: "py-5 px-6",
+        headerPadding: "py-[22px] px-6",
         cellPadding: "py-5 px-6",
         iconSize: "w-12 h-12",
         iconText: "text-lg",
@@ -75,6 +76,14 @@ export default function PasswordTable({
   };
 
   const sizeClasses = getSizeClasses();
+
+  const rowEstimate = useMemo(() => {
+    switch (itemSize) {
+      case "small": return 40;
+      case "large": return 60;
+      default: return 52;
+    }
+  }, [itemSize]);
 
   const getThemeClasses = () => {
     switch (theme) {
@@ -146,7 +155,6 @@ export default function PasswordTable({
 
   const [failedFavicons, setFailedFavicons] = useState<Set<string>>(new Set());
   const [copiedField, setCopiedField] = useState<{ id: string; field: 'username' | 'password' } | null>(null);
-  const [expandedCustomId, setExpandedCustomId] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartPos = useRef<{ x: number; y: number; id: string } | null>(null);
   const dragActive = useRef(false);
@@ -171,6 +179,14 @@ export default function PasswordTable({
 
   const headerRowRef = useRef<HTMLTableRowElement | null>(null);
   const colWidthsInit = useRef(false);
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: passwords.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => rowEstimate,
+    overscan: 5,
+  });
 
   const colDragRef = useRef<{ key: string | number } | null>(null);
   const isDraggingCol = useRef(false);
@@ -188,7 +204,6 @@ export default function PasswordTable({
     localStorage.setItem('guardian-table-col-order', JSON.stringify(colOrder));
   }, [colOrder]);
 
-  // Sync colOrder when customFieldTemplates change (add new CF columns)
   useEffect(() => {
     setColOrder(prev => {
       const cfKeys = new Set(
@@ -203,22 +218,21 @@ export default function PasswordTable({
 
   useEffect(() => {
     if (colWidthsInit.current) return;
-    const row = headerRowRef.current;
-    if (!row) return;
-    const ths = row.querySelectorAll<HTMLElement>('th[data-col-index]');
-    if (ths.length === 0) return;
+    if (!headerRowRef.current) return;
+    const children = headerRowRef.current.querySelectorAll<HTMLElement>('[data-col-index]');
+    if (children.length === 0) return;
     const current = { ...colWidths };
     let changed = false;
-    ths.forEach((th) => {
-      const idx = th.getAttribute('data-col-index') || '0';
+    children.forEach((el) => {
+      const idx = el.getAttribute('data-col-index') || '0';
       if (current[idx] === undefined) {
-        current[idx] = th.offsetWidth;
+        current[idx] = el.offsetWidth;
         changed = true;
       }
     });
     if (changed) setColWidths(current);
     colWidthsInit.current = true;
-  }, [allColumns.length]);
+  }, [allColumns.length, colWidths]);
 
   const handleCopy = useCallback((id: string, field: 'username' | 'password', value: string, handler: (v: string) => void) => {
     handler(value);
@@ -233,117 +247,103 @@ export default function PasswordTable({
       const tmpl = customFieldTemplates?.[idx];
       const cf = tmpl ? password.customFields?.find(f => f.name === tmpl.name) : undefined;
       return (
-        <td key={`${password.id}-${colKey}`} className={`${sizeClasses.cellPadding} overflow-hidden`}>
-          <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} truncate block`}>
-            {cf?.value || "—"}
-          </span>
-        </td>
+        <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} truncate block`}>
+          {cf?.value || "—"}
+        </span>
       );
     }
     switch (colKey) {
       case 0:
         return (
-          <motion.td key={`${password.id}-col-0`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <div className={`flex items-center ${sizeClasses.gap}`}>
-              <div className={`${sizeClasses.iconSize} rounded-xl flex-shrink-0 ${selectedId === password.id ? 'bg-black/10' : accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
-                {password.favicon && !failedFavicons.has(password.id) ? (
-                  <img
-                    src={password.favicon}
-                    alt=""
-                    className="w-full h-full object-cover rounded-xl"
-                    onError={() => {
-                      setFailedFavicons((current) => {
-                        const next = new Set(current);
-                        next.add(password.id);
-                        return next;
-                      });
-                    }}
-                  />
-                ) : (
-                  <span className={`font-bold ${accentClasses.onContrastClass} ${sizeClasses.iconText}`}>
-                    {password.title.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight truncate`}>{password.title}</div>
-                {password.favorite && (
-                  <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5 truncate`}>Favorite</div>
-                )}
-              </div>
+          <div className={`flex items-center ${sizeClasses.gap}`}>
+            <div className={`${sizeClasses.iconSize} rounded-xl flex-shrink-0 ${selectedId === password.id ? 'bg-black/10' : accentClasses.bgClass} flex items-center justify-center shadow-lg ${accentClasses.shadowClass} transition-transform group-hover:scale-110 duration-300`}>
+              {password.favicon && !failedFavicons.has(password.id) ? (
+                <img
+                  src={password.favicon}
+                  alt=""
+                  className="w-full h-full object-cover rounded-xl"
+                  onError={() => {
+                    setFailedFavicons((current) => {
+                      const next = new Set(current);
+                      next.add(password.id);
+                      return next;
+                    });
+                  }}
+                />
+              ) : (
+                <span className={`font-bold ${accentClasses.onContrastClass} ${sizeClasses.iconText}`}>
+                  {password.title.charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
-          </motion.td>
+            <div className="min-w-0">
+              <div className={`font-semibold ${themeClasses.text} ${sizeClasses.textSize} leading-tight truncate`}>{password.title}</div>
+              {password.favorite && (
+                <div className={`text-[0.6rem] font-bold uppercase tracking-wider ${accentClasses.textClass} mt-0.5 truncate`}>Favorite</div>
+              )}
+            </div>
+          </div>
         );
       case 1:
         return (
-          <motion.td key={`${password.id}-col-1`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
-              <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors truncate`}>
-                {password.username}
-              </span>
-              {copiedField?.id === password.id && copiedField?.field === 'username' ? (
-                <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              )}
-            </div>
-          </motion.td>
+          <div className={`flex items-center gap-2 group/field cursor-pointer w-full`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'username', password.username, onCopyUsername); }}>
+            <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} transition-colors truncate flex-1 min-w-0`}>
+              {password.username}
+            </span>
+            {copiedField?.id === password.id && copiedField?.field === 'username' ? (
+              <svg className={`w-3.5 h-3.5 text-green-400 flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </div>
         );
       case 2:
         return (
-          <motion.td key={`${password.id}-col-2`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70 truncate block`}>{password.website}</span>
-          </motion.td>
+          <span className={`${themeClasses.textMuted} ${sizeClasses.textSize} opacity-70 truncate block`}>{password.website}</span>
         );
       case 3:
         return (
-          <motion.td key={`${password.id}-col-3`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <div className={`flex items-center gap-2 group/field cursor-pointer`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
-              <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
-                ••••••••
-              </span>
-              {copiedField?.id === password.id && copiedField?.field === 'password' ? (
-                <svg className={`w-3.5 h-3.5 text-green-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              )}
-            </div>
-          </motion.td>
+          <div className={`flex items-center gap-2 group/field cursor-pointer w-full`} onClick={(e) => { e.stopPropagation(); handleCopy(password.id, 'password', password.password, onCopyPassword); }}>
+            <span className={`${themeClasses.textTertiary} text-lg tracking-widest leading-none mt-1.5 transition-colors`}>
+              ••••••••
+            </span>
+            {copiedField?.id === password.id && copiedField?.field === 'password' ? (
+              <svg className={`w-3.5 h-3.5 text-green-400 flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className={`w-3 h-3 ${themeClasses.textMuted} opacity-0 group-hover/field:opacity-100 transition-all flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </div>
         );
       case 4:
         return (
-          <motion.td key={`${password.id}-col-4`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[100px]`}>
-              {password.notes || "—"}
-            </span>
-          </motion.td>
+          <span className={`text-xs ${themeClasses.textMuted} truncate block max-w-[100px]`}>
+            {password.notes || "—"}
+          </span>
         );
       case 5:
         return (
-          <motion.td key={`${password.id}-col-5`} layout className={`${sizeClasses.cellPadding} overflow-hidden`}>
-            <div className="flex justify-end">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(password.id);
-                }}
-                className={`p-2 rounded-lg hover:bg-red-500/10 text-red-500/50 hover:text-red-500 transition-colors`}
-                title="Delete Entry"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
-          </motion.td>
+          <div className="flex justify-end">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(password.id);
+              }}
+              className={`p-2 rounded-lg hover:bg-red-500/10 text-red-500/50 hover:text-red-500 transition-colors`}
+              title="Delete Entry"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         );
     }
   };
@@ -354,9 +354,8 @@ export default function PasswordTable({
 
   const handleColDragStart = (e: React.MouseEvent, colKey: string | number) => {
     e.stopPropagation();
-
-    const thEl = e.currentTarget as HTMLElement;
-    const rect = thEl.getBoundingClientRect();
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
 
     colDragRef.current = { key: colKey };
     isDraggingCol.current = true;
@@ -381,13 +380,13 @@ export default function PasswordTable({
     const positionIndicator = (clientX: number) => {
       const row = headerRowRef.current;
       if (!row) return;
-      const ths = Array.from(row.querySelectorAll<HTMLElement>('th[data-col-index]'));
-      if (ths.length === 0) return;
+      const children = Array.from(row.querySelectorAll<HTMLElement>('[data-col-index]'));
+      if (children.length === 0) return;
 
       let targetIdx = 0;
-      for (let i = 0; i < ths.length; i++) {
-        const rect = ths[i].getBoundingClientRect();
-        const mid = rect.left + rect.width / 2;
+      for (let i = 0; i < children.length; i++) {
+        const r = children[i].getBoundingClientRect();
+        const mid = r.left + r.width / 2;
         if (clientX < mid) {
           targetIdx = i;
           break;
@@ -397,17 +396,16 @@ export default function PasswordTable({
 
       dropTargetRef.current = targetIdx;
 
-      // Reset all resize handle spans
       row.querySelectorAll<HTMLElement>('.cursor-col-resize span').forEach(s => {
         s.style.opacity = '';
         s.style.width = '';
         s.style.background = '';
       });
-      ths.forEach(th => { th.style.borderRight = ''; th.style.borderLeft = ''; });
+      children.forEach(el => { el.style.borderRight = ''; el.style.borderLeft = ''; });
       if (targetIdx === 0) {
-        ths[0].style.borderLeft = `2px solid ${accentHex}`;
-      } else if (targetIdx < ths.length) {
-        const prev = ths[targetIdx - 1];
+        children[0].style.borderLeft = `2px solid ${accentHex}`;
+      } else if (targetIdx < children.length) {
+        const prev = children[targetIdx - 1];
         const handle = prev.querySelector<HTMLElement>('.cursor-col-resize span');
         if (handle) {
           handle.style.opacity = '1';
@@ -423,12 +421,10 @@ export default function PasswordTable({
 
     const onMove = (ev: MouseEvent) => {
       if (!colDragRef.current) return;
-
       if (ghostRef.current) {
         ghostRef.current.style.left = `${ev.clientX - ghostOffsetRef.current.x}px`;
         ghostRef.current.style.top = `${ev.clientY - ghostOffsetRef.current.y}px`;
       }
-
       positionIndicator(ev.clientX);
     };
 
@@ -442,9 +438,9 @@ export default function PasswordTable({
 
       const row = headerRowRef.current;
       if (row) {
-        row.querySelectorAll<HTMLElement>('th[data-col-index]').forEach(th => {
-          th.style.borderRight = '';
-          th.style.borderLeft = '';
+        row.querySelectorAll<HTMLElement>('[data-col-index]').forEach(el => {
+          el.style.borderRight = '';
+          el.style.borderLeft = '';
         });
         row.querySelectorAll<HTMLElement>('.cursor-col-resize span').forEach(s => {
           s.style.opacity = '';
@@ -479,6 +475,10 @@ export default function PasswordTable({
     document.addEventListener('mouseup', onUp);
   };
 
+  const totalWidth = useMemo(() => {
+    return colOrder.reduce<number>((sum, k) => sum + (colWidths[String(k)] || 120), 0);
+  }, [colOrder, colWidths]);
+
   return (
     <>
     {draggedColKey !== null && allColumns.find(c => c.key === draggedColKey) && (
@@ -492,77 +492,78 @@ export default function PasswordTable({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`w-full overflow-hidden rounded-2xl ${themeClasses.wrapper} relative`}
+      className={`w-full overflow-hidden rounded-2xl ${themeClasses.wrapper} relative flex flex-col min-h-0`}
       data-table="password-table"
     >
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse table-fixed">
-          <thead>
-            <tr ref={headerRowRef} className={`border-b ${themeClasses.rowBorder} ${themeClasses.headerBg}`}>
-              {colOrder.map((colKey) => {
-                const col = allColumns.find(c => c.key === colKey)!;
-                const isResizable = colKey !== 5;
-                return (
-                  <motion.th
-                    key={colKey}
-                    layout
-                    data-col-index={colKey}
-                    className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden truncate ${!isResizable ? 'text-right' : 'relative'} cursor-grab active:cursor-grabbing select-none ${draggedColKey === colKey ? `${accentClasses.textClass} opacity-90` : ''}`}
-                    style={colWidths[colKey] ? { width: colWidths[colKey], minWidth: 60 } : { width: 120, minWidth: 80 }}
-                    onMouseDown={(e) => handleColDragStart(e, colKey)}
-                  >
-                    {col.label}
-                    {isResizable && (
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-5 cursor-col-resize z-20 flex items-center justify-center touch-none select-none"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const th = (e.currentTarget as HTMLElement).parentElement;
-                          if (!th || !th.hasAttribute('data-col-index')) return;
-                          const idx = th.getAttribute('data-col-index') || '0';
-                          const startX = e.clientX;
-                          const startWidth = th.offsetWidth;
+      <div
+        ref={headerRowRef as any}
+        className={`flex border-b flex-shrink-0 ${themeClasses.rowBorder} ${themeClasses.headerBg}`}
+      >
+            {colOrder.map((colKey) => {
+              const col = allColumns.find(c => c.key === colKey)!;
+              const isResizable = colKey !== 5;
+              return (
+                <div
+                  key={colKey}
+                  data-col-index={colKey}
+                  className={`${sizeClasses.headerPadding} ${themeClasses.headerText} text-[0.65rem] font-bold uppercase tracking-widest overflow-hidden truncate flex-shrink-0 flex items-center ${!isResizable ? 'justify-end' : 'relative'} cursor-grab active:cursor-grabbing select-none ${draggedColKey === colKey ? `${accentClasses.textClass} opacity-90` : ''}`}
+                  style={{ width: colWidths[String(colKey)] || 120, minWidth: 60 }}
+                  onMouseDown={(e) => handleColDragStart(e, colKey)}
+                >
+                  {col.label}
+                  {isResizable && (
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-5 cursor-col-resize z-20 flex items-center justify-center touch-none select-none"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const parent = (e.currentTarget as HTMLElement).parentElement;
+                        if (!parent || !parent.hasAttribute('data-col-index')) return;
+                        const idx = parent.getAttribute('data-col-index') || '0';
+                        const startX = e.clientX;
+                        const startWidth = parent.offsetWidth;
 
-                          const row = th.parentElement;
-                          if (row) {
-                            const locked: Record<string, number> = {};
-                            row.querySelectorAll<HTMLElement>('th[data-col-index]').forEach((c) => {
-                              const ci = c.getAttribute('data-col-index') || '0';
-                              locked[ci] = c.offsetWidth;
-                            });
-                            setColWidths(locked);
-                          }
+                        const row = parent.parentElement;
+                        if (row) {
+                          const locked: Record<string, number> = {};
+                          row.querySelectorAll<HTMLElement>('[data-col-index]').forEach((c) => {
+                            const ci = c.getAttribute('data-col-index') || '0';
+                            locked[ci] = c.offsetWidth;
+                          });
+                          setColWidths(locked);
+                        }
 
-                          document.body.style.userSelect = "none";
-                          document.body.style.cursor = "col-resize";
+                        document.body.style.userSelect = "none";
+                        document.body.style.cursor = "col-resize";
 
-                          const onMove = (ev: MouseEvent) => {
-                            const diff = ev.clientX - startX;
-                            setColWidths(prev => ({ ...prev, [idx]: Math.max(50, startWidth + diff) }));
-                          };
-                          const onUp = () => {
-                            document.removeEventListener('mousemove', onMove);
-                            document.removeEventListener('mouseup', onUp);
-                            document.body.style.userSelect = "";
-                            document.body.style.cursor = "";
-                          };
-                          document.addEventListener('mousemove', onMove);
-                          document.addEventListener('mouseup', onUp);
-                        }}
-                      >
-                        <span className="w-px h-5 bg-current opacity-15 pointer-events-none" />
-                      </div>
-                    )}
-                  </motion.th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {passwords.map((password, idx) => (
-              <React.Fragment key={password.id ?? idx}>
-              <tr
+                        const onMove = (ev: MouseEvent) => {
+                          const diff = ev.clientX - startX;
+                          setColWidths(prev => ({ ...prev, [idx]: Math.max(50, startWidth + diff) }));
+                        };
+                        const onUp = () => {
+                          document.removeEventListener('mousemove', onMove);
+                          document.removeEventListener('mouseup', onUp);
+                          document.body.style.userSelect = "";
+                          document.body.style.cursor = "";
+                        };
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                      }}
+                    >
+                      <span className="w-px h-5 bg-current opacity-15 pointer-events-none" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        <div ref={parentRef} className="overflow-y-auto overflow-x-auto flex-1 min-h-0">
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, minWidth: `${totalWidth}px`, position: 'relative' }}>
+          {virtualizer.getVirtualItems().map(virtualRow => {
+            const password = passwords[virtualRow.index];
+            return (
+              <div
+                key={password.id}
                 data-password-id={password.id}
                 onClick={() => { if (!dragActive.current) onSelect?.(selectedId === password.id ? null : password.id); dragActive.current = false; }}
                 onDoubleClick={() => { if (!dragActive.current) onDoubleClick?.(password); }}
@@ -580,32 +581,29 @@ export default function PasswordTable({
                   }
                 }}
                 onPointerUp={() => { dragStartPos.current = null; }}
-                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }}
-                className={`group border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer ${selectedId === password.id ? `${accentClasses.lightClass}` : themeClasses.rowHover}`}
+                className={`flex border-b last:border-0 ${themeClasses.rowBorder} transition-all duration-200 cursor-pointer group ${selectedId === password.id ? `${accentClasses.lightClass}` : themeClasses.rowHover}`}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
               >
-                {colOrder.map((colKey) => renderCell(colKey, password))}
-              </tr>
-              {password.customFields && password.customFields.length > 0 && (!customFieldTemplates || customFieldTemplates.length === 0) && (
-                <tr
-                  onClick={() => setExpandedCustomId(expandedCustomId === password.id ? null : password.id)}
-                  className={`border-b last:border-0 ${themeClasses.rowBorder} cursor-pointer ${expandedCustomId === password.id ? '' : 'hidden'}`}
-                >
-                  <td colSpan={colOrder.length + (customFieldTemplates?.length || 0)} className="px-6 py-3">
-                    <div className="flex flex-wrap gap-3">
-                      {password.customFields.map((f, i) => (
-                        <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${themeClasses.badge} text-[0.6rem]`}>
-                          <span className={`font-bold uppercase tracking-wider ${themeClasses.textMuted}`}>{f.name}</span>
-                          <span className={`font-medium ${themeClasses.text}`}>{f.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
+                {colOrder.map((colKey) => (
+                  <div
+                    key={`${password.id}-${colKey}`}
+                    className={`${sizeClasses.cellPadding} overflow-hidden flex-shrink-0 flex items-center`}
+                    style={{ width: colWidths[String(colKey)] || 120, minWidth: 60 }}
+                  >
+                    {renderCell(colKey, password)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </motion.div>
     </>

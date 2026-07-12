@@ -992,7 +992,7 @@ function App() {
               >
 
 
-                  <div className="flex-1 overflow-y-auto p-8 relative" onContextMenu={(e) => { e.preventDefault(); setAreaContextMenu({ x: e.clientX, y: e.clientY }); }}>
+                  <div className={`flex-1 p-8 relative ${filteredPasswords.length === 0 ? 'overflow-y-auto' : 'flex flex-col min-h-0'}`} onContextMenu={(e) => { e.preventDefault(); setAreaContextMenu({ x: e.clientX, y: e.clientY }); }}>
                   {filteredPasswords.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-20">
                       <div className={`w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-xl`}>
