@@ -68,6 +68,7 @@ export interface VaultSettings {
   revealCensorSeconds?: number;
   syncTheme?: boolean;
   customFieldTemplates?: { name: string; type: string }[];
+  keybinds?: Record<string, { key: string; ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean }>;
 }
 
 export interface FolderNode {

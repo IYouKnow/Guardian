@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Theme, AccentColor } from "../types";
 import { getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings } from "@guardian/shared";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion, AnimatePresence } from "framer-motion";
+import { loadKeybinds, formatKeybind, Keybinding } from "../utils/keybinds";
+import type { KeybindingOverride } from "../hooks/usePreferences";
 
 interface SettingsProps {
   viewMode: "grid" | "table";
@@ -33,9 +35,11 @@ interface SettingsProps {
   customFieldTemplates: { name: string; type: string }[];
   onCustomFieldTemplatesChange: (templates: { name: string; type: string }[]) => void;
   onImport?: () => void;
+  keybinds?: Record<string, KeybindingOverride>;
+  onKeybindsChange?: (keybinds: Record<string, KeybindingOverride>) => void;
 }
 
-type SettingsSection = "account" | "appearance" | "security" | "fields";
+type SettingsSection = "account" | "appearance" | "security" | "fields" | "keybinds";
 
 const Icons = {
   Account: () => (
@@ -51,6 +55,11 @@ const Icons = {
   Security: () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  ),
+  Keyboard: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2zm2 2h14M6 13h4m-2-2v4m6-4v4m-2-2h4" />
     </svg>
   )
 };
@@ -83,7 +92,9 @@ export default function Settings({
   onUpdate,
   customFieldTemplates,
   onCustomFieldTemplatesChange,
-  onImport
+  onImport,
+  keybinds,
+  onKeybindsChange
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -95,6 +106,7 @@ export default function Settings({
     { id: "appearance", label: "Appearance", icon: <Icons.Appearance /> },
     { id: "fields", label: "Fields", icon: <Icons.Appearance /> },
     { id: "security", label: "Security", icon: <Icons.Security /> },
+    { id: "keybinds", label: "Keybinds", icon: <Icons.Keyboard /> },
   ];
 
   return (
@@ -377,9 +389,9 @@ export default function Settings({
         {activeSection === "security" && (
           <motion.div
             key="security"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="space-y-12 md:space-y-14"
           >
@@ -398,8 +410,168 @@ export default function Settings({
           </motion.div>
         )}
 
+        {activeSection === "keybinds" && (
+          <KeybindsSection themeClasses={themeClasses} keybinds={keybinds} onKeybindsChange={onKeybindsChange} />
+        )}
 
       </AnimatePresence>
     </SettingsLayout>
+  );
+}
+
+const READ_ONLY_BINDS = [
+  { keys: "Enter / Escape", action: "Confirm or cancel folder rename" },
+  { keys: "Enter / Escape", action: "Create or close folder modal" },
+  { keys: "Escape", action: "Close search overlay" },
+];
+
+function KeybindsSection({ themeClasses, keybinds: keybindOverrides, onKeybindsChange }: { themeClasses: Record<string, string>; keybinds?: Record<string, KeybindingOverride>; onKeybindsChange?: (k: Record<string, KeybindingOverride>) => void }) {
+  const [recordingId, setRecordingId] = useState<string | null>(null);
+  const recordingRef = useRef<string | null>(null);
+  const allKeybinds = useMemo(() => {
+    const defaults = loadKeybinds();
+    if (!keybindOverrides) return defaults;
+    return defaults.map((entry) => ({
+      ...entry,
+      current: keybindOverrides[entry.id] ? { ...entry.default, ...keybindOverrides[entry.id] } : entry.default,
+    }));
+  }, [keybindOverrides]);
+
+  useEffect(() => {
+    if (!recordingId) return;
+    recordingRef.current = recordingId;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setRecordingId(null);
+        recordingRef.current = null;
+        return;
+      }
+      const binding: Keybinding = { key: e.key };
+      if (e.ctrlKey || e.metaKey) { binding.ctrl = true; binding.meta = true; }
+      if (e.altKey) binding.alt = true;
+      if (e.shiftKey) binding.shift = true;
+      e.preventDefault();
+      e.stopPropagation();
+      const id = recordingRef.current;
+      if (id) {
+        const next = { ...keybindOverrides, [id]: binding };
+        onKeybindsChange?.(next);
+        recordingRef.current = null;
+        setRecordingId(null);
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [recordingId, keybindOverrides, onKeybindsChange]);
+
+  const handleRecord = (id: string) => {
+    setRecordingId(id);
+  };
+
+  const handleReset = (id: string) => {
+    const next = { ...keybindOverrides };
+    delete next[id];
+    onKeybindsChange?.(next);
+  };
+
+  const handleResetAll = () => {
+    onKeybindsChange?.({});
+  };
+
+  return (
+    <motion.div
+      key="keybinds"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="space-y-12 md:space-y-14"
+    >
+      <header className="md:hidden mb-8">
+        <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">Settings</h1>
+      </header>
+
+      <section className="space-y-6">
+        <div className={`p-6 rounded-2xl ${themeClasses.sectionBg} border ${themeClasses.border} space-y-6`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className={`text-lg font-bold ${themeClasses.text} mb-1`}>Keyboard Shortcuts</h3>
+              <p className={`text-sm ${themeClasses.textSecondary}`}>Click a shortcut to rebind it.</p>
+            </div>
+            <button
+              onClick={handleResetAll}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${themeClasses.input} border ${themeClasses.border} hover:bg-white/5 transition-all`}
+            >
+              Reset all
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            {allKeybinds.map((bind) => (
+              <div
+                key={bind.id}
+                className={`flex items-center justify-between px-4 py-3 rounded-lg ${themeClasses.input} border ${themeClasses.border}`}
+              >
+                <span className={`text-sm ${themeClasses.text}`}>{bind.label}</span>
+                <div className="flex items-center gap-2">
+                  {recordingId === bind.id ? (
+                    <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-yellow-400 animate-pulse">
+                      Press a key...
+                    </span>
+                  ) : (
+                    <kbd className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${themeClasses.sectionBg} border ${themeClasses.border} font-mono`}>
+                      {formatKeybind(bind.current)}
+                    </kbd>
+                  )}
+                  <button
+                    onClick={() => recordingId === bind.id ? setRecordingId(null) : handleRecord(bind.id)}
+                    className={`p-1.5 rounded-md transition-all ${
+                      recordingId === bind.id ? 'text-yellow-400 bg-yellow-400/10' : `${themeClasses.textMuted} hover:${themeClasses.text} hover:bg-white/5`
+                    }`}
+                    title={recordingId === bind.id ? "Cancel" : "Rebind"}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {recordingId === bind.id ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      )}
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => handleReset(bind.id)}
+                    className={`p-1.5 rounded-md ${themeClasses.textMuted} hover:text-red-400 hover:bg-red-500/10 transition-all`}
+                    title="Reset to default"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className={`h-px ${themeClasses.divider} opacity-30`} />
+
+          <div>
+            <h4 className={`text-xs font-bold ${themeClasses.textMuted} mb-2`}>Context shortcuts (not rebindable)</h4>
+            <div className="space-y-1">
+              {READ_ONLY_BINDS.map((bind) => (
+                <div
+                  key={bind.action}
+                  className={`flex items-center justify-between px-4 py-2.5 rounded-lg ${themeClasses.input} border ${themeClasses.border} opacity-60`}
+                >
+                  <span className={`text-xs ${themeClasses.text}`}>{bind.action}</span>
+                  <kbd className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${themeClasses.sectionBg} border ${themeClasses.border} font-mono opacity-70`}>
+                    {bind.keys}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </motion.div>
   );
 }

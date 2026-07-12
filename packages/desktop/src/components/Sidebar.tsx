@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Theme, AccentColor, Folder } from "../types";
 import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
+import { useKeybind } from "../hooks/useKeybind";
 import { motion } from "framer-motion";
 
 interface SidebarProps {
@@ -24,6 +25,7 @@ interface SidebarProps {
   onReorderFolder: (folderId: string, targetIndex: number) => void;
   onMoveFolder: (folderId: string, newParentId: string | null) => void;
   onReorderFolderCrossParent: (folderId: string, newParentId: string | null, targetIndex: number) => void;
+  keybinds?: Record<string, { key: string; ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean }>;
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
@@ -51,6 +53,7 @@ export default function Sidebar({
   onReorderFolder,
   onMoveFolder,
   onReorderFolderCrossParent,
+  keybinds,
 }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string | null } | null>(null);
@@ -92,18 +95,26 @@ export default function Sidebar({
   requestDeleteRef.current = onRequestFolderDelete;
   deleteFolderRef.current = onDeleteFolder;
 
+  useKeybind('delete-folder', (e) => {
+    if (!activeFolderId || renamingFolderId) return;
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) return;
+    e.preventDefault();
+    if (requestDeleteRef.current) {
+      requestDeleteRef.current(activeFolderId);
+    } else {
+      deleteFolderRef.current(activeFolderId);
+    }
+  }, [activeFolderId, renamingFolderId], keybinds);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.key === "Delete" || e.key === "Backspace") && activeFolderId && !renamingFolderId) {
-        const activeEl = document.activeElement;
-        if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) return;
-        e.preventDefault();
-        if (requestDeleteRef.current) {
-          requestDeleteRef.current(activeFolderId);
-        } else {
-          deleteFolderRef.current(activeFolderId);
-        }
-      }
+      if (e.key !== "Backspace" || !activeFolderId || renamingFolderId) return;
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+      if (requestDeleteRef.current) requestDeleteRef.current(activeFolderId);
+      else deleteFolderRef.current(activeFolderId);
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);

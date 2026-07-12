@@ -3,6 +3,13 @@ import { load, Store } from "@tauri-apps/plugin-store";
 import { Theme, AccentColor } from "../types";
 import type { ThemeSyncMode } from "@guardian/shared";
 
+export interface KeybindingOverride {
+  key: string;
+  ctrl?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+  meta?: boolean;
+}
 
 interface Preferences {
   theme: Theme;
@@ -19,6 +26,7 @@ interface Preferences {
   themeSyncMode: ThemeSyncMode;
   miniMode: boolean;
   customFieldTemplates: { name: string; type: string }[];
+  keybinds: Record<string, KeybindingOverride>;
 }
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -36,6 +44,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   themeSyncMode: "off",
   miniMode: false,
   customFieldTemplates: [],
+  keybinds: {},
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -94,6 +103,7 @@ export function usePreferences() {
         const savedConnectionMode = await store.get<"local" | "server">("connectionMode");
         const savedLastServerUrl = await store.get<string>("lastServerUrl");
         const savedCustomFieldTemplates = await store.get<{ name: string; type: string }[]>("customFieldTemplates");
+        const savedKeybinds = await store.get<Record<string, KeybindingOverride>>("keybinds");
 
         const resolvedThemeSyncMode =
           savedThemeSyncMode ?? (savedSyncTheme ? "follow" : DEFAULT_PREFERENCES.themeSyncMode);
@@ -113,6 +123,7 @@ export function usePreferences() {
           themeSyncMode: resolvedThemeSyncMode,
           miniMode: savedMiniMode ?? DEFAULT_PREFERENCES.miniMode,
           customFieldTemplates: savedCustomFieldTemplates ?? DEFAULT_PREFERENCES.customFieldTemplates,
+          keybinds: savedKeybinds ?? DEFAULT_PREFERENCES.keybinds,
         });
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -200,6 +211,11 @@ export function usePreferences() {
     [updatePreference]
   );
 
+  const setKeybinds = useCallback(
+    (keybinds: Record<string, KeybindingOverride>) => updatePreference("keybinds", keybinds),
+    [updatePreference]
+  );
+
   const setConnectionMode = useCallback(
     (mode: "local" | "server") => updatePreference("connectionMode", mode),
     [updatePreference]
@@ -255,6 +271,9 @@ export function usePreferences() {
     if (vaultSettings.customFieldTemplates) {
       vaultBound.customFieldTemplates = vaultSettings.customFieldTemplates;
     }
+    if (vaultSettings.keybinds) {
+      vaultBound.keybinds = vaultSettings.keybinds;
+    }
     if (Object.keys(vaultBound).length > 0) {
       setPreferences(prev => ({ ...prev, ...vaultBound }));
       persistSettings(vaultBound);
@@ -280,6 +299,7 @@ export function usePreferences() {
     setThemeSyncMode,
     setMiniMode,
     setCustomFieldTemplates,
+    setKeybinds,
     setConnectionMode,
     setLastServerUrl,
     loadFromVault,

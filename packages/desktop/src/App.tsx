@@ -24,6 +24,7 @@ import KdbxPasswordModal from "./components/KdbxPasswordModal";
 import FolderDeleteModal from "./components/FolderDeleteModal";
 import SearchOverlay from "./components/SearchOverlay";
 import { usePreferences } from "./hooks/usePreferences";
+import { useKeybind } from "./hooks/useKeybind";
 import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
 import { useToast } from "./hooks/useToast";
@@ -84,6 +85,7 @@ function App() {
     setThemeSyncMode,
     setMiniMode,
     setCustomFieldTemplates,
+    setKeybinds,
     setConnectionMode,
     setLastServerUrl,
     loadFromVault,
@@ -617,40 +619,26 @@ function App() {
     };
   }, [dragPasswordId, movePassword, reorderPassword]);
 
-  // Ctrl+F search overlay
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        setShowSearchOverlay(true);
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  useKeybind('search', (e) => {
+    e.preventDefault();
+    setShowSearchOverlay(true);
+  }, [], preferences.keybinds);
 
-  // Keyboard reorder: Alt+Up/Down
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedPasswordId || !e.altKey) return;
-      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  useKeybind('reorder-up', (e) => {
+    if (!selectedPasswordId) return;
+    e.preventDefault();
+    const sorted = [...passwords].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const currentIndex = sorted.findIndex(p => p.id === selectedPasswordId);
+    if (currentIndex > 0) reorderPassword(selectedPasswordId, currentIndex - 1);
+  }, [selectedPasswordId, passwords, reorderPassword], preferences.keybinds);
 
-      e.preventDefault();
-
-      const sorted = [...passwords].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const currentIndex = sorted.findIndex(p => p.id === selectedPasswordId);
-      if (currentIndex === -1) return;
-
-      if (e.key === 'ArrowUp' && currentIndex > 0) {
-        reorderPassword(selectedPasswordId, currentIndex - 1);
-      } else if (e.key === 'ArrowDown' && currentIndex < sorted.length - 1) {
-        reorderPassword(selectedPasswordId, currentIndex + 1);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedPasswordId, passwords, reorderPassword]);
+  useKeybind('reorder-down', (e) => {
+    if (!selectedPasswordId) return;
+    e.preventDefault();
+    const sorted = [...passwords].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const currentIndex = sorted.findIndex(p => p.id === selectedPasswordId);
+    if (currentIndex < sorted.length - 1) reorderPassword(selectedPasswordId, currentIndex + 1);
+  }, [selectedPasswordId, passwords, reorderPassword], preferences.keybinds);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -932,6 +920,7 @@ function App() {
                 : (preferences.lastVaultPath || "Local Vault").split(/[\\/]/).pop() || "Local Vault"
             }
             username={username}
+            keybinds={preferences.keybinds}
           />
 
           {/* Resize handle */}
@@ -980,6 +969,8 @@ function App() {
                     customFieldTemplates={preferences.customFieldTemplates}
                     onCustomFieldTemplatesChange={setCustomFieldTemplates}
                     onImport={handleImport}
+                    keybinds={preferences.keybinds}
+                    onKeybindsChange={setKeybinds}
                   />
               </motion.div>
             ) : (
