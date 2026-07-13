@@ -284,6 +284,7 @@ function App() {
     getFolders,
     addFolder,
     renameFolder,
+    setFolderIcon,
     deleteFolder,
     movePassword,
     reorderPassword,
@@ -370,7 +371,7 @@ function App() {
         const newParentId = f.parentId ? (folderIdMap.get(f.parentId) ?? rootFolderId_new) : rootFolderId_new;
         const newId = crypto.randomUUID();
         folderIdMap.set(f.id, newId);
-        newFolders.push({ id: newId, name: f.name, parentId: newParentId });
+        newFolders.push({ id: newId, name: f.name, parentId: newParentId, icon: f.icon });
       }
 
       const newEntries: PasswordEntry[] = entries.map((entry: any) => ({
@@ -380,6 +381,7 @@ function App() {
         website: entry.website || "",
         password: entry.password || "",
         notes: entry.notes || undefined,
+        favicon: entry.favicon || undefined,
         folderId: entry.folderId ? (folderIdMap.get(entry.folderId) ?? rootFolderId_new) : rootFolderId_new,
         lastModified: new Date().toISOString(),
         customFields: entry.customFields,
@@ -921,6 +923,7 @@ function App() {
             }
             username={username}
             keybinds={preferences.keybinds}
+            onSetFolderIcon={setFolderIcon}
           />
 
           {/* Resize handle */}
@@ -971,6 +974,8 @@ function App() {
                     onImport={handleImport}
                     keybinds={preferences.keybinds}
                     onKeybindsChange={setKeybinds}
+                    folders={folders}
+                    onSetFolderIcon={setFolderIcon}
                   />
               </motion.div>
             ) : (
@@ -1238,6 +1243,8 @@ function App() {
           filePath={importPreview.filePath}
           onConfirm={handleConfirmImport}
           onCancel={() => setImportPreview(null)}
+          theme={activeTheme}
+          accentColor={preferences.accentColor}
         />
       )}
       {kdbxUnlock && (
@@ -1245,6 +1252,8 @@ function App() {
           error={kdbxUnlockError}
           onConfirm={handleKdbxUnlock}
           onCancel={() => { setKdbxUnlock(null); setKdbxUnlockError(undefined); }}
+          theme={activeTheme}
+          accentColor={preferences.accentColor}
         />
       )}
       <ToastContainer toasts={toasts} onRemove={removeToast} theme={activeTheme} accentColor={preferences.accentColor} />

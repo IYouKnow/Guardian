@@ -1,5 +1,6 @@
 import { PasswordEntry, CustomField, Folder } from "../types";
 import { Kdbx, Credentials, ProtectedValue } from "kdbxweb";
+import { normalizeIcon } from "@guardian/shared";
 
 interface ImportResult {
   entries: PasswordEntry[];
@@ -40,76 +41,6 @@ function getFieldValue(fields: Map<string, any>, key: string): string {
   return String(val);
 }
 
-function flattenGroup(
-  group: any,
-  parentId: string | null,
-  folderMap: Map<string, { id: string; name: string; parentId: string | null; order: number }>,
-  groupToId: Map<any, string>,
-  order: { value: number }
-): string | null {
-  const name = group.name?.trim() || "Unnamed";
-  const id = crypto.randomUUID();
-  folderMap.set(id, { id, name, parentId, order: order.value++ });
-  groupToId.set(group, id);
-
-  if (group.groups) {
-    for (const child of group.groups) {
-      flattenGroup(child, id, folderMap, groupToId, order);
-    }
-  }
-  return id;
-}
-
-function collectKdbxEntries(
-  group: any,
-  groupToId: Map<any, string>,
-): PasswordEntry[] {
-  const entries: PasswordEntry[] = [];
-
-  const folderId = groupToId.get(group);
-
-  if (group.entries) {
-    for (const entry of group.entries) {
-      if (entry.fields) {
-        const title = getFieldValue(entry.fields, "Title") || "Imported Entry";
-        const username = getFieldValue(entry.fields, "UserName");
-        const password = getFieldValue(entry.fields, "Password");
-        const url = getFieldValue(entry.fields, "URL");
-        const notes = getFieldValue(entry.fields, "Notes");
-
-        const customFields: CustomField[] = [];
-        if (entry.customData) {
-          for (const [name, val] of entry.customData.entries()) {
-            if (val) {
-              customFields.push({ name, value: String(val), type: "text" });
-            }
-          }
-        }
-
-        entries.push({
-          id: crypto.randomUUID(),
-          title,
-          username,
-          website: url,
-          password,
-          notes: notes || undefined,
-          folderId,
-          lastModified: new Date().toISOString(),
-          customFields: customFields.length > 0 ? customFields : undefined,
-        });
-      }
-    }
-  }
-
-  if (group.groups) {
-    for (const child of group.groups) {
-      entries.push(...collectKdbxEntries(child, groupToId));
-    }
-  }
-
-  return entries;
-}
-
 export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyFileData?: Uint8Array): Promise<ImportResult> {
   const pw = ProtectedValue.fromString(password);
   const credentials = keyFileData
@@ -117,12 +48,50 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
     : new Credentials(pw);
   const kdbx = await Kdbx.load(data, credentials);
 
+  const iconMap = new Map<string, string>();
+  if (kdbx.meta.customIcons) {
+    for (const [uuid, iconData] of kdbx.meta.customIcons) {
+      if (iconData?.data) {
+        try {
+          const normalized = await normalizeIcon({
+            bytes: iconData.data,
+            mimeType: "image/png",
+          });
+          if (normalized) {
+            iconMap.set(uuid, normalized);
+          }
+        } catch {
+          // skip icons that fail to normalize
+        }
+      }
+    }
+  }
+
   const keePassFolderId = crypto.randomUUID();
-  const folderMap = new Map<string, { id: string; name: string; parentId: string | null; order: number }>();
+  const folderMap = new Map<string, { id: string; name: string; parentId: string | null; order: number; icon?: string }>();
   const groupToId = new Map<any, string>();
   folderMap.set(keePassFolderId, { id: keePassFolderId, name: "KeePass", parentId: null, order: 0 });
 
   const order = { value: 1 };
+
+  // Flatten groups with icon support
+  function flattenGroupWithIcon(
+    group: any,
+    parentId: string | null,
+  ): string | null {
+    const name = group.name?.trim() || "Unnamed";
+    const id = crypto.randomUUID();
+    const icon = group.customIcon ? iconMap.get(group.customIcon.toString()) : undefined;
+    folderMap.set(id, { id, name, parentId, order: order.value++, icon });
+    groupToId.set(group, id);
+
+    if (group.groups) {
+      for (const child of group.groups) {
+        flattenGroupWithIcon(child, id);
+      }
+    }
+    return id;
+  }
 
   if (kdbx.groups) {
     for (const group of kdbx.groups) {
@@ -130,11 +99,11 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
       if (isRoot) {
         if (group.groups) {
           for (const child of group.groups) {
-            flattenGroup(child, keePassFolderId, folderMap, groupToId, order);
+            flattenGroupWithIcon(child, keePassFolderId);
           }
         }
       } else {
-        flattenGroup(group, keePassFolderId, folderMap, groupToId, order);
+        flattenGroupWithIcon(group, keePassFolderId);
       }
     }
   }
@@ -155,6 +124,7 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
                 password: getFieldValue(entry.fields, "Password"),
                 website: getFieldValue(entry.fields, "URL"),
                 notes: getFieldValue(entry.fields, "Notes") || undefined,
+                favicon: entry.customIcon ? iconMap.get(entry.customIcon.toString()) : undefined,
                 folderId: keePassFolderId,
                 lastModified: new Date().toISOString(),
               });
@@ -163,11 +133,11 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
         }
         if (group.groups) {
           for (const child of group.groups) {
-            entries.push(...collectKdbxEntries(child, groupToId));
+            entries.push(...collectKdbxEntriesWithIcon(child, groupToId, iconMap));
           }
         }
       } else {
-        entries.push(...collectKdbxEntries(group, groupToId));
+        entries.push(...collectKdbxEntriesWithIcon(group, groupToId, iconMap));
       }
     }
   }
@@ -175,6 +145,56 @@ export async function parseKeePassKdbx(data: ArrayBuffer, password: string, keyF
   const folders: Folder[] = Array.from(folderMap.values());
 
   return { entries, folders, rootFolderId: keePassFolderId };
+}
+
+function collectKdbxEntriesWithIcon(
+  group: any,
+  groupToId: Map<any, string>,
+  iconMap: Map<string, string>,
+): PasswordEntry[] {
+  const entries: PasswordEntry[] = [];
+  const folderId = groupToId.get(group);
+
+  if (group.entries) {
+    for (const entry of group.entries) {
+      if (entry.fields) {
+        const title = getFieldValue(entry.fields, "Title") || "Imported Entry";
+        const username = getFieldValue(entry.fields, "UserName");
+        const password = getFieldValue(entry.fields, "Password");
+        const url = getFieldValue(entry.fields, "URL");
+        const notes = getFieldValue(entry.fields, "Notes");
+        const customFields: CustomField[] = [];
+        if (entry.customData) {
+          for (const [name, val] of entry.customData.entries()) {
+            if (val) {
+              customFields.push({ name, value: String(val), type: "text" });
+            }
+          }
+        }
+
+        entries.push({
+          id: crypto.randomUUID(),
+          title,
+          username,
+          website: url,
+          password,
+          notes: notes || undefined,
+          favicon: entry.customIcon ? iconMap.get(entry.customIcon.toString()) : undefined,
+          folderId,
+          lastModified: new Date().toISOString(),
+          customFields: customFields.length > 0 ? customFields : undefined,
+        });
+      }
+    }
+  }
+
+  if (group.groups) {
+    for (const child of group.groups) {
+      entries.push(...collectKdbxEntriesWithIcon(child, groupToId, iconMap));
+    }
+  }
+
+  return entries;
 }
 
 export function parseKeePassCsv(text: string): ImportResult {

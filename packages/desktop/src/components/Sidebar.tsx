@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Theme, AccentColor, Folder } from "../types";
 import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
 import { useKeybind } from "../hooks/useKeybind";
 import { motion } from "framer-motion";
+import { normalizeIcon } from "@guardian/shared";
 
 interface SidebarProps {
   folders: Folder[];
@@ -26,6 +27,7 @@ interface SidebarProps {
   onMoveFolder: (folderId: string, newParentId: string | null) => void;
   onReorderFolderCrossParent: (folderId: string, newParentId: string | null, targetIndex: number) => void;
   keybinds?: Record<string, { key: string; ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean }>;
+  onSetFolderIcon?: (id: string, icon: string | undefined) => void;
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
@@ -54,6 +56,7 @@ export default function Sidebar({
   onMoveFolder,
   onReorderFolderCrossParent,
   keybinds,
+  onSetFolderIcon,
 }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string | null } | null>(null);
@@ -65,6 +68,8 @@ export default function Sidebar({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<'before' | 'into' | 'after'>('after');
   const [folderDragPos, setFolderDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [iconChangeFolderId, setIconChangeFolderId] = useState<string | null>(null);
+  const iconFileInputRef = useRef<HTMLInputElement>(null);
   const contextRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,6 +94,22 @@ export default function Sidebar({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const handleIconPick = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !iconChangeFolderId) return;
+    try {
+      const dataUrl = await normalizeIcon(file);
+      if (dataUrl && onSetFolderIcon) {
+        onSetFolderIcon(iconChangeFolderId, dataUrl);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIconChangeFolderId(null);
+    }
+  }, [iconChangeFolderId, onSetFolderIcon]);
 
   const requestDeleteRef = useRef(onRequestFolderDelete);
   const deleteFolderRef = useRef(onDeleteFolder);
@@ -334,6 +355,13 @@ export default function Sidebar({
 
   return (
     <aside ref={sidebarRef} className={`w-full h-full backdrop-blur-xl ${themeClasses.bg} border-r ${themeClasses.border} flex flex-col relative overflow-visible`}>
+      <input
+        ref={iconFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleIconPick}
+      />
       {/* Branding */}
       <div className={`px-5 py-4 border-b ${themeClasses.border}`}>
         <div className="flex items-center gap-3">
@@ -447,6 +475,19 @@ export default function Sidebar({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
                 Rename
+              </button>
+              <button
+                className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+                onClick={() => {
+                  setIconChangeFolderId(contextMenu.folderId!);
+                  setContextMenu(null);
+                  setTimeout(() => iconFileInputRef.current?.click(), 0);
+                }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Change icon
               </button>
               <div className="h-px bg-[#333] my-1" />
               <button

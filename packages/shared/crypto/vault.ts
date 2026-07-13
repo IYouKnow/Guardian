@@ -76,6 +76,7 @@ export interface FolderNode {
   name: string;
   parentId: string | null;
   order?: number;
+  icon?: string;
 }
 
 export interface CustomField {

@@ -25,6 +25,7 @@ interface UsePasswordsReturn {
   getFolders: () => FolderNode[];
   addFolder: (name: string, parentId: string | null, icon?: string) => Folder;
   renameFolder: (id: string, name: string) => void;
+  setFolderIcon: (id: string, icon: string | undefined) => void;
   deleteFolder: (id: string, includeSubfolders?: boolean) => void;
   movePassword: (passwordId: string, folderId: string | null) => Promise<void>;
   reorderPassword: (passwordId: string, targetIndex: number) => Promise<void>;
@@ -129,7 +130,7 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
   const persistFolders = useCallback(
     async (updatedFolders: Folder[]) => {
       await onSaveFolders?.(
-        updatedFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }))
+        updatedFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId, icon: f.icon }))
       );
     },
     [onSaveFolders]
@@ -156,7 +157,7 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
     if (vaultFolders) {
       const needsFolderOrder = vaultFolders.some(f => f.order === undefined);
       setFolders(
-        vaultFolders.map((f, i) => ({ id: f.id, name: f.name, parentId: f.parentId, order: needsFolderOrder ? i : f.order }))
+        vaultFolders.map((f, i) => ({ id: f.id, name: f.name, parentId: f.parentId, order: needsFolderOrder ? i : f.order, icon: f.icon }))
       );
     }
   }, []);
@@ -228,6 +229,15 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
   const renameFolder = useCallback(
     (id: string, name: string) => {
       const updated = folders.map((f) => (f.id === id ? { ...f, name } : f));
+      setFolders(updated);
+      persistFolders(updated);
+    },
+    [folders, persistFolders]
+  );
+
+  const setFolderIcon = useCallback(
+    (id: string, icon: string | undefined) => {
+      const updated = folders.map((f) => (f.id === id ? { ...f, icon } : f));
       setFolders(updated);
       persistFolders(updated);
     },
@@ -379,10 +389,11 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
       });
     }, [passwords, entryCreatedAtMap]),
     getFolders: useCallback(() => {
-      return folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }));
+      return folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId, icon: f.icon }));
     }, [folders]),
     addFolder,
     renameFolder,
+    setFolderIcon,
     deleteFolder,
     movePassword,
     reorderPassword,

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { Theme, AccentColor } from "../types";
-import { getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings } from "@guardian/shared";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Theme, AccentColor, Folder } from "../types";
+import { getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings, normalizeIcon } from "@guardian/shared";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadKeybinds, formatKeybind, Keybinding } from "../utils/keybinds";
@@ -37,9 +37,11 @@ interface SettingsProps {
   onImport?: () => void;
   keybinds?: Record<string, KeybindingOverride>;
   onKeybindsChange?: (keybinds: Record<string, KeybindingOverride>) => void;
+  folders?: Folder[];
+  onSetFolderIcon?: (id: string, icon: string | undefined) => void;
 }
 
-type SettingsSection = "account" | "appearance" | "security" | "fields" | "keybinds";
+type SettingsSection = "account" | "appearance" | "security" | "fields" | "icons" | "keybinds";
 
 const Icons = {
   Account: () => (
@@ -55,6 +57,11 @@ const Icons = {
   Security: () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  ),
+  FolderIcons: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   ),
   Keyboard: () => (
@@ -94,7 +101,9 @@ export default function Settings({
   onCustomFieldTemplatesChange,
   onImport,
   keybinds,
-  onKeybindsChange
+  onKeybindsChange,
+  folders,
+  onSetFolderIcon
 }: SettingsProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
@@ -105,6 +114,7 @@ export default function Settings({
     { id: "account", label: "Account", icon: <Icons.Account /> },
     { id: "appearance", label: "Appearance", icon: <Icons.Appearance /> },
     { id: "fields", label: "Fields", icon: <Icons.Appearance /> },
+    { id: "icons", label: "Icons", icon: <Icons.FolderIcons /> },
     { id: "security", label: "Security", icon: <Icons.Security /> },
     { id: "keybinds", label: "Keybinds", icon: <Icons.Keyboard /> },
   ];
@@ -386,6 +396,40 @@ export default function Settings({
           </motion.div>
         )}
 
+        {activeSection === "icons" && (
+          <motion.div
+            key="icons"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="space-y-12 md:space-y-14"
+          >
+            <header className="md:hidden mb-8">
+              <h1 className="text-2xl font-black tracking-tight uppercase opacity-90">Settings</h1>
+            </header>
+
+            <section className="space-y-6">
+              <div className={`p-6 rounded-2xl ${themeClasses.sectionBg} border ${themeClasses.border} space-y-6`}>
+                <div>
+                  <h3 className={`text-lg font-bold ${themeClasses.text} mb-1`}>Folder Icons</h3>
+                  <p className={`text-sm ${themeClasses.textSecondary}`}>Set custom icons for your folders. Icons are synced across all devices.</p>
+                </div>
+
+                {(!folders || folders.length === 0) ? (
+                  <p className={`text-sm ${themeClasses.textMuted} italic`}>No folders yet. Create folders in the sidebar to set icons.</p>
+                ) : (
+                  <FolderIconsList
+                    folders={folders}
+                    onSetFolderIcon={onSetFolderIcon || (() => {})}
+                    themeClasses={themeClasses}
+                  />
+                )}
+              </div>
+            </section>
+          </motion.div>
+        )}
+
         {activeSection === "security" && (
           <motion.div
             key="security"
@@ -416,6 +460,86 @@ export default function Settings({
 
       </AnimatePresence>
     </SettingsLayout>
+  );
+}
+
+function FolderIconsList({ folders, onSetFolderIcon, themeClasses }: {
+  folders: Folder[];
+  onSetFolderIcon: (id: string, icon: string | undefined) => void;
+  themeClasses: Record<string, string>;
+}) {
+  const [iconFolderId, setIconFolderId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFilePick = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, folderId: string) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await normalizeIcon(file);
+      if (dataUrl) {
+        onSetFolderIcon(folderId, dataUrl);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIconFolderId(null);
+    }
+  }, [onSetFolderIcon]);
+
+  const foldersWithIcons = useMemo(() => folders.filter(f => f.icon), [folders]);
+
+  return (
+    <div className="space-y-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => iconFolderId && handleFilePick(e, iconFolderId)}
+      />
+
+      {foldersWithIcons.length > 0 ? (
+        <div>
+          <p className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-wider mb-3`}>
+            Custom icons ({foldersWithIcons.length})
+          </p>
+          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+            {foldersWithIcons.map((f) => (
+              <div key={f.id} className="group relative flex flex-col items-center gap-1.5">
+                <div className="relative w-full aspect-square rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden flex items-center justify-center">
+                  <img src={f.icon} alt="" className="w-8 h-8 object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
+                    <button
+                      onClick={() => {
+                        setIconFolderId(f.id);
+                        setTimeout(() => fileInputRef.current?.click(), 0);
+                      }}
+                      className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => onSetFolderIcon(f.id, undefined)}
+                      className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <span className="text-[0.6rem] text-gray-500 font-medium truncate w-full text-center">{f.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className={`text-sm ${themeClasses.textMuted} italic text-center py-8`}>No custom icons yet. Add one from the sidebar.</p>
+      )}
+    </div>
   );
 }
 
