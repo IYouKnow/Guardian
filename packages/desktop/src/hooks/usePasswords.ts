@@ -25,7 +25,7 @@ interface UsePasswordsReturn {
   getFolders: () => FolderNode[];
   addFolder: (name: string, parentId: string | null, icon?: string) => Folder;
   renameFolder: (id: string, name: string) => void;
-  deleteFolder: (id: string) => void;
+  deleteFolder: (id: string, includeSubfolders?: boolean) => void;
   movePassword: (passwordId: string, folderId: string | null) => Promise<void>;
   reorderPassword: (passwordId: string, targetIndex: number) => Promise<void>;
   reorderFolder: (folderId: string, targetIndex: number) => void;
@@ -235,20 +235,36 @@ export function usePasswords({ onSave, onSaveFolders }: UsePasswordsProps): UseP
   );
 
   const deleteFolder = useCallback(
-    (id: string) => {
-      const descendantIds = collectDescendantIds(folders, id);
-      const remainingFolders = folders.filter((f) => !descendantIds.includes(f.id));
-      const updatedPasswords = passwords.map((p) =>
-        p.folderId && descendantIds.includes(p.folderId)
-          ? { ...p, folderId: undefined }
-          : p
-      );
-      setFolders(remainingFolders);
-      setPasswords(updatedPasswords);
-      persistFolders(remainingFolders);
-      savePasswords(updatedPasswords);
-      if (activeFolderId && descendantIds.includes(activeFolderId)) {
-        startTransition(() => setActiveFolderId(null));
+    (id: string, includeSubfolders: boolean = true) => {
+      if (includeSubfolders) {
+        const descendantIds = collectDescendantIds(folders, id);
+        const remainingFolders = folders.filter((f) => !descendantIds.includes(f.id));
+        const updatedPasswords = passwords.map((p) =>
+          p.folderId && descendantIds.includes(p.folderId)
+            ? { ...p, folderId: undefined }
+            : p
+        );
+        setFolders(remainingFolders);
+        setPasswords(updatedPasswords);
+        persistFolders(remainingFolders);
+        savePasswords(updatedPasswords);
+        if (activeFolderId && descendantIds.includes(activeFolderId)) {
+          startTransition(() => setActiveFolderId(null));
+        }
+      } else {
+        const remainingFolders = folders
+          .filter((f) => f.id !== id)
+          .map((f) => f.parentId === id ? { ...f, parentId: null } : f);
+        const updatedPasswords = passwords.map((p) =>
+          p.folderId === id ? { ...p, folderId: undefined } : p
+        );
+        setFolders(remainingFolders);
+        setPasswords(updatedPasswords);
+        persistFolders(remainingFolders);
+        savePasswords(updatedPasswords);
+        if (activeFolderId === id) {
+          startTransition(() => setActiveFolderId(null));
+        }
       }
     },
     [folders, passwords, activeFolderId, persistFolders, savePasswords]

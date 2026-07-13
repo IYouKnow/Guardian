@@ -1227,7 +1227,7 @@ function App() {
           folderId={folderDeleteConfirmId}
           folders={folders}
           passwords={passwords}
-          onConfirm={() => { deleteFolder(folderDeleteConfirmId); setFolderDeleteConfirmId(null); }}
+          onConfirm={(includeSubfolders) => { deleteFolder(folderDeleteConfirmId, includeSubfolders); setFolderDeleteConfirmId(null); }}
           onCancel={() => setFolderDeleteConfirmId(null)}
         />
       )}
