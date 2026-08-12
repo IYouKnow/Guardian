@@ -7,20 +7,22 @@ WORKDIR /app
 
 # Copy only what's needed for the web build
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/web/package.json ./packages/web/
-COPY packages/desktop/package.json ./packages/desktop/
-COPY packages/extension/package.json ./packages/extension/
-COPY packages/mobile/package.json ./packages/mobile/
+COPY packages/core/package.json ./packages/core/
+COPY packages/ui/package.json ./packages/ui/
+COPY apps/web/package.json ./apps/web/
+COPY apps/desktop/package.json ./apps/desktop/
+COPY apps/extension/package.json ./apps/extension/
+COPY apps/mobile/package.json ./apps/mobile/
 
 RUN pnpm install --frozen-lockfile
 
-# Copy source code for shared and web
-COPY packages/shared ./packages/shared
-COPY packages/web ./packages/web
+# Copy source code for the internal packages and web
+COPY packages/core ./packages/core
+COPY packages/ui ./packages/ui
+COPY apps/web ./apps/web
 
 # Create server directory since Vite is configured to build into ../server/dist
-RUN mkdir -p packages/server
+RUN mkdir -p apps/server
 
 # Build the web panel (skipping type check to avoid exit code 2 in CI)
 RUN pnpm --filter guardian-web exec vite build
@@ -35,18 +37,18 @@ WORKDIR /build
 RUN apk add --no-cache git
 
 # Copy dependency files first for better caching
-COPY packages/server/go.mod ./
-COPY packages/server/go.sum ./
+COPY apps/server/go.mod ./
+COPY apps/server/go.sum ./
 
 # Download dependencies
 RUN go mod download
 
 # Copy the rest of the source
 # Copy the rest of the source
-COPY packages/server/ ./
+COPY apps/server/ ./
 
 # Copy built web assets for embedding
-COPY --from=web-builder /app/packages/server/dist ./dist
+COPY --from=web-builder /app/apps/server/dist ./dist
 
 # Build the binary
 ARG VERSION=dev

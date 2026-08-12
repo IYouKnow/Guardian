@@ -27,13 +27,13 @@
         "./src/*"
       ],
       "@guardian/core": [
-        "../core/index.ts"
+        "../../packages/core/index.ts"
       ],
       "@guardian/core/*": [
-        "../core/*"
+        "../../packages/core/*"
       ],
       "@guardian/ui": [
-        "../ui/index.ts"
+        "../../packages/ui/index.ts"
       ]
     },
     /* Linting */

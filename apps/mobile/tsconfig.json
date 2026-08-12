@@ -2,8 +2,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@guardian/core": ["../core/index.ts"],
-      "@guardian/core/*": ["../core/*"]
+      "@guardian/core": ["../../packages/core/index.ts"],
+      "@guardian/core/*": ["../../packages/core/*"]
     }
   },
   "files": [],

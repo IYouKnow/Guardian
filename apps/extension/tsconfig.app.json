@@ -19,9 +19,9 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@guardian/core": ["../core/index.ts"],
-      "@guardian/core/*": ["../core/*"],
-      "@guardian/ui": ["../ui/index.ts"]
+      "@guardian/core": ["../../packages/core/index.ts"],
+      "@guardian/core/*": ["../../packages/core/*"],
+      "@guardian/ui": ["../../packages/ui/index.ts"]
     },
 
     /* Linting */

@@ -22,14 +22,14 @@ export default defineConfig({
     target: 'es2015',
   },
   server: {
-    // This app imports code/assets from `../core`; allow Vite to serve it in dev.
+    // This app imports code/assets from `../../packages/core`; allow Vite to serve it in dev.
     fs: {
-      allow: [path.resolve(__dirname, '..')],
+      allow: [path.resolve(__dirname, '../..')],
     },
   },
   resolve: {
     alias: {
-      '@guardian/core': path.resolve(__dirname, '../core'),
+      '@guardian/core': path.resolve(__dirname, '../../packages/core'),
     },
   },
 })

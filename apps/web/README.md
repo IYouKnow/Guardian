@@ -40,4 +40,4 @@ Navigate to http://localhost:5173 and log in with your admin credentials.
 pnpm --filter guardian-web build
 ```
 
-Build output will be in `packages/web/dist/`
+Build output will be in `apps/server/dist`

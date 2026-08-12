@@ -8,22 +8,20 @@ importers:
 
   .: {}
 
-  packages/core: {}
-
-  packages/desktop:
+  apps/desktop:
     dependencies:
       '@guardian/core':
         specifier: workspace:*
-        version: link:../core
+        version: link:../../packages/core
       '@guardian/ui':
         specifier: workspace:*
-        version: link:../ui
+        version: link:../../packages/ui
       '@tanstack/react-virtual':
         specifier: ^3.14.5
-        version: 3.14.5(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        version: 3.14.5(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       '@tauri-apps/api':
         specifier: ^2
-        version: 2.9.1
+        version: 2.11.1
       '@tauri-apps/plugin-dialog':
         specifier: ^2.4.2
         version: 2.4.2
@@ -44,19 +42,19 @@ importers:
         version: 2.9.0
       framer-motion:
         specifier: ^12.23.26
-        version: 12.23.26(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        version: 12.23.26(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       kdbxweb:
         specifier: ^2.1.1
         version: 2.1.1
       lucide-react:
         specifier: ^0.575.0
-        version: 0.575.0(react@19.2.0)
+        version: 0.575.0(react@19.2.1)
       react:
         specifier: ^19.1.0
-        version: 19.2.0
+        version: 19.2.1
       react-dom:
         specifier: ^19.1.0
-        version: 19.2.0(react@19.2.0)
+        version: 19.2.1(react@19.2.1)
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2
@@ -89,14 +87,14 @@ importers:
         specifier: ^7.0.4
         version: 7.2.6(@types/node@24.10.1)(jiti@1.21.7)(yaml@2.8.2)
 
-  packages/extension:
+  apps/extension:
     dependencies:
       '@guardian/core':
         specifier: workspace:*
-        version: link:../core
+        version: link:../../packages/core
       '@guardian/ui':
         specifier: workspace:*
-        version: link:../ui
+        version: link:../../packages/ui
       framer-motion:
         specifier: ^12.23.26
         version: 12.23.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -138,7 +136,7 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@24.10.1)
 
-  packages/mobile:
+  apps/mobile:
     dependencies:
       '@capacitor/android':
         specifier: ^7.4.4
@@ -160,7 +158,7 @@ importers:
         version: 7.1.13(@capacitor/core@7.4.4)
       '@guardian/core':
         specifier: workspace:*
-        version: link:../core
+        version: link:../../packages/core
       react:
         specifier: ^19.2.0
         version: 19.2.1
@@ -220,30 +218,14 @@ importers:
         specifier: ^7.2.4
         version: 7.2.6(@types/node@24.10.1)(jiti@1.21.7)(yaml@2.8.2)
 
-  packages/ui:
+  apps/web:
     dependencies:
       '@guardian/core':
         specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.7
-      framer-motion:
-        specifier: ^12.0.0
-        version: 12.23.26(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.1
-
-  packages/web:
-    dependencies:
-      '@guardian/core':
-        specifier: workspace:*
-        version: link:../core
+        version: link:../../packages/core
       '@guardian/ui':
         specifier: workspace:*
-        version: link:../ui
+        version: link:../../packages/ui
       '@radix-ui/react-avatar':
         specifier: ^1.1.1
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -350,6 +332,24 @@ importers:
       vite:
         specifier: ^7.2.4
         version: 7.2.6(@types/node@24.10.1)(jiti@1.21.7)(yaml@2.8.2)
+
+  packages/core: {}
+
+  packages/ui:
+    dependencies:
+      '@guardian/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.7
+      framer-motion:
+        specifier: ^12.0.0
+        version: 12.23.26(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.1
 
 packages:
 
@@ -1535,9 +1535,6 @@ packages:
 
   '@tauri-apps/api@2.11.1':
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
-
-  '@tauri-apps/api@2.9.1':
-    resolution: {integrity: sha512-IGlhP6EivjXHepbBic618GOmiWe4URJiIeZFlB7x3czM0yDHHYviH1Xvoiv4FefdkQtn6v7TuwWCRfOGdnVUGw==}
 
   '@tauri-apps/cli-darwin-arm64@2.9.5':
     resolution: {integrity: sha512-P5XDyCwq3VbWGAplyfP/bgmuUITVDcypxgZUyX45SM7HbU1Nrkk0cNK1HCOkuNBAVVbWen2GUNWah/AiupHHXg==}
@@ -2840,11 +2837,6 @@ packages:
     peerDependencies:
       react: ^18.3.1
 
-  react-dom@19.2.0:
-    resolution: {integrity: sha512-UlbRu4cAiGaIewkPyiRGJk0imDN2T3JjieT6spoL2UeSf5od4n5LB/mQ4ejmxhCFT1tYe8IvaFulzynWovsEFQ==}
-    peerDependencies:
-      react: ^19.2.0
-
   react-dom@19.2.1:
     resolution: {integrity: sha512-ibrK8llX2a4eOskq1mXKu/TGZj9qzomO+sNfO98M6d9zIPOEhlBkMkBUBLd1vgS0gQsLDBzA+8jJBVXDnfHmJg==}
     peerDependencies:
@@ -2929,10 +2921,6 @@ packages:
 
   react@18.3.1:
     resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
-    engines: {node: '>=0.10.0'}
-
-  react@19.2.0:
-    resolution: {integrity: sha512-tmbWg6W31tQLeB5cdIBOicJDJRR2KzXsV7uSK9iNfLWQ5bIZfxuPEHp7M8wiHyHnn0DD1i7w3Zmin0FtkrwoCQ==}
     engines: {node: '>=0.10.0'}
 
   react@19.2.1:
@@ -3101,6 +3089,7 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   thenify-all@1.6.0:
     resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
@@ -4397,17 +4386,15 @@ snapshots:
     dependencies:
       '@swc/counter': 0.1.3
 
-  '@tanstack/react-virtual@3.14.5(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+  '@tanstack/react-virtual@3.14.5(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
     dependencies:
       '@tanstack/virtual-core': 3.17.3
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
 
   '@tanstack/virtual-core@3.17.3': {}
 
   '@tauri-apps/api@2.11.1': {}
-
-  '@tauri-apps/api@2.9.1': {}
 
   '@tauri-apps/cli-darwin-arm64@2.9.5':
     optional: true
@@ -4458,23 +4445,23 @@ snapshots:
 
   '@tauri-apps/plugin-dialog@2.4.2':
     dependencies:
-      '@tauri-apps/api': 2.9.1
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-fs@2.4.4':
     dependencies:
-      '@tauri-apps/api': 2.9.1
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-opener@2.5.2':
     dependencies:
-      '@tauri-apps/api': 2.9.1
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-process@2.3.1':
     dependencies:
-      '@tauri-apps/api': 2.9.1
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-store@2.4.1':
     dependencies:
-      '@tauri-apps/api': 2.9.1
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-updater@2.9.0':
     dependencies:
@@ -5263,15 +5250,6 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  framer-motion@12.23.26(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
-    dependencies:
-      motion-dom: 12.23.23
-      motion-utils: 12.23.6
-      tslib: 2.8.1
-    optionalDependencies:
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
-
   framer-motion@12.23.26(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
       motion-dom: 12.23.23
@@ -5501,9 +5479,9 @@ snapshots:
     dependencies:
       react: 18.3.1
 
-  lucide-react@0.575.0(react@19.2.0):
+  lucide-react@0.575.0(react@19.2.1):
     dependencies:
-      react: 19.2.0
+      react: 19.2.1
 
   magic-string@0.30.21:
     dependencies:
@@ -5749,11 +5727,6 @@ snapshots:
       react: 18.3.1
       scheduler: 0.23.2
 
-  react-dom@19.2.0(react@19.2.0):
-    dependencies:
-      react: 19.2.0
-      scheduler: 0.27.0
-
   react-dom@19.2.1(react@19.2.1):
     dependencies:
       react: 19.2.1
@@ -5830,8 +5803,6 @@ snapshots:
   react@18.3.1:
     dependencies:
       loose-envify: 1.4.0
-
-  react@19.2.0: {}
 
   react@19.2.1: {}
 

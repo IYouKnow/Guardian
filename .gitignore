@@ -9,15 +9,15 @@ dist/
 .vite/
 
 # Tauri
-packages/desktop/src-tauri/target/
-packages/desktop/src-tauri/gen/
-packages/desktop/src-tauri/Cargo.lock
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/Cargo.lock
 
 # Capacitor
-packages/app/android/
-packages/app/ios/
-packages/app/capacitor.config.ts.bak
-packages/app/.capacitor/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/capacitor.config.ts.bak
+apps/mobile/.capacitor/
 
 # OS junk (Windows)
 Thumbs.db
@@ -33,9 +33,10 @@ Desktop.ini
 *.swo
 
 # Extension builds
-packages/extension/dist/
-packages/extension/.vite/
-packages/server/server.exe
+apps/extension/dist/
+apps/extension/.vite/
+apps/server/server.exe
+apps/server/server_local.exe
 .gradle/
 tools/esbuild.exe
-packages/server/guardian-server.exe
+apps/server/guardian-server.exe

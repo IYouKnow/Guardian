@@ -5,7 +5,7 @@ import { join } from 'path';
 const args = process.argv.slice(2);
 const forceNew = args.includes('-new') || args.includes('--new');
 
-const webDistPath = join(import.meta.dirname, 'packages/server/dist');
+const webDistPath = join(process.cwd(), 'apps/server/dist');
 
 if (!existsSync(webDistPath) || forceNew) {
   if (forceNew) {
@@ -19,4 +19,4 @@ if (!existsSync(webDistPath) || forceNew) {
 }
 
 console.log('Starting Go server...');
-execSync('cd packages/server && go run .', { stdio: 'inherit' });
+execSync('cd apps/server && go run .', { stdio: 'inherit' });
