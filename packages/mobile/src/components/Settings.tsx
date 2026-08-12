@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Theme, AccentColor } from "@guardian/shared/themes";
-import { getAccentColorClasses } from "@guardian/shared/themes";
+import type { Theme, AccentColor } from "@guardian/core/themes";
+import { getAccentColorClasses } from "@guardian/core/themes";
 import { getThemeClasses } from "../utils/theme";
 import { clearDebugLogs, formatDebugLogs, getDebugLogs, isDebugConsoleEnabled, setDebugConsoleEnabled } from "../utils/debugLog";
 

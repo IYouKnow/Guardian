@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import type { PasswordEntry } from "../types";
-import { generatePassword } from "../../../shared/crypto/generator";
+import { generatePassword } from "@guardian/core/crypto/generator";
 
 interface EditPasswordModalProps {
     isOpen: boolean;

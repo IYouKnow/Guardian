@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Theme, AccentColor, Folder } from "../types";
-import { getThemeClasses, AppearanceSettings, SettingsLayout, SecuritySettings, normalizeIcon } from "@guardian/shared";
+import { getThemeClasses, normalizeIcon } from "@guardian/core";
+import { AppearanceSettings, SettingsLayout, SecuritySettings } from "@guardian/ui";
 import { getAccentColorClasses } from "../utils/accentColors";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadKeybinds, formatKeybind, Keybinding } from "../utils/keybinds";

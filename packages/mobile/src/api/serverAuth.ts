@@ -1,6 +1,6 @@
-import type { VaultEntry, VaultData, VaultSettings } from "@guardian/shared/crypto/vault";
-import { deriveKey } from "@guardian/shared/crypto/argon2";
-import { decrypt } from "@guardian/shared/crypto/chacha20";
+import type { VaultEntry, VaultData, VaultSettings } from "@guardian/core/crypto/vault";
+import { deriveKey } from "@guardian/core/crypto/argon2";
+import { decrypt } from "@guardian/core/crypto/chacha20";
 import { httpRequest } from "./http";
 import { sha256 } from "./sha256";
 

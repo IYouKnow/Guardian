@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Theme, AccentColor } from "../types";
 import { getThemeClasses, getAccentColorClasses } from "../utils/accentColors";
-import { normalizeIcon } from "@guardian/shared";
+import { normalizeIcon } from "@guardian/core";
 
 interface FolderModalProps {
   parentId: string | null;

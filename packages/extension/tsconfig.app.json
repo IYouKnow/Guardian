@@ -16,6 +16,14 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Path aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@guardian/core": ["../core/index.ts"],
+      "@guardian/core/*": ["../core/*"],
+      "@guardian/ui": ["../ui/index.ts"]
+    },
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

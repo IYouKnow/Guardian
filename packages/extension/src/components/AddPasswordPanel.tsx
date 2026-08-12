@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { PasswordEntry, Theme, AccentColor } from "../types";
-import { generatePassword } from "../../../shared/crypto/generator";
+import { generatePassword } from "@guardian/core/crypto/generator";
 import { getThemeClasses } from "../utils/theme";
 import { getAccentColorClasses } from "../utils/accentColors";
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { Theme, AccentColor } from "@guardian/shared/themes";
-import { getAccentColorClasses } from "@guardian/shared/themes";
+import type { Theme, AccentColor } from "@guardian/core/themes";
+import { getAccentColorClasses } from "@guardian/core/themes";
 import { getThemeClasses } from "../utils/theme";
 
 type LoginMode = "local" | "server";

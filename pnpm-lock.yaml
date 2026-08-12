@@ -8,11 +8,16 @@ importers:
 
   .: {}
 
+  packages/core: {}
+
   packages/desktop:
     dependencies:
-      '@guardian/shared':
+      '@guardian/core':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../core
+      '@guardian/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@tanstack/react-virtual':
         specifier: ^3.14.5
         version: 3.14.5(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -86,6 +91,12 @@ importers:
 
   packages/extension:
     dependencies:
+      '@guardian/core':
+        specifier: workspace:*
+        version: link:../core
+      '@guardian/ui':
+        specifier: workspace:*
+        version: link:../ui
       framer-motion:
         specifier: ^12.23.26
         version: 12.23.26(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -147,9 +158,9 @@ importers:
       '@capgo/capacitor-native-biometric':
         specifier: 7.1.13
         version: 7.1.13(@capacitor/core@7.4.4)
-      '@guardian/shared':
+      '@guardian/core':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../core
       react:
         specifier: ^19.2.0
         version: 19.2.1
@@ -209,7 +220,11 @@ importers:
         specifier: ^7.2.4
         version: 7.2.6(@types/node@24.10.1)(jiti@1.21.7)(yaml@2.8.2)
 
-  packages/shared:
+  packages/ui:
+    dependencies:
+      '@guardian/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
@@ -223,9 +238,12 @@ importers:
 
   packages/web:
     dependencies:
-      '@guardian/shared':
+      '@guardian/core':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../core
+      '@guardian/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@radix-ui/react-avatar':
         specifier: ^1.1.1
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)

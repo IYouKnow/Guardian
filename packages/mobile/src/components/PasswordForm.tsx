@@ -2,8 +2,8 @@ import { useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "rea
 import type { PasswordEntry } from "../types";
 import type { MobileTheme } from "../utils/theme";
 import { getThemeClasses } from "../utils/theme";
-import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
-import { normalizeIcon } from "@guardian/shared";
+import { getAccentColorClasses, type AccentColor } from "@guardian/core/themes";
+import { normalizeIcon } from "@guardian/core";
 
 type Draft = Pick<PasswordEntry, "title" | "website" | "username" | "password" | "notes" | "favicon">;
 

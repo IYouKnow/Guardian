@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { VaultEntry, VaultData, VaultSettings, FolderNode, loadVault, createVault } from "../../../shared/crypto/vault";
-import { deriveKey } from "../../../shared/crypto/argon2";
-import { encrypt, decrypt, generateNonce } from "../../../shared/crypto/chacha20";
+import { VaultEntry, VaultData, VaultSettings, FolderNode, loadVault, createVault } from "@guardian/core/crypto/vault";
+import { deriveKey } from "@guardian/core/crypto/argon2";
+import { encrypt, decrypt, generateNonce } from "@guardian/core/crypto/chacha20";
 
 interface UseVaultReturn {
   // Common

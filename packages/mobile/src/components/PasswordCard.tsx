@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { PasswordEntry } from "../types";
-import { getAccentColorClasses } from "@guardian/shared/themes";
+import { getAccentColorClasses } from "@guardian/core/themes";
 import { getThemeClasses, type MobileTheme } from "../utils/theme";
-import type { AccentColor } from "@guardian/shared/themes";
+import type { AccentColor } from "@guardian/core/themes";
 
 interface PasswordCardProps {
   password: PasswordEntry;

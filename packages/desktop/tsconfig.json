@@ -18,8 +18,14 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@guardian/shared": [
-        "../shared/index.ts"
+      "@guardian/core": [
+        "../core/index.ts"
+      ],
+      "@guardian/core/*": [
+        "../core/*"
+      ],
+      "@guardian/ui": [
+        "../ui/index.ts"
       ]
     },
     /* Linting */

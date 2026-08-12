@@ -1,5 +1,5 @@
 import type { Theme } from "../types";
-import { getThemeClasses as getSharedThemeClasses } from "../../../shared/themes";
+import { getThemeClasses as getSharedThemeClasses } from "@guardian/core/themes";
 
 export function getThemeClasses(theme: Theme) {
     const shared = getSharedThemeClasses(theme);

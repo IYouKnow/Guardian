@@ -1,12 +1,12 @@
 import { useState, useCallback } from "react";
-import type { VaultEntry, VaultData } from "../../../shared/crypto/vault";
+import type { VaultEntry, VaultData } from "@guardian/core/crypto/vault";
 export interface ExtensionVaultData extends VaultData {
     authToken?: string;
     serverUrl?: string;
     serverKey?: number[];
 }
-import { deriveKey } from "../../../shared/crypto/argon2";
-import { decrypt } from "../../../shared/crypto/chacha20";
+import { deriveKey } from "@guardian/core/crypto/argon2";
+import { decrypt } from "@guardian/core/crypto/chacha20";
 
 interface UseExtensionVaultReturn {
     isLoading: boolean;

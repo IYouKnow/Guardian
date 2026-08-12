@@ -9,8 +9,8 @@
  * service worker.
  */
 
-import type { VaultEntry } from "../../../shared/crypto/vault";
-import { encrypt, generateNonce } from "../../../shared/crypto/chacha20";
+import type { VaultEntry } from "@guardian/core/crypto/vault";
+import { encrypt, generateNonce } from "@guardian/core/crypto/chacha20";
 
 interface ServerItem {
   id: string;

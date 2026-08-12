@@ -1,6 +1,6 @@
 import { PasswordEntry, CustomField, Folder } from "../types";
 import { Kdbx, Credentials, ProtectedValue } from "kdbxweb";
-import { normalizeIcon } from "@guardian/shared";
+import { normalizeIcon } from "@guardian/core";
 
 interface ImportResult {
   entries: PasswordEntry[];

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, startTransition } from "react";
 import { PasswordEntry, Folder } from "../types";
-import { VaultEntry, FolderNode } from "../../../shared/crypto";
+import { VaultEntry, FolderNode } from "@guardian/core/crypto";
 
 interface UsePasswordsProps {
   onSave: (entries: VaultEntry[]) => Promise<void>;

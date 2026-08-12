@@ -1,6 +1,6 @@
 import { useState, FormEvent, useEffect, useRef, type ChangeEvent } from "react";
 import { PasswordEntry, Folder, CustomField } from "../types";
-import { normalizeIcon } from "@guardian/shared";
+import { normalizeIcon } from "@guardian/core";
 
 interface AddPasswordModalProps {
   isOpen: boolean;

@@ -3,9 +3,9 @@
  * Handles password matching and autofill coordination
  */
 
-import { openVaultWithKey, createVaultWithKey, type VaultEntry } from "../../shared/crypto/vault";
+import { openVaultWithKey, createVaultWithKey, type VaultEntry } from "@guardian/core/crypto/vault";
 import { pushEntriesToServer } from "./utils/serverSync";
-import { normalizeIcon } from "../../shared/icons";
+import { normalizeIcon } from "@guardian/core/icons";
 
 
 

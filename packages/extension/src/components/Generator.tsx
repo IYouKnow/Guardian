@@ -3,7 +3,7 @@ import { Copy, RefreshCcw, Check, Key } from "lucide-react";
 import type { Theme, AccentColor } from "../types";
 import { getThemeClasses } from "../utils/theme";
 import { getAccentColorClasses } from "../utils/accentColors";
-import { generatePassword, evaluatePasswordStrength, type GeneratorOptions } from "../../../shared/crypto/generator";
+import { generatePassword, evaluatePasswordStrength, type GeneratorOptions } from "@guardian/core/crypto/generator";
 import { motion } from "framer-motion";
 
 interface GeneratorProps {

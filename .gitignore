@@ -38,3 +38,4 @@ packages/extension/.vite/
 packages/server/server.exe
 .gradle/
 tools/esbuild.exe
+packages/server/guardian-server.exe

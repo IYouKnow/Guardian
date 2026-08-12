@@ -3,7 +3,7 @@ import { Theme, AccentColor, Folder } from "../types";
 import { getAccentColorClasses, getThemeClasses } from "../utils/accentColors";
 import { useKeybind } from "../hooks/useKeybind";
 import { motion } from "framer-motion";
-import { normalizeIcon } from "@guardian/shared";
+import { normalizeIcon } from "@guardian/core";
 
 interface SidebarProps {
   folders: Folder[];

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { SettingsLayout } from "../../../shared/ui/SettingsLayout";
-import { AppearanceSettings } from "../../../shared/ui/AppearanceSettings";
-import { SecuritySettings } from "../../../shared/ui/SecuritySettings";
+import { SettingsLayout } from "@guardian/ui";
+import { AppearanceSettings } from "@guardian/ui";
+import { SecuritySettings } from "@guardian/ui";
 import { getThemeClasses } from "../utils/theme";
 import { getAccentColorClasses } from "../utils/accentColors";
 import type { Theme, AccentColor } from "../types";

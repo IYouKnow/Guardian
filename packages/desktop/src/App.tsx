@@ -4,7 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import "./App.css";
 import { Folder } from "./types";
-import type { VaultEntry, FolderNode } from "../../shared/crypto";
+import type { VaultEntry, FolderNode } from "@guardian/core/crypto";
 
 import { getAccentColorClasses, getThemeClasses } from "./utils/accentColors";
 import Login from "./components/Login";
@@ -29,12 +29,12 @@ import { useVault } from "./hooks/useVault";
 import { usePasswords } from "./hooks/usePasswords";
 import { useToast } from "./hooks/useToast";
 import { useSSE } from "./hooks/useSSE";
-import { SyncIndicator } from "@guardian/shared";
+import { SyncIndicator } from "@guardian/ui";
 import { parseKeePassCsv, parseKeePassKdbx } from "./utils/keepass";
 import { motion, AnimatePresence } from "framer-motion";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import type { Theme, AccentColor, ThemeSyncMode } from "@guardian/shared";
+import type { Theme, AccentColor, ThemeSyncMode } from "@guardian/core";
 import type { PasswordEntry } from "./types";
 
 function App() {

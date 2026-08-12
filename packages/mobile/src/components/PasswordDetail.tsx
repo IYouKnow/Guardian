@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { PasswordEntry } from "../types";
 import type { MobileTheme } from "../utils/theme";
 import { getThemeClasses } from "../utils/theme";
-import { getAccentColorClasses, type AccentColor } from "@guardian/shared/themes";
+import { getAccentColorClasses, type AccentColor } from "@guardian/core/themes";
 
 type Props = {
   password: PasswordEntry;

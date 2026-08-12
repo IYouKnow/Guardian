@@ -13,9 +13,9 @@ import AddPasswordPanel from "./components/AddPasswordPanel";
 import EditPasswordModal from "./components/EditPasswordModal";
 import { SyncIndicator } from "./components/SyncIndicator";
 import { useSSE } from "./hooks/useSSE";
-import { openVault, type VaultEntry } from "../../shared/crypto/vault";
-import { deriveHKDF } from "../../shared/crypto/hkdf";
-import { deriveKey } from "../../shared/crypto/argon2";
+import { openVault, type VaultEntry } from "@guardian/core/crypto/vault";
+import { deriveHKDF } from "@guardian/core/crypto/hkdf";
+import { deriveKey } from "@guardian/core/crypto/argon2";
 import { loadSettings, saveSettings, clearSession, saveVault, deleteVault, loadVaultFromStorage, getExtensionMasterSalt } from "./utils/storage";
 import {
   getFileMetadata,

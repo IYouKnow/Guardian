@@ -1,1 +1,1 @@
-export type { Theme, AccentColor } from "@guardian/shared";
+export type { Theme, AccentColor } from "@guardian/core";

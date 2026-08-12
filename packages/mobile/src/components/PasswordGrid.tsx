@@ -1,7 +1,7 @@
 import type { PasswordEntry } from "../types";
 import PasswordCard from "./PasswordCard";
 import type { MobileTheme } from "../utils/theme";
-import type { AccentColor } from "@guardian/shared/themes";
+import type { AccentColor } from "@guardian/core/themes";
 
 interface PasswordGridProps {
   passwords: PasswordEntry[];

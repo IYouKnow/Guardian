@@ -3,8 +3,8 @@
  * Uses chrome.storage.local to store encrypted vault data
  */
 
-import { createVaultWithKey, openVaultWithKey } from "../../../shared/crypto/vault";
-import type { VaultEntry } from "../../../shared/crypto/vault";
+import { createVaultWithKey, openVaultWithKey } from "@guardian/core/crypto/vault";
+import type { VaultEntry } from "@guardian/core/crypto/vault";
 
 const VAULT_STORAGE_KEY = "guardian_vault";
 const SETTINGS_STORAGE_KEY = "guardian_settings";

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { load, Store } from "@tauri-apps/plugin-store";
 import { Theme, AccentColor } from "../types";
-import type { ThemeSyncMode } from "@guardian/shared";
+import type { ThemeSyncMode } from "@guardian/core";
 
 export interface KeybindingOverride {
   key: string;

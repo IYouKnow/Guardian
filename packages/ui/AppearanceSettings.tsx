@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import type { Theme, AccentColor, ThemeSyncMode } from "../themes/index";
-import { getAccentColorClasses, getThemeClasses } from "../themes/index";
+import type { Theme, AccentColor, ThemeSyncMode } from "@guardian/core/themes";
+import { getAccentColorClasses, getThemeClasses } from "@guardian/core/themes";
 
 interface AppearanceSettingsProps {
     theme: Theme;

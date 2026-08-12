@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 import { useTheme } from "../context/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { AppearanceSettings, SettingsLayout } from "@guardian/shared";
+import { AppearanceSettings, SettingsLayout } from "@guardian/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

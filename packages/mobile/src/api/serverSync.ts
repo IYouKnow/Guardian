@@ -1,5 +1,5 @@
-import type { VaultEntry } from "@guardian/shared/crypto/vault";
-import { encrypt, generateNonce } from "@guardian/shared/crypto/chacha20";
+import type { VaultEntry } from "@guardian/core/crypto/vault";
+import { encrypt, generateNonce } from "@guardian/core/crypto/chacha20";
 import { httpRequest } from "./http";
 
 interface ServerItem {

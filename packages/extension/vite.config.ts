@@ -18,6 +18,17 @@ export default defineConfig({
       }
     })
   ],
+  resolve: {
+    alias: {
+      '@guardian/core': resolve(__dirname, '../core'),
+      '@guardian/ui': resolve(__dirname, '../ui'),
+    },
+  },
+  server: {
+    fs: {
+      allow: [resolve(__dirname, '..')],
+    },
+  },
   build: { 
     outDir: 'dist',
     rollupOptions: {

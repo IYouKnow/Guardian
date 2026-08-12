@@ -1,6 +1,6 @@
 
-import type { Theme, AccentColor } from "../themes/index";
-import { getAccentColorClasses, getThemeClasses } from "../themes/index";
+import type { Theme, AccentColor } from "@guardian/core/themes";
+import { getAccentColorClasses, getThemeClasses } from "@guardian/core/themes";
 
 export interface SettingsNavItem {
     id: string;

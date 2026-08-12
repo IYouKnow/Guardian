@@ -19,8 +19,8 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@guardian/shared": ["../shared/index.ts"],
-      "@guardian/shared/*": ["../shared/*"]
+      "@guardian/core": ["../core/index.ts"],
+      "@guardian/core/*": ["../core/*"]
     },
 
     /* Linting */

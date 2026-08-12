@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { useTheme } from './context/ThemeContext';
 import { useSSE } from './hooks/useSSE';
-import { SyncIndicator } from "@guardian/shared";
+import { SyncIndicator } from "@guardian/ui";
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { CommandPalette, useCommandPalette } from './components/CommandPalette';
 

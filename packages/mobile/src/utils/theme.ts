@@ -1,5 +1,5 @@
-import type { Theme } from "@guardian/shared/themes";
-import { getThemeClasses as getSharedThemeClasses, resolveTheme } from "@guardian/shared/themes";
+import type { Theme } from "@guardian/core/themes";
+import { getThemeClasses as getSharedThemeClasses, resolveTheme } from "@guardian/core/themes";
 
 export type MobileTheme = Theme;
 
