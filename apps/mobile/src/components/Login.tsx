@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { Theme, AccentColor } from "@guardian/core/themes";
-import { getAccentColorClasses } from "@guardian/core/themes";
+import { getAccentColorClasses, getAccentColorHex } from "@guardian/core/themes";
 import { getThemeClasses } from "../utils/theme";
+import guardianLogo from "../assets/guardian-logo.png";
 
 type LoginMode = "local" | "server";
 
@@ -67,9 +68,14 @@ export default function Login({
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [preferManualLogin, setPreferManualLogin] = useState(false);
   const autoBiometricSigRef = useRef<string>("");
+  const [introSettled, setIntroSettled] = useState(false);
+  const [cardsShown, setCardsShown] = useState(false);
+  const [showLogo, setShowLogo] = useState(false);
+  const [showName, setShowName] = useState(false);
 
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
+  const accentHex = getAccentColorHex(accentColor, theme);
 
   const canBiometricUnlockLocal = !!onBiometricUnlockLocal && !!biometric?.available && !!biometric?.localEnabled && !!biometric?.localReady;
   const canBiometricUnlockServer = !!onBiometricUnlockServer && !!biometric?.available && !!biometric?.serverEnabled && !!biometric?.serverReady;
@@ -99,6 +105,24 @@ export default function Login({
     setScreen(initialScreen);
     setPreferManualLogin(false);
   }, [initialScreen]);
+
+  useEffect(() => {
+    if (screen !== "choose") return;
+    setShowLogo(false);
+    setShowName(false);
+    setIntroSettled(false);
+    setCardsShown(false);
+    const a = window.setTimeout(() => setShowLogo(true), 100);
+    const b = window.setTimeout(() => setShowName(true), 900);
+    const c = window.setTimeout(() => setIntroSettled(true), 1700);
+    const d = window.setTimeout(() => setCardsShown(true), 2400);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
+      window.clearTimeout(c);
+      window.clearTimeout(d);
+    };
+  }, [screen]);
 
   useEffect(() => {
     if (!autofillMode) return;
@@ -290,12 +314,7 @@ export default function Login({
               </p>
             </div>
           </div>
-        ) : (
-          <>
-            <h1 className="text-3xl font-semibold tracking-tight">Guardian</h1>
-            <p className={`text-sm ${themeClasses.textSecondary} mt-1`}>How do you want to unlock?</p>
-          </>
-        )}
+        ) : null}
       </header>
 
       {!!autofillPrompt && (
@@ -312,54 +331,36 @@ export default function Login({
       )}
 
       {screen === "choose" ? (
-        <div className="space-y-3">
-          {canBiometricUnlockLocal && (
-            <button
-              type="button"
-              onClick={() => handleBiometricUnlock("local")}
-              disabled={isBiometricLoading}
-              className={`w-full text-left rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4 active:opacity-90 disabled:opacity-50`}
+        <div className="flex flex-col">
+          <div
+            className={`flex flex-col items-center transition-[padding] duration-700 ease-out ${introSettled ? "pt-4" : "pt-[calc(50vh-9rem)]"}`}
+          >
+            <div
+              aria-label="Guardian"
+              role="img"
+              className={`rounded-2xl shadow-lg transition-all duration-700 ease-out ${introSettled ? "h-16 w-16" : "h-40 w-40"} ${showLogo ? "scale-100 opacity-100" : "scale-75 opacity-0"}`}
+              style={{
+                backgroundColor: accentHex,
+                WebkitMaskImage: `url(${guardianLogo})`,
+                WebkitMaskSize: "contain",
+                WebkitMaskRepeat: "no-repeat",
+                WebkitMaskPosition: "center",
+                maskImage: `url(${guardianLogo})`,
+                maskSize: "contain",
+                maskRepeat: "no-repeat",
+                maskPosition: "center",
+              }}
+            />
+            <h1
+              className={`mt-4 text-3xl font-semibold tracking-tight transition-all duration-500 ease-out ${accentClasses.textClass} ${showName ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}
             >
-              <div className="flex items-start gap-3">
-                <div className={`h-10 w-10 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center`}>
-                  <svg className={`w-5 h-5 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11a3 3 0 100-6 3 3 0 000 6z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 20a7 7 0 0114 0" />
-                  </svg>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-base font-medium">{isBiometricLoading ? "Unlocking..." : `Unlock local vault with ${biometric?.label ?? "biometrics"}`}</p>
-                  <p className={`text-sm ${themeClasses.textSecondary} mt-0.5`}>Use saved local vault credentials</p>
-                </div>
-              </div>
-            </button>
-          )}
+              Guardian
+            </h1>
+          </div>
 
-          {canBiometricUnlockServer && (
-            <button
-              type="button"
-              onClick={() => handleBiometricUnlock("server")}
-              disabled={isBiometricLoading}
-              className={`w-full text-left rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4 active:opacity-90 disabled:opacity-50`}
-            >
-              <div className="flex items-start gap-3">
-                <div className={`h-10 w-10 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center`}>
-                  <svg className={`w-5 h-5 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 15h16.8" />
-                  </svg>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-base font-medium">{isBiometricLoading ? "Signing in..." : `Sign in with ${biometric?.label ?? "biometrics"}`}</p>
-                  <p className={`text-sm ${themeClasses.textSecondary} mt-0.5`}>
-                    {biometric?.serverHint ? `Server: ${biometric.serverHint}` : "Use saved server credentials"}
-                  </p>
-                </div>
-              </div>
-            </button>
-          )}
-
+          <div
+            className={`mt-10 space-y-3 transition-all duration-500 ease-out ${cardsShown ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
+          >
           <button
             type="button"
             onClick={() => {
@@ -369,9 +370,9 @@ export default function Login({
             }}
             className={`w-full text-left rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4 active:opacity-90`}
           >
-            <div className="flex items-start gap-3">
-              <div className={`h-10 w-10 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center`}>
-                <svg className={`w-5 h-5 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-3">
+              <div className={`h-11 w-11 shrink-0 rounded-xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center`}>
+                <svg className={`h-6 w-6 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -380,10 +381,13 @@ export default function Login({
                   />
                 </svg>
               </div>
-              <div className="min-w-0">
-                <p className="text-base font-medium">Local vault</p>
-                <p className={`text-sm ${themeClasses.textSecondary} mt-0.5`}>Use a `.guardian` file stored on this device</p>
+              <div className="min-w-0 flex-1">
+                <p className={`text-base font-semibold ${themeClasses.text}`}>Local vault</p>
+                <p className={`text-sm ${themeClasses.textSecondary} mt-0.5`}>Open a `.guardian` file stored on this device</p>
               </div>
+              <svg className={`h-5 w-5 shrink-0 ${themeClasses.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </div>
           </button>
 
@@ -396,23 +400,21 @@ export default function Login({
             }}
             className={`w-full text-left rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4 active:opacity-90`}
           >
-            <div className="flex items-start gap-3">
-              <div className={`h-10 w-10 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center`}>
-                <svg className={`w-5 h-5 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
+            <div className="flex items-center gap-3">
+              <div className={`h-11 w-11 shrink-0 rounded-xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center`}>
+                <svg className={`h-6 w-6 ${accentClasses.textClass}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 15h16.8" />
                 </svg>
               </div>
-              <div className="min-w-0">
-                <p className="text-base font-medium">Server</p>
+              <div className="min-w-0 flex-1">
+                <p className={`text-base font-semibold ${themeClasses.text}`}>Server</p>
                 <p className={`text-sm ${themeClasses.textSecondary} mt-0.5`}>Sign in and sync encrypted items from your server</p>
               </div>
+              <svg className={`h-5 w-5 shrink-0 ${themeClasses.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </div>
           </button>
 
@@ -421,6 +423,7 @@ export default function Login({
               {loginError}
             </div>
           )}
+          </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
