@@ -18,7 +18,6 @@
     "@capacitor/app": "^7.1.0",
     "@capacitor/core": "^7.4.4",
     "@capacitor/filesystem": "^7.0.1",
-    "@capacitor/ios": "^7.4.4",
     "@capgo/capacitor-native-biometric": "7.1.13",
     "@guardian/core": "workspace:*",
     "react": "^19.2.0",

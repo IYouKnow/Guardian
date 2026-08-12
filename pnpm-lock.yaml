@@ -150,9 +150,6 @@ importers:
       '@capacitor/filesystem':
         specifier: ^7.0.1
         version: 7.1.5(@capacitor/core@7.4.4)
-      '@capacitor/ios':
-        specifier: ^7.4.4
-        version: 7.4.4(@capacitor/core@7.4.4)
       '@capgo/capacitor-native-biometric':
         specifier: 7.1.13
         version: 7.1.13(@capacitor/core@7.4.4)
@@ -466,11 +463,6 @@ packages:
     resolution: {integrity: sha512-ZzJxpEh6SwKhF1cqSVmIAkEyNG3ozf3Lwg8rUNltX6CGdd94UJV45asqmFoP6X6aT5eVu7FPjPU5SHxi6XOFgA==}
     peerDependencies:
       '@capacitor/core': '>=7.0.0'
-
-  '@capacitor/ios@7.4.4':
-    resolution: {integrity: sha512-Xp3bGWlSQAwsZGngRMWTdoD2agdMV12Whnm+/xsYPxfQSj+Tksbr7r/8Mso7VWkpnTKO4iMlx762g3PjW+wi4w==}
-    peerDependencies:
-      '@capacitor/core': ^7.4.0
 
   '@capacitor/synapse@1.0.4':
     resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
@@ -3492,10 +3484,6 @@ snapshots:
     dependencies:
       '@capacitor/core': 7.4.4
       '@capacitor/synapse': 1.0.4
-
-  '@capacitor/ios@7.4.4(@capacitor/core@7.4.4)':
-    dependencies:
-      '@capacitor/core': 7.4.4
 
   '@capacitor/synapse@1.0.4': {}
 
