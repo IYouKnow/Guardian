@@ -12,6 +12,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as CapacitorApp } from "@capacitor/app";
 import { NativeBiometric, BiometryType } from "@capgo/capacitor-native-biometric";
 import { clearServerSession, getStoredServerUrl, getStoredServerUsername } from "./api/serverAuth";
+import { saveServer } from "./api/savedServers";
 import { fetchPreferencesFromServer, fetchVaultFromServer, fetchVaultItemIdsFromServer, loginToServerAndFetchVault, savePreferencesToServer, type ServerSession } from "./api/serverAuth";
 import { deleteEntryFromServer, deleteEntryViaUpsertToServer, pushEntriesToServer } from "./api/serverSync";
 import type { VaultData, VaultSettings } from "@guardian/core/crypto/vault";
@@ -947,6 +948,7 @@ function App() {
     setMasterPassword("");
 
     const { vault, session } = await loginToServerAndFetchVault(url, username, password);
+    saveServer({ url: session.serverUrl, username });
     setServerSession(session);
     loadPasswordsFromVaultData(vault);
     setIsLoggedIn(true);

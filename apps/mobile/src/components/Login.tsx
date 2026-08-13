@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import type { Theme, AccentColor } from "@guardian/core/themes";
 import { getAccentColorClasses, getAccentColorHex } from "@guardian/core/themes";
 import { getThemeClasses } from "../utils/theme";
 import guardianLogo from "../assets/guardian-logo.png";
+import { getSavedServers, removeServer, displayNameFor, cleanUrl, type SavedServer } from "../api/savedServers";
+import { getStoredServerUrl } from "../api/serverAuth";
 
 type LoginMode = "local" | "server";
 
@@ -17,6 +20,49 @@ type ServerCredentials = {
   username: string;
   password: string;
 };
+
+function formatLastLogin(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff) || diff < 0) return "recently";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function FingerprintIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
+      <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
+      <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" />
+      <path d="M2 12a10 10 0 0 1 18-6" />
+      <path d="M2 16h.01" />
+      <path d="M21.8 16c.2-2 .131-5.354 0-6" />
+      <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2" />
+      <path d="M8.65 22c.21-.66.45-1.32.57-2" />
+      <path d="M9 6.8a6 6 0 0 1 9 5.2v2" />
+    </svg>
+  );
+}
+
+function FaceIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" x2="9.01" y1="9" y2="9" />
+      <line x1="15" x2="15.01" y1="9" y2="9" />
+    </svg>
+  );
+}
 
 interface LoginProps {
   onLogin: (mode: LoginMode, credentials: LocalCredentials | ServerCredentials) => Promise<void>;
@@ -61,6 +107,10 @@ export default function Login({
   const [serverUsername, setServerUsername] = useState(
     localStorage.getItem("guardian_server_username") || "",
   );
+  const [serverView, setServerView] = useState<"list" | "biometric" | "form">("list");
+  const [savedServers, setSavedServers] = useState<SavedServer[]>(() => getSavedServers());
+  const [localView, setLocalView] = useState<"biometric" | "form">("form");
+  const [biometricServer, setBiometricServer] = useState<SavedServer | null>(null);
 
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
@@ -79,6 +129,12 @@ export default function Login({
 
   const canBiometricUnlockLocal = !!onBiometricUnlockLocal && !!biometric?.available && !!biometric?.localEnabled && !!biometric?.localReady;
   const canBiometricUnlockServer = !!onBiometricUnlockServer && !!biometric?.available && !!biometric?.serverEnabled && !!biometric?.serverReady;
+  const serverBiometricAvailableFor = (url: string) =>
+    !!onBiometricUnlockServer &&
+    !!biometric?.available &&
+    !!biometric?.serverEnabled &&
+    !!biometric?.serverReady &&
+    cleanUrl(url) === cleanUrl(getStoredServerUrl());
   const preferredBiometricKind: LoginMode | null = useMemo(() => {
     if (screen === "server" && canBiometricUnlockServer) return "server";
     if (screen === "local" && canBiometricUnlockLocal) return "local";
@@ -106,8 +162,34 @@ export default function Login({
     setPreferManualLogin(false);
   }, [initialScreen]);
 
+  const introPlayedRef = useRef(false);
+
+  useEffect(() => {
+    if (screen === "choose") return;
+    const backButtonListener = CapacitorApp.addListener("backButton", () => {
+      if (screen === "server" && serverView !== "list") {
+        setServerView("list");
+        setLoginError("");
+      } else {
+        setScreen("choose");
+        setLoginError("");
+      }
+    });
+    return () => {
+      backButtonListener.then((listener) => listener.remove());
+    };
+  }, [screen, serverView]);
+
   useEffect(() => {
     if (screen !== "choose") return;
+    if (introPlayedRef.current) {
+      setShowLogo(true);
+      setShowName(true);
+      setIntroSettled(true);
+      setCardsShown(true);
+      return;
+    }
+    introPlayedRef.current = true;
     setShowLogo(false);
     setShowName(false);
     setIntroSettled(false);
@@ -136,6 +218,29 @@ export default function Login({
     handleBiometricUnlock(preferredBiometricKind).catch(() => undefined);
   }, [autofillMode, autofillPrompt, initialScreen, isBiometricLoading, isLoading, preferredBiometricKind]);
 
+  const autoBiometricPromptRef = useRef<string>("");
+
+  useEffect(() => {
+    let kind: "local" | "server" | null = null;
+    if (screen === "local" && localView === "biometric" && canBiometricUnlockLocal) {
+      kind = "local";
+    } else if (
+      screen === "server" &&
+      serverView === "biometric" &&
+      biometricServer &&
+      serverBiometricAvailableFor(biometricServer.url)
+    ) {
+      kind = "server";
+    }
+    if (!kind) return;
+    if (isBiometricLoading) return;
+    const sig = `${kind}|${screen === "server" ? biometricServer?.url ?? "" : ""}`;
+    if (autoBiometricPromptRef.current === sig) return;
+    autoBiometricPromptRef.current = sig;
+    handleBiometricUnlock(kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, localView, serverView, biometricServer, canBiometricUnlockLocal, isBiometricLoading]);
+
   const friendlyError = (raw: string) => {
     const msg = (raw || "").trim();
     if (!msg) return "Login failed.";
@@ -156,6 +261,40 @@ export default function Login({
     }
 
     return "Failed to reach server. Check the address/port and that your device is on the same network.";
+  };
+
+  const handlePickServer = (s: SavedServer) => {
+    setBiometricServer(s);
+    setServerUrl(s.url);
+    setServerUsername(s.username);
+    setPassword("");
+    setLoginError("");
+    setServerView(serverBiometricAvailableFor(s.url) ? "biometric" : "form");
+  };
+
+  const handleRemoveServer = (url: string) => {
+    removeServer(url);
+    setSavedServers(getSavedServers());
+    setLoginError("");
+  };
+
+  const handleAddNewServer = () => {
+    setBiometricServer(null);
+    setServerUrl("");
+    setServerUsername("");
+    setPassword("");
+    setLoginError("");
+    setServerView("form");
+  };
+
+  const handleUseBiometricsInstead = () => {
+    setLoginError("");
+    if (screen === "server") {
+      setBiometricServer({ url: serverUrl, username: serverUsername, lastLoginAt: "" });
+      setServerView("biometric");
+    } else {
+      setLocalView("biometric");
+    }
   };
 
   const canSubmit = useMemo(() => {
@@ -263,6 +402,72 @@ export default function Login({
     }
   };
 
+  const renderBiometricView = (kind: "local" | "server") => {
+    const isServer = kind === "server";
+    const label = biometric?.label ?? "biometrics";
+    const iconKind =
+      label.toLowerCase().includes("face") || label.toLowerCase().includes("iris") ? "face" : "fingerprint";
+    const subtitle = isServer
+      ? `Signing in to ${biometricServer ? displayNameFor(biometricServer.url) : ""}${
+          biometricServer?.username ? ` as ${biometricServer.username}` : ""
+        }`
+      : "Open your local vault";
+
+    return (
+      <div className="space-y-4">
+        <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl px-4 py-8 flex flex-col items-center text-center`}>
+          <div className={`h-20 w-20 rounded-2xl ${accentClasses.lightClass} border ${accentClasses.borderClass} flex items-center justify-center ${isBiometricLoading ? "animate-pulse" : ""}`}>
+            {iconKind === "face" ? (
+              <FaceIcon className={`h-10 w-10 ${accentClasses.textClass}`} />
+            ) : (
+              <FingerprintIcon className={`h-10 w-10 ${accentClasses.textClass}`} />
+            )}
+          </div>
+          <p className={`mt-4 text-lg font-semibold ${themeClasses.text}`}>
+            {isBiometricLoading
+              ? isServer
+                ? "Signing in..."
+                : "Unlocking..."
+              : `Unlock with ${label}`}
+          </p>
+          <p className={`text-sm ${themeClasses.textSecondary} mt-1`}>{subtitle}</p>
+          {loginError && (
+            <p className="mt-3 text-xs text-red-400 max-w-full break-words">{loginError}</p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          disabled={isBiometricLoading}
+          onClick={() => handleBiometricUnlock(kind)}
+          className={`w-full rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed active:opacity-90`}
+        >
+          {iconKind === "face" ? (
+            <FaceIcon className="h-5 w-5" />
+          ) : (
+            <FingerprintIcon className="h-5 w-5" />
+          )}
+          {isBiometricLoading
+            ? isServer
+              ? "Signing in..."
+              : "Unlocking..."
+            : `Unlock with ${label}`}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (isServer) setServerView("form");
+            else setLocalView("form");
+          }}
+          className={`w-full text-center text-sm font-semibold ${themeClasses.textSecondary} underline underline-offset-4 py-2 active:opacity-90`}
+        >
+          Use password instead
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className={`min-h-screen ${themeClasses.bg} ${themeClasses.text} px-5 pt-12 pb-8`}>
       {/* Hidden file input */}
@@ -282,7 +487,9 @@ export default function Login({
               onClick={() => {
                 setPreferManualLogin(true);
                 setLoginError("");
-                setScreen(initialScreen && initialScreen !== "choose" ? initialScreen : preferredBiometricKind);
+                const target = initialScreen && initialScreen !== "choose" ? initialScreen : preferredBiometricKind;
+                setScreen(target);
+                if (target === "server") setServerView("form");
               }}
               className={`rounded-xl border ${themeClasses.border} ${themeClasses.cardBg} px-3 py-2 text-xs font-semibold ${themeClasses.textSecondary} active:opacity-90`}
             >
@@ -295,8 +502,13 @@ export default function Login({
             <button
               type="button"
               onClick={() => {
-                setScreen("choose");
-                setLoginError("");
+                if (screen === "server" && serverView !== "list") {
+                  setServerView("list");
+                  setLoginError("");
+                } else {
+                  setScreen("choose");
+                  setLoginError("");
+                }
               }}
               className={`h-10 w-10 rounded-full ${themeClasses.cardBg} border ${themeClasses.border} flex items-center justify-center active:opacity-90`}
               aria-label="Back"
@@ -310,7 +522,11 @@ export default function Login({
                 {screen === "server" ? "Server sign in" : "Local vault"}
               </h1>
               <p className="text-sm text-gray-400 mt-0.5">
-                {screen === "server" ? "Connect to your Guardian Server" : "Unlock a .guardian file on this device"}
+                {screen === "server"
+                  ? serverView === "list"
+                    ? "Pick a server or add a new one"
+                    : "Connect to your Guardian Server"
+                  : "Unlock a .guardian file on this device"}
               </p>
             </div>
           </div>
@@ -366,6 +582,7 @@ export default function Login({
             onClick={() => {
               setMode("local");
               setScreen("local");
+              setLocalView(canBiometricUnlockLocal ? "biometric" : "form");
               setLoginError("");
             }}
             className={`w-full text-left rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4 active:opacity-90`}
@@ -396,6 +613,8 @@ export default function Login({
             onClick={() => {
               setMode("server");
               setScreen("server");
+              setServerView("list");
+              setSavedServers(getSavedServers());
               setLoginError("");
             }}
             className={`w-full text-left rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4 active:opacity-90`}
@@ -425,6 +644,55 @@ export default function Login({
           )}
           </div>
         </div>
+      ) : screen === "server" && serverView === "list" ? (
+        <div className="space-y-3">
+          {savedServers.length === 0 && (
+            <div className={`${themeClasses.cardBg} border ${themeClasses.border} rounded-2xl px-4 py-5 text-center`}>
+              <p className={`text-sm ${themeClasses.textSecondary}`}>No saved servers yet.</p>
+              <p className={`text-xs ${themeClasses.textMuted} mt-1`}>Add your server to sign in and sync.</p>
+            </div>
+          )}
+
+          {savedServers.map((s) => (
+            <div key={s.url} className={`flex items-center gap-3 rounded-2xl border ${themeClasses.border} ${themeClasses.cardBg} px-4 py-4`}>
+              <button
+                type="button"
+                onClick={() => handlePickServer(s)}
+                className="min-w-0 flex-1 text-left active:opacity-90"
+              >
+                <p className={`text-base font-semibold ${themeClasses.text}`}>{displayNameFor(s.url)}</p>
+                <p className={`text-sm ${themeClasses.textSecondary} mt-0.5 truncate`}>
+                  {s.username || "No username saved"}
+                </p>
+                {s.lastLoginAt && (
+                  <p className={`text-xs ${themeClasses.textMuted} mt-0.5`}>Last used {formatLastLogin(s.lastLoginAt)}</p>
+                )}
+              </button>
+              <button
+                type="button"
+                aria-label="Remove server"
+                onClick={() => handleRemoveServer(s.url)}
+                className={`h-9 w-9 shrink-0 rounded-full ${themeClasses.cardBg} border ${themeClasses.border} flex items-center justify-center active:opacity-90`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={handleAddNewServer}
+            className={`w-full rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border} py-4 text-base font-semibold ${accentClasses.textClass} active:opacity-90`}
+          >
+            Add new server
+          </button>
+        </div>
+      ) : screen === "server" && serverView === "biometric" ? (
+        renderBiometricView("server")
+      ) : screen === "local" && localView === "biometric" ? (
+        renderBiometricView("local")
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "local" ? (
@@ -520,28 +788,28 @@ export default function Login({
           <button
             type="submit"
             disabled={isLoading || !canSubmit}
-            className={`w-full rounded-2xl ${accentClasses.bgClass} ${accentClasses.onContrastClass} py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90`}
+            className={`w-full rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border} py-4 text-base font-semibold ${accentClasses.textClass} disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90`}
           >
             {isLoading ? (mode === "server" ? "Signing in..." : "Unlocking...") : mode === "server" ? "Sign in" : "Unlock"}
           </button>
-          {canBiometricUnlockLocal && mode === "local" && (
+          {mode === "local" && canBiometricUnlockLocal && (
             <button
               type="button"
-              onClick={() => handleBiometricUnlock("local")}
-              disabled={isBiometricLoading || isLoading}
-              className={`mt-3 w-full rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border} py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90`}
+              onClick={handleUseBiometricsInstead}
+              disabled={isLoading}
+              className={`w-full text-center text-sm font-semibold ${themeClasses.textSecondary} underline underline-offset-4 py-2 active:opacity-90`}
             >
-              {isBiometricLoading ? "Unlocking..." : `Unlock with ${biometric?.label ?? "biometrics"}`}
+              Use {biometric?.label ?? "biometrics"} instead
             </button>
           )}
-          {canBiometricUnlockServer && mode === "server" && (
+          {mode === "server" && serverBiometricAvailableFor(serverUrl) && (
             <button
               type="button"
-              onClick={() => handleBiometricUnlock("server")}
-              disabled={isBiometricLoading || isLoading}
-              className={`mt-3 w-full rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border} py-4 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed active:opacity-90`}
+              onClick={handleUseBiometricsInstead}
+              disabled={isLoading}
+              className={`w-full text-center text-sm font-semibold ${themeClasses.textSecondary} underline underline-offset-4 py-2 active:opacity-90`}
             >
-              {isBiometricLoading ? "Signing in..." : `Sign in with ${biometric?.label ?? "biometrics"}`}
+              Use {biometric?.label ?? "biometrics"} instead
             </button>
           )}
           <p className={`text-xs ${themeClasses.textMuted} text-center mt-3`}>

@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+
+	// Register the pure-Go SQLite driver ("sqlite") with database/sql.
+	_ "modernc.org/sqlite"
 )
 
 // --- DB Init ---
