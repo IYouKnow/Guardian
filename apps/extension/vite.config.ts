@@ -5,8 +5,7 @@ import { crx } from '@crxjs/vite-plugin'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
-const manifestFile = process.env.MANIFEST || 'chrome'
-const manifestPath = resolve(__dirname, `./manifest.${manifestFile}.json`)
+const manifestPath = resolve(__dirname, './manifest.chrome.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
 
 export default defineConfig({

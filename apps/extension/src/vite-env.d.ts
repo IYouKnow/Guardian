@@ -61,6 +61,14 @@ declare namespace chrome {
       options?: any,
     ): Promise<any>;
   }
+  namespace permissions {
+    function request(
+      permissions: { origins?: string[]; permissions?: string[] },
+    ): Promise<boolean>;
+    function contains(
+      permissions: { origins?: string[]; permissions?: string[] },
+    ): Promise<boolean>;
+  }
   namespace storage {
     interface StorageArea {
       get(

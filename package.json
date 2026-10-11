@@ -7,6 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:web": "pnpm --filter guardian-web build",
     "build:server": "pnpm build:web && cd apps/server && go build -o server_local.exe .",
+    "build:extension": "pnpm --filter extension build:chrome",
+    "package:extension": "pnpm --filter extension package:chrome",
     "dev:server": "node apps/server/dev-server.mjs"
   },
   "keywords": [],

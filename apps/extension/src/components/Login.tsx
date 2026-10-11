@@ -47,6 +47,19 @@ function formatHost(url: string): string {
   }
 }
 
+// Request the exact server origin at login time rather than shipping with
+// blanket host access. Returns true when access is (or already was) granted.
+async function requestServerAccess(serverUrl: string): Promise<boolean> {
+  let origin: string;
+  try {
+    origin = new URL(serverUrl).origin;
+  } catch {
+    return false;
+  }
+  if (!chrome.permissions?.request) return true;
+  return chrome.permissions.request({ origins: [`${origin}/*`] });
+}
+
 export default function Login({ onLogin, initialFile, initialHandle }: LoginProps) {
   const [mode, setMode] = useState<Mode>("local");
   const [masterPassword, setMasterPassword] = useState("");
@@ -180,6 +193,11 @@ export default function Login({ onLogin, initialFile, initialHandle }: LoginProp
 
       setIsLoading(true);
       try {
+        const granted = await requestServerAccess(serverUrl);
+        if (!granted) {
+          setLoginError("Guardian needs permission to connect to this server.");
+          return;
+        }
         await onLogin("server", { url: serverUrl, username, password: masterPassword });
         void saveLoginPrefs({ lastMode: "server", serverUrl, username });
       } catch (err) {

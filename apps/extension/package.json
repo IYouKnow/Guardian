@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:chrome": "vite build",
-    "build:firefox": "cross-env MANIFEST=firefox vite build",
-    "build:safari": "cross-env MANIFEST=safari vite build",
+    "package:chrome": "pnpm build:chrome && node scripts/package.mjs",
+    "publish:chrome": "node scripts/publish.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b tsconfig.app.json"
   },
@@ -19,7 +19,6 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
-    "cross-env": "^7.0.3",
     "tailwindcss": "^4.1.0",
     "tw-animate-css": "^1.2.0",
     "typescript": "~5.9.3",

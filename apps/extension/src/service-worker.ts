@@ -426,17 +426,18 @@ async function maybePushToServer(entries: VaultEntry[]): Promise<ServerPushStatu
   }
 }
 
-// Fetch a favicon URL and return a data URL, or null on any failure.
-// Keeps entries self-contained (no runtime cross-origin leaks) and bounded
-// in size. The SW has host permissions for <all_urls>, so cross-origin
-// favicon fetches succeed here even when a content script couldn't do it.
-async function fetchFaviconAsDataUrl(url: string | undefined): Promise<string | undefined> {
-  if (!url) return undefined;
+// Resolve a page's favicon through the browser's own cache and return it as
+// a data URL, or undefined on any failure. Uses the `favicon` permission's
+// /_favicon/ endpoint, so no host permission is needed for arbitrary site
+// origins and no cross-origin request is made from the extension.
+async function fetchFaviconAsDataUrl(pageUrl: string | undefined): Promise<string | undefined> {
+  if (!pageUrl) return undefined;
   try {
-    const resp = await fetch(url, { credentials: 'omit' });
+    const faviconUrl = new URL(chrome.runtime.getURL('/_favicon/'));
+    faviconUrl.searchParams.set('pageUrl', pageUrl);
+    faviconUrl.searchParams.set('size', '32');
+    const resp = await fetch(faviconUrl.toString(), { credentials: 'omit' });
     if (!resp.ok) return undefined;
-    const ct = resp.headers.get('content-type') || '';
-    if (!ct.startsWith('image/') && !ct.includes('icon')) return undefined;
     const blob = await resp.blob();
     if (blob.size === 0) return undefined;
     return await normalizeIcon(blob);
@@ -448,9 +449,8 @@ async function fetchFaviconAsDataUrl(url: string | undefined): Promise<string | 
 
 // Pick the best human-readable name for a new entry: prefer the page
 // title when it's reasonable, fall back to the domain.
-function pickEntryName(tabTitle: string | undefined, url: string, explicit?: string): string {
-  if (explicit && explicit.trim().length > 0) return explicit.trim();
-  const title = (tabTitle || '').trim();
+function pickEntryName(pageTitle: string | undefined, url: string): string {
+  const title = (pageTitle || '').trim();
   const domain = getDomain(url);
   if (!title) return domain || 'New login';
   // Strip leading/trailing noise like "· Login" / "— Sign in" etc, but keep
@@ -866,8 +866,7 @@ async function classifyCapturedCredential(
         url: message.url,
         username: message.username,
         hasPassword: !!message.password,
-        tabTitle: sender?.tab?.title,
-        tabFavicon: sender?.tab?.favIconUrl,
+        pageTitle: message.title,
       });
       const entries = await readDecryptedVault();
       if (!entries) {
@@ -877,16 +876,16 @@ async function classifyCapturedCredential(
       }
       const now = new Date().toISOString();
       const url = String(message.url || '');
-      const tabTitle: string | undefined = sender?.tab?.title;
-      const tabFavIconUrl: string | undefined = sender?.tab?.favIconUrl;
+      const pageTitle: string | undefined =
+        typeof message.title === 'string' ? message.title : undefined;
 
       // Kick off favicon fetch in parallel with vault write so the UI
       // doesn't stall on a slow image request.
-      const faviconPromise = fetchFaviconAsDataUrl(tabFavIconUrl);
+      const faviconPromise = fetchFaviconAsDataUrl(url);
 
       const newEntry: VaultEntry = {
         id: (crypto as any).randomUUID ? (crypto as any).randomUUID() : `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: pickEntryName(tabTitle, url, message.title),
+        name: pickEntryName(pageTitle, url),
         username: String(message.username || ''),
         password: String(message.password || ''),
         url,

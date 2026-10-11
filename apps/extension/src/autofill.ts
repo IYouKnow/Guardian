@@ -1386,10 +1386,9 @@ function showSaveBanner(options: BannerOptions) {
         response = await safeSendMessage({
           action: 'savePassword',
           url: options.credential.url,
+          title: document.title,
           username: options.credential.username,
           password: options.credential.password,
-          // Intentionally omit `title` so the service worker can use the
-          // real tab title via sender.tab.title (cleaner than the domain).
         });
       }
     } catch (err) {

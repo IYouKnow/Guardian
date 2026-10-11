@@ -1,0 +1,68 @@
+name: Build and Publish Extension
+
+on:
+  push:
+    tags: [ "extension-v*.*.*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build, Package and Publish Chrome Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Extract version from tag
+        id: version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#extension-v}" >> $GITHUB_OUTPUT
+
+      - name: Verify manifest version matches tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          MANIFEST_VERSION=$(node -p "require('./apps/extension/manifest.chrome.json').version")
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match manifest.chrome.json ($MANIFEST_VERSION). Bump the manifest before tagging."
+            exit 1
+          fi
+
+      - name: Build and package Chrome extension
+        run: pnpm --filter extension package:chrome
+
+      - name: Publish to Chrome Web Store
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          CWS_SERVICE_ACCOUNT_JSON: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+        run: node apps/extension/scripts/publish.mjs
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: apps/extension/release/guardian-chrome-*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          name: "Guardian Extension v${{ steps.version.outputs.version }}"
