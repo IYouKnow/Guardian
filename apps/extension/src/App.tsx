@@ -705,24 +705,34 @@ function App() {
         <div className="flex-1 overflow-hidden">{renderContent()}</div>
 
         {isLoggedIn && (
-          <nav className="flex shrink-0 items-center justify-around border-t border-border bg-card">
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                aria-current={activeTab === id ? "page" : undefined}
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  "flex flex-1 flex-col items-center gap-0.5 py-2 text-[9px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  activeTab === id
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </button>
-            ))}
+          <nav className="flex shrink-0 items-center gap-1 border-t border-border bg-card p-1">
+            {TABS.map(({ id, label, icon: Icon }) => {
+              const active = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    "relative flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="nav-indicator"
+                      className="absolute inset-0 rounded-md bg-primary/10"
+                      transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                    />
+                  )}
+                  <Icon className="relative h-3.5 w-3.5" />
+                  <span className="relative">{label}</span>
+                </button>
+              );
+            })}
           </nav>
         )}
       </div>
