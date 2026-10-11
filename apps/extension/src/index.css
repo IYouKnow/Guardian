@@ -1,65 +1,217 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
 
-/* Remove default margins and borders for extension popup */
-* {
-  box-sizing: border-box;
+@source "../index.html";
+@source "./**/*.{ts,tsx}";
+
+/*
+  Guardian token system — "calm precision".
+  Themes set the full semantic set; accents only drive --primary / --ring.
+  All values are OKLCH. Neutrals are tinted (<0.02 chroma) so surfaces read
+  as authored rather than dead gray. "system" is resolved to light|dark in JS.
+*/
+
+:root {
+  --radius: 0.625rem;
+  --ring: var(--primary);
+
+  /* Default = dark */
+  --background: oklch(0.16 0.006 265);
+  --foreground: oklch(0.94 0.004 265);
+  --card: oklch(0.19 0.006 265);
+  --card-foreground: oklch(0.94 0.004 265);
+  --popover: oklch(0.2 0.006 265);
+  --popover-foreground: oklch(0.94 0.004 265);
+  --primary: oklch(0.83 0.16 92);
+  --primary-foreground: oklch(0.2 0.04 92);
+  --secondary: oklch(0.24 0.006 265);
+  --secondary-foreground: oklch(0.94 0.004 265);
+  --muted: oklch(0.23 0.006 265);
+  --muted-foreground: oklch(0.67 0.01 265);
+  --accent: oklch(0.26 0.008 265);
+  --accent-foreground: oklch(0.94 0.004 265);
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 25);
+  --border: oklch(0.27 0.006 265);
+  --input: oklch(0.23 0.006 265);
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  width: 600px;
-  height: 500px;
-  background: black;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+[data-theme="slate"] {
+  --background: oklch(0.2 0.016 252);
+  --foreground: oklch(0.95 0.005 252);
+  --card: oklch(0.24 0.018 252);
+  --card-foreground: oklch(0.95 0.005 252);
+  --popover: oklch(0.25 0.018 252);
+  --popover-foreground: oklch(0.95 0.005 252);
+  --secondary: oklch(0.29 0.02 252);
+  --secondary-foreground: oklch(0.95 0.005 252);
+  --muted: oklch(0.28 0.02 252);
+  --muted-foreground: oklch(0.71 0.02 252);
+  --accent: oklch(0.31 0.022 252);
+  --accent-foreground: oklch(0.95 0.005 252);
+  --border: oklch(0.33 0.02 252);
+  --input: oklch(0.29 0.02 252);
 }
 
-#root {
-  margin: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  width: 600px;
-  height: 500px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+[data-theme="light"] {
+  --background: oklch(0.99 0.002 265);
+  --foreground: oklch(0.21 0.008 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.008 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.008 265);
+  --secondary: oklch(0.96 0.003 265);
+  --secondary-foreground: oklch(0.21 0.008 265);
+  --muted: oklch(0.96 0.003 265);
+  --muted-foreground: oklch(0.51 0.01 265);
+  --accent: oklch(0.95 0.004 265);
+  --accent-foreground: oklch(0.21 0.008 265);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.98 0.01 27);
+  --border: oklch(0.9 0.004 265);
+  --input: oklch(0.92 0.004 265);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+[data-theme="editor"] {
+  --background: oklch(0.22 0.004 75);
+  --foreground: oklch(0.87 0.005 85);
+  --card: oklch(0.26 0.004 75);
+  --card-foreground: oklch(0.87 0.005 85);
+  --popover: oklch(0.27 0.004 75);
+  --popover-foreground: oklch(0.87 0.005 85);
+  --secondary: oklch(0.31 0.005 75);
+  --secondary-foreground: oklch(0.87 0.005 85);
+  --muted: oklch(0.32 0.005 75);
+  --muted-foreground: oklch(0.66 0.007 75);
+  --accent: oklch(0.35 0.006 75);
+  --accent-foreground: oklch(0.87 0.005 85);
+  --border: oklch(0.36 0.005 75);
+  --input: oklch(0.31 0.005 75);
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+[data-theme="violet"] {
+  --background: oklch(0.18 0.03 300);
+  --foreground: oklch(0.95 0.01 300);
+  --card: oklch(0.22 0.036 300);
+  --card-foreground: oklch(0.95 0.01 300);
+  --popover: oklch(0.23 0.036 300);
+  --popover-foreground: oklch(0.95 0.01 300);
+  --secondary: oklch(0.28 0.042 300);
+  --secondary-foreground: oklch(0.95 0.01 300);
+  --muted: oklch(0.28 0.042 300);
+  --muted-foreground: oklch(0.72 0.04 300);
+  --accent: oklch(0.31 0.046 300);
+  --accent-foreground: oklch(0.95 0.01 300);
+  --border: oklch(0.33 0.042 300);
+  --input: oklch(0.28 0.042 300);
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+/* Accents drive --primary only */
+[data-accent="yellow"] { --primary: oklch(0.83 0.16 92);  --primary-foreground: oklch(0.2 0.04 92); }
+[data-accent="blue"]   { --primary: oklch(0.66 0.17 255); --primary-foreground: oklch(0.98 0.01 255); }
+[data-accent="green"]  { --primary: oklch(0.72 0.17 150); --primary-foreground: oklch(0.2 0.05 150); }
+[data-accent="purple"] { --primary: oklch(0.68 0.18 300); --primary-foreground: oklch(0.98 0.01 300); }
+[data-accent="pink"]   { --primary: oklch(0.7 0.19 350);  --primary-foreground: oklch(0.98 0.01 350); }
+[data-accent="orange"] { --primary: oklch(0.74 0.17 55);  --primary-foreground: oklch(0.2 0.05 55); }
+[data-accent="cyan"]   { --primary: oklch(0.76 0.13 200); --primary-foreground: oklch(0.2 0.04 200); }
+[data-accent="red"]    { --primary: oklch(0.66 0.2 27);   --primary-foreground: oklch(0.98 0.01 27); }
+[data-accent="black"]  { --primary: oklch(0.9 0.004 265); --primary-foreground: oklch(0.18 0.006 265); }
+[data-theme="light"][data-accent="black"] {
+  --primary: oklch(0.25 0.006 265);
+  --primary-foreground: oklch(0.98 0.002 265);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    width: 600px;
+    height: 500px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
-.scrollbar-hide {
+@utility scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

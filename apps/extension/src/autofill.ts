@@ -3,14 +3,6 @@
  * Detects login forms and shows autofill suggestions
  */
 
-interface PasswordEntry {
-  id: string;
-  title: string;
-  username: string;
-  website: string;
-  password: string;
-}
-
 interface AutofillMatch {
   id: string;
   username: string;
@@ -30,7 +22,6 @@ let dropdownSearchEl: HTMLInputElement | null = null;
 let dropdownEmptyEl: HTMLElement | null = null;
 // Debounce timer for search keystrokes → SW round trip.
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-let isPasswordField = false;
 let matches: AutofillMatch[] = [];
 // After we autofill, the act of `.focus()`ing the filled field re-fires
 // focusin → the dropdown would pop right back up. This timestamp lets
@@ -489,7 +480,6 @@ function positionDropdown(input: HTMLInputElement) {
 function showDropdown(input: HTMLInputElement, passwordMatches: AutofillMatch[]) {
   matches = passwordMatches;
   currentInput = input;
-  isPasswordField = input.type === 'password';
 
   if (!autofillDropdown) {
     autofillDropdown = document.body.appendChild(createAutofillDropdown());
@@ -509,7 +499,6 @@ function showDropdown(input: HTMLInputElement, passwordMatches: AutofillMatch[])
 function showLoginRequiredDropdown(input: HTMLInputElement) {
   matches = [];
   currentInput = input;
-  isPasswordField = input.type === 'password';
 
   if (!autofillDropdown) {
     autofillDropdown = document.body.appendChild(createAutofillDropdown());
@@ -873,23 +862,6 @@ function getDomain(url: string): string {
   } catch {
     return '';
   }
-}
-
-// Check if URL matches website
-function urlMatches(entryWebsite: string, currentUrl: string): boolean {
-  const entryDomain = getDomain(entryWebsite);
-  const currentDomain = getDomain(currentUrl);
-
-  if (!entryDomain || !currentDomain) return false;
-
-  // Exact match
-  if (entryDomain === currentDomain) return true;
-
-  // Subdomain match (e.g., www.google.com matches google.com)
-  if (currentDomain.endsWith('.' + entryDomain)) return true;
-  if (entryDomain.endsWith('.' + currentDomain)) return true;
-
-  return false;
 }
 
 // Decide whether a focused field is a plausible login field. We accept

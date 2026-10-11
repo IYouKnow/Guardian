@@ -1,4 +1,4 @@
-import type { PasswordEntry, Theme, AccentColor } from "../types";
+import type { PasswordEntry } from "@/types";
 import PasswordCard from "./PasswordCard";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -7,24 +7,17 @@ interface PasswordGridProps {
   onCardClick: (password: PasswordEntry) => void;
   onCopyUsername: (username: string) => void;
   onCopyPassword: (password: string) => void;
-  theme: Theme;
-  accentColor: AccentColor;
   selectedId?: string;
 }
 
 const container = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05
-    }
-  }
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
 };
 
 const item = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0 }
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
 };
 
 export default function PasswordGrid({
@@ -32,8 +25,6 @@ export default function PasswordGrid({
   onCardClick,
   onCopyUsername,
   onCopyPassword,
-  theme,
-  accentColor,
   selectedId,
 }: PasswordGridProps) {
   return (
@@ -41,7 +32,7 @@ export default function PasswordGrid({
       variants={container}
       initial="hidden"
       animate="show"
-      className="flex flex-col gap-2 w-full"
+      className="flex w-full flex-col gap-0.5"
     >
       <AnimatePresence mode="popLayout">
         {passwords.map((password) => (
@@ -51,8 +42,6 @@ export default function PasswordGrid({
               onCardClick={() => onCardClick(password)}
               onCopyUsername={() => onCopyUsername(password.username)}
               onCopyPassword={() => onCopyPassword(password.password)}
-              theme={theme}
-              accentColor={accentColor}
               isActive={password.id === selectedId}
             />
           </motion.div>

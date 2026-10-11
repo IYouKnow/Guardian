@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { crx } from '@crxjs/vite-plugin'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
@@ -10,8 +11,9 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
 
 export default defineConfig({
   plugins: [
-    react(), 
-    crx({ 
+    react(),
+    tailwindcss(),
+    crx({
       manifest,
       contentScripts: {
         injectCss: false,
@@ -20,8 +22,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      '@': resolve(__dirname, './src'),
       '@guardian/core': resolve(__dirname, '../../packages/core'),
-      '@guardian/ui': resolve(__dirname, '../../packages/ui'),
     },
   },
   server: {
@@ -29,7 +31,7 @@ export default defineConfig({
       allow: [resolve(__dirname, '../..')],
     },
   },
-  build: { 
+  build: {
     outDir: 'dist',
     rollupOptions: {
       output: {

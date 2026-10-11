@@ -15,8 +15,17 @@ export interface PasswordEntry {
   favicon?: string;
 }
 
-export type Theme = "dark" | "slate" | "light" | "editor" | "violet";
+export type Theme = "system" | "light" | "dark" | "slate" | "editor" | "violet";
 
-export type AccentColor = "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
+export type AccentColor =
+  | "yellow"
+  | "orange"
+  | "red"
+  | "pink"
+  | "purple"
+  | "blue"
+  | "cyan"
+  | "green"
+  | "black";
 
 

@@ -5,6 +5,7 @@
 
 import { createVaultWithKey, openVaultWithKey } from "@guardian/core/crypto/vault";
 import type { VaultEntry } from "@guardian/core/crypto/vault";
+import type { AccentColor, Theme } from "@/types";
 
 const VAULT_STORAGE_KEY = "guardian_vault";
 const SETTINGS_STORAGE_KEY = "guardian_settings";
@@ -24,8 +25,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 export interface ExtensionSettings {
-  theme?: "dark" | "slate" | "light" | "editor" | "violet";
-  accentColor?: "yellow" | "blue" | "green" | "purple" | "pink" | "orange" | "cyan" | "red";
+  theme?: Theme;
+  accentColor?: AccentColor;
   autoLockMinutes?: number;
   clipboardClearSeconds?: number;
   revealCensorSeconds?: number;
