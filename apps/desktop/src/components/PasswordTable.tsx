@@ -13,6 +13,19 @@ const STATIC_COLUMNS = [
   { key: 5, label: "Actions" },
 ] as const;
 
+function reconcileColOrder(
+  order: (string | number)[],
+  columns: { key: string | number; label: string }[]
+): (string | number)[] {
+  const valid = new Set(columns.map((c) => c.key));
+  const kept = order.filter((k) => valid.has(k));
+  const keptSet = new Set(kept);
+  for (const c of columns) {
+    if (!keptSet.has(c.key)) kept.push(c.key);
+  }
+  return kept;
+}
+
 interface PasswordTableProps {
   passwords: PasswordEntry[];
   onCopyUsername: (username: string) => void;
@@ -177,6 +190,11 @@ export default function PasswordTable({
     return def;
   });
 
+  const renderKeys = useMemo(
+    () => reconcileColOrder(colOrder, allColumns),
+    [colOrder, allColumns]
+  );
+
   const headerRowRef = useRef<HTMLDivElement | null>(null);
   const colMinWidthsRef = useRef<Record<string, number>>({});
   const colWidthsInit = useRef(false);
@@ -207,15 +225,11 @@ export default function PasswordTable({
 
   useEffect(() => {
     setColOrder(prev => {
-      const cfKeys = new Set(
-        (customFieldTemplates || []).map((_, i) => `cf_${i}`)
-      );
-      const existing = new Set(prev);
-      const missing = [...cfKeys].filter(k => !existing.has(k));
-      if (missing.length === 0) return prev;
-      return [...prev, ...missing];
+      const next = reconcileColOrder(prev, allColumns);
+      if (next.length === prev.length && next.every((k, i) => k === prev[i])) return prev;
+      return next;
     });
-  }, [customFieldTemplates]);
+  }, [allColumns]);
 
   useEffect(() => {
     if (colWidthsInit.current) return;
@@ -503,8 +517,8 @@ export default function PasswordTable({
   };
 
   const totalWidth = useMemo(() => {
-    return colOrder.reduce<number>((sum, k) => sum + (colWidths[String(k)] || 120), 0);
-  }, [colOrder, colWidths]);
+    return renderKeys.reduce<number>((sum, k) => sum + (colWidths[String(k)] || 120), 0);
+  }, [renderKeys, colWidths]);
 
   return (
     <>
@@ -526,8 +540,9 @@ export default function PasswordTable({
         ref={headerRowRef as any}
         className={`flex border-b flex-shrink-0 ${themeClasses.rowBorder} ${themeClasses.headerBg}`}
       >
-            {colOrder.map((colKey) => {
-              const col = allColumns.find(c => c.key === colKey)!;
+            {renderKeys.map((colKey) => {
+              const col = allColumns.find(c => c.key === colKey);
+              if (!col) return null;
               const isResizable = colKey !== 5;
               return (
                 <div
@@ -618,7 +633,7 @@ export default function PasswordTable({
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                {colOrder.map((colKey) => (
+                {renderKeys.map((colKey) => (
                   <div
                     key={`${password.id}-${colKey}`}
                     className={`${sizeClasses.cellPadding} overflow-hidden flex-shrink-0 flex items-center`}
