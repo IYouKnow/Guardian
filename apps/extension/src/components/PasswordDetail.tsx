@@ -14,6 +14,12 @@ import { AvatarTile } from "./AvatarTile";
 import { CopyButton } from "./CopyButton";
 import { StrengthMeter, type Strength } from "./StrengthMeter";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 
 interface PasswordDetailProps {
@@ -34,7 +40,6 @@ export default function PasswordDetail({
   revealCensorSeconds = 5,
 }: PasswordDetailProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const strength: Strength | null = password.password
     ? (evaluatePasswordStrength(password.password) as Strength)
@@ -84,37 +89,40 @@ export default function PasswordDetail({
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
-          {onDelete && !confirmDelete && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setConfirmDelete(true)}
-              aria-label="Delete entry"
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {onDelete && confirmDelete && (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  onDelete();
-                  setConfirmDelete(false);
-                }}
-              >
-                Delete
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </Button>
-            </div>
+          {onDelete && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Delete entry"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-60">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold">Delete this entry?</p>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      “{password.title}” will be removed from your vault. This
+                      can’t be undone.
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <PopoverClose asChild>
+                      <Button variant="ghost" size="sm">
+                        Cancel
+                      </Button>
+                    </PopoverClose>
+                    <Button variant="destructive" size="sm" onClick={onDelete}>
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
         </div>
       </header>

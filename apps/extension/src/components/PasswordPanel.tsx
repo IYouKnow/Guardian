@@ -10,23 +10,34 @@ import { Textarea } from "@/components/ui/textarea";
 import { CategorySelect } from "./CategorySelect";
 import { Spinner } from "./Spinner";
 
-interface AddPasswordPanelProps {
-  onAddPassword: (password: PasswordEntry) => Promise<void>;
+interface PasswordPanelProps {
+  mode: "add" | "edit";
+  initial?: Partial<PasswordEntry>;
+  onSubmit: (entry: PasswordEntry) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function AddPasswordPanel({
-  onAddPassword,
+const COPY = {
+  add: { title: "Add password", subtitle: "Create a new entry", submit: "Save password" },
+  edit: { title: "Edit password", subtitle: "Update this entry", submit: "Save changes" },
+} as const;
+
+export default function PasswordPanel({
+  mode,
+  initial,
+  onSubmit,
   onCancel,
-}: AddPasswordPanelProps) {
-  const [title, setTitle] = useState("");
-  const [username, setUsername] = useState("");
-  const [website, setWebsite] = useState("");
-  const [password, setPassword] = useState("");
-  const [category, setCategory] = useState("Development");
-  const [notes, setNotes] = useState("");
+}: PasswordPanelProps) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [username, setUsername] = useState(initial?.username ?? "");
+  const [website, setWebsite] = useState(initial?.website ?? "");
+  const [password, setPassword] = useState(initial?.password ?? "");
+  const [category, setCategory] = useState(initial?.category ?? "Development");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const copy = COPY[mode];
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,22 +54,24 @@ export default function AddPasswordPanel({
 
     setIsSubmitting(true);
     try {
-      const newPassword: PasswordEntry = {
-        id: crypto.randomUUID(),
+      const entry: PasswordEntry = {
+        ...(mode === "edit" ? (initial as PasswordEntry) : {}),
+        id: mode === "edit" ? (initial as PasswordEntry).id : crypto.randomUUID(),
         title: title.trim(),
         username: username.trim(),
         website: website.trim(),
         password,
         category: category || undefined,
-        favorite: false,
-        lastModified: new Date().toISOString(),
         notes: notes.trim() || undefined,
-        breached: false,
+        favorite: initial?.favorite ?? false,
+        breached: initial?.breached ?? false,
+        favicon: initial?.favicon,
+        lastModified: new Date().toISOString(),
       };
-      await onAddPassword(newPassword);
+      await onSubmit(entry);
     } catch (err) {
-      console.error("Error adding password:", err);
-      setError("Failed to save password. Please try again.");
+      console.error("Error saving password:", err);
+      setError("Failed to save. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -66,17 +79,13 @@ export default function AddPasswordPanel({
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex shrink-0 items-center justify-between border-b border-border p-4">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight">Add password</h1>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Create a new entry
-          </p>
-        </div>
+      <header className="shrink-0 border-b border-border p-4">
+        <h1 className="text-base font-semibold tracking-tight">{copy.title}</h1>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{copy.subtitle}</p>
       </header>
 
       <div className="scrollbar-hide flex-1 overflow-y-auto p-4">
-        <form id="add-password-form" onSubmit={handleSubmit} className="space-y-3">
+        <form id="password-form" onSubmit={handleSubmit} className="space-y-3">
           {error && (
             <div
               role="alert"
@@ -87,20 +96,21 @@ export default function AddPasswordPanel({
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-title">Title</Label>
+            <Label htmlFor="pf-title">Title</Label>
             <Input
-              id="add-title"
+              id="pf-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. GitHub"
               required
+              autoFocus={mode === "add"}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-username">Username or email</Label>
+            <Label htmlFor="pf-username">Username or email</Label>
             <Input
-              id="add-username"
+              id="pf-username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="user@example.com"
@@ -108,9 +118,9 @@ export default function AddPasswordPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-website">Website</Label>
+            <Label htmlFor="pf-website">Website</Label>
             <Input
-              id="add-website"
+              id="pf-website"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
               placeholder="example.com"
@@ -118,10 +128,10 @@ export default function AddPasswordPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-password">Password</Label>
+            <Label htmlFor="pf-password">Password</Label>
             <div className="relative">
               <Input
-                id="add-password"
+                id="pf-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -143,18 +153,14 @@ export default function AddPasswordPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-category">Category</Label>
-            <CategorySelect
-              id="add-category"
-              value={category}
-              onChange={setCategory}
-            />
+            <Label htmlFor="pf-category">Category</Label>
+            <CategorySelect id="pf-category" value={category} onChange={setCategory} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-notes">Notes</Label>
+            <Label htmlFor="pf-notes">Notes</Label>
             <Textarea
-              id="add-notes"
+              id="pf-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Additional notes…"
@@ -175,7 +181,7 @@ export default function AddPasswordPanel({
           Cancel
         </Button>
         <Button
-          form="add-password-form"
+          form="password-form"
           type="submit"
           disabled={isSubmitting}
           className="flex-1 gap-2"
@@ -185,7 +191,7 @@ export default function AddPasswordPanel({
               <Spinner className="h-3.5 w-3.5" /> Saving…
             </>
           ) : (
-            "Save password"
+            copy.submit
           )}
         </Button>
       </div>

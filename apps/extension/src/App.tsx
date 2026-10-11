@@ -15,8 +15,7 @@ import PasswordGrid from "@/components/PasswordGrid";
 import PasswordDetail from "@/components/PasswordDetail";
 import Settings from "@/components/Settings";
 import Generator from "@/components/Generator";
-import AddPasswordPanel from "@/components/AddPasswordPanel";
-import EditPasswordModal from "@/components/EditPasswordModal";
+import PasswordPanel from "@/components/PasswordPanel";
 import { SyncIndicator } from "@/components/SyncIndicator";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -109,8 +108,7 @@ function App() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const [isAddingPassword, setIsAddingPassword] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editTarget, setEditTarget] = useState<PasswordEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<PasswordEntry | null>(null);
 
   const filePollIntervalRef = useRef<number | null>(null);
   const lastFileModifiedRef = useRef<number>(0);
@@ -381,8 +379,7 @@ function App() {
     const updated = passwords.map((p) => (p.id === entry.id ? entry : p));
     setPasswords(updated);
     if (selectedPassword?.id === entry.id) setSelectedPassword(entry);
-    setShowEditModal(false);
-    setEditTarget(null);
+    setEditingEntry(null);
     await persistPasswords(updated, [entry]);
   };
 
@@ -550,6 +547,7 @@ function App() {
                   size="icon-sm"
                   onClick={() => {
                     setSelectedPassword(null);
+                    setEditingEntry(null);
                     setIsAddingPassword(true);
                   }}
                   aria-label="Add password"
@@ -601,6 +599,7 @@ function App() {
                 passwords={filteredPasswords}
                 onCardClick={(pw) => {
                   setIsAddingPassword(false);
+                  setEditingEntry(null);
                   setSelectedPassword(pw);
                 }}
                 onCopyUsername={(username) => navigator.clipboard.writeText(username)}
@@ -630,9 +629,26 @@ function App() {
                 transition={{ duration: 0.15 }}
                 className="h-full w-full"
               >
-                <AddPasswordPanel
-                  onAddPassword={handleAddPassword}
+                <PasswordPanel
+                  mode="add"
+                  onSubmit={handleAddPassword}
                   onCancel={() => setIsAddingPassword(false)}
+                />
+              </motion.div>
+            ) : editingEntry ? (
+              <motion.div
+                key={`edit-${editingEntry.id}`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="h-full w-full"
+              >
+                <PasswordPanel
+                  mode="edit"
+                  initial={editingEntry}
+                  onSubmit={handleEditPassword}
+                  onCancel={() => setEditingEntry(null)}
                 />
               </motion.div>
             ) : selectedPassword ? (
@@ -656,10 +672,7 @@ function App() {
                       );
                     }
                   }}
-                  onEdit={() => {
-                    setEditTarget(selectedPassword);
-                    setShowEditModal(true);
-                  }}
+                  onEdit={() => setEditingEntry(selectedPassword)}
                   onDelete={() => handleDeletePassword(selectedPassword.id)}
                   revealCensorSeconds={revealCensorSeconds}
                 />
@@ -711,18 +724,6 @@ function App() {
               </button>
             ))}
           </nav>
-        )}
-
-        {editTarget && (
-          <EditPasswordModal
-            isOpen={showEditModal}
-            password={editTarget}
-            onClose={() => {
-              setShowEditModal(false);
-              setEditTarget(null);
-            }}
-            onSave={handleEditPassword}
-          />
         )}
       </div>
     </TooltipProvider>
