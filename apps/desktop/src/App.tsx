@@ -106,7 +106,7 @@ function App() {
     username,
   } = useVault();
 
-  const { isSyncing, lastEvent, setIsSyncing } = useSSE(serverUrl, authToken);
+  const { isSyncing, lastEvent } = useSSE(serverUrl, authToken);
 
   const { toasts, removeToast, success, error: showError } = useToast();
   const [selectedPasswordId, setSelectedPasswordId] = useState<string | null>(null);
@@ -140,25 +140,6 @@ function App() {
       }
     } catch {
       setUpdating(false);
-    }
-  };
-
-  const handleSync = async () => {
-    try {
-      if (connectionMode === 'server' && !isSyncing) {
-        setIsSyncing(true);
-        const vaultData = await syncVault();
-        loadPasswords(vaultData.entries, vaultData.folders);
-        if (vaultData.settings) {
-          await loadFromVault(vaultData.settings as any);
-        }
-          setTimeout(() => {
-          setIsSyncing(false);
-        }, 1500);
-      }
-    } catch (err) {
-      console.error("Sync failed:", err);
-      setIsSyncing(false);
     }
   };
 
@@ -961,7 +942,6 @@ function App() {
                     onShowNotificationsChange={setShowNotifications}
                     themeSyncMode={preferences.themeSyncMode as any}
                     onThemeSyncModeChange={handleThemeSyncModeChange}
-                    onSync={handleSync}
                     miniMode={preferences.miniMode}
                     onMiniModeChange={setMiniMode}
                     connectionMode={connectionMode}

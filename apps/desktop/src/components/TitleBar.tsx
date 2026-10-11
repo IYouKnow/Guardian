@@ -61,7 +61,10 @@ export default function TitleBar({ theme, compact }: TitleBarProps) {
     const themeClasses = getThemeClasses();
 
     const WindowControls = () => (
-        <div className={`flex h-full relative z-[102] ${isMac ? 'flex-row-reverse' : ''}`}>
+        <div
+            onMouseDown={(e) => e.stopPropagation()}
+            className={`flex h-full relative z-[102] ${isMac ? 'flex-row-reverse' : ''}`}
+        >
             <button
                 onClick={(e) => {
                     e.stopPropagation();

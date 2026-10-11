@@ -20,8 +20,6 @@ interface SettingsProps {
   onClipboardClearSecondsChange: (seconds: number) => void;
   revealCensorSeconds: number;
   onRevealCensorSecondsChange: (seconds: number) => void;
-  onSync?: () => void;
-  onLinkAccount?: () => void;
   miniMode: boolean;
   onMiniModeChange: (enabled: boolean) => void;
   showNotifications: boolean;
@@ -85,8 +83,6 @@ export default function Settings({
   onClipboardClearSecondsChange,
   revealCensorSeconds,
   onRevealCensorSecondsChange,
-  onSync,
-  onLinkAccount,
   miniMode,
   onMiniModeChange,
   showNotifications,
@@ -145,44 +141,6 @@ export default function Settings({
             </header>
 
             <section className="space-y-6">
-              <div className={`p-6 rounded-2xl ${themeClasses.sectionBg} border ${themeClasses.border} space-y-6`}>
-                <div>
-                  <h3 className={`text-lg font-bold ${themeClasses.text} mb-1`}>Vault Status</h3>
-                  <p className={`text-sm ${themeClasses.textSecondary}`}>Manage your vault connection and synchronization.</p>
-                </div>
-
-                <div className="flex gap-4">
-                  {connectionMode === "server" && (
-                    <button
-                      onClick={onSync}
-                      className={`flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${themeClasses.activeBg} ${themeClasses.activeText} hover:opacity-90 flex items-center justify-center gap-2`}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Sync Vault
-                    </button>
-                  )}
-                  {connectionMode === "server" && (
-                    <button
-                      onClick={onLinkAccount}
-                      className={`flex-1 py-3 px-4 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${themeClasses.input} ${themeClasses.text} hover:bg-white/10 flex items-center justify-center gap-2`}
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                      Link Account
-                    </button>
-                  )}
-                  {connectionMode === "local" && (
-                    <div className="flex-1 text-center text-sm opacity-50 italic">
-                      Local vaults are managed directly from your device.
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
               <div className={`p-6 rounded-2xl ${themeClasses.sectionBg} border ${themeClasses.border} flex items-center justify-between`}>
                 <div className="flex-1">
                   <h3 className={`text-sm font-bold ${themeClasses.text}`}>Mini Mode</h3>
