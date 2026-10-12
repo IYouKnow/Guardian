@@ -896,6 +896,7 @@ function App() {
             showSettings={showSettings}
             theme={activeTheme}
             accentColor={preferences.accentColor}
+            itemSize={preferences.itemSize}
             connectionMode={connectionMode}
             vaultName={
               connectionMode === "server"

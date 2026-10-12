@@ -28,10 +28,66 @@ interface SidebarProps {
   onReorderFolderCrossParent: (folderId: string, newParentId: string | null, targetIndex: number) => void;
   keybinds?: Record<string, { key: string; ctrl?: boolean; alt?: boolean; shift?: boolean; meta?: boolean }>;
   onSetFolderIcon?: (id: string, icon: string | undefined) => void;
+  itemSize: "small" | "medium" | "large";
 }
 
 function getChildFolders(folders: Folder[], parentId: string | null): Folder[] {
   return folders.filter((f) => f.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function getDensity(itemSize: "small" | "medium" | "large") {
+  if (itemSize === "small") {
+    return {
+      navPadding: "p-2",
+      navSpace: "space-y-3",
+      rowPadding: "px-2 py-1",
+      rowText: "text-[0.7rem]",
+      gap: "gap-1",
+      iconSize: "w-3.5 h-3.5",
+      chevronBox: "w-3.5 h-3.5",
+      chevronIcon: "w-2.5 h-2.5",
+      headerText: "text-[0.6rem]",
+      headerMargin: "mb-1.5 px-2",
+      listSpace: "space-y-px",
+      indentBase: 8,
+      indentStep: 12,
+      dropBadge: "text-[0.5rem] px-1.5 py-0.5",
+    };
+  }
+  if (itemSize === "large") {
+    return {
+      navPadding: "p-4",
+      navSpace: "space-y-5",
+      rowPadding: "px-3 py-2",
+      rowText: "text-sm",
+      gap: "gap-2",
+      iconSize: "w-5 h-5",
+      chevronBox: "w-5 h-5",
+      chevronIcon: "w-4 h-4",
+      headerText: "text-xs",
+      headerMargin: "mb-2.5 px-3",
+      listSpace: "space-y-1",
+      indentBase: 12,
+      indentStep: 16,
+      dropBadge: "text-[0.6rem] px-2 py-1",
+    };
+  }
+  return {
+    navPadding: "p-3",
+    navSpace: "space-y-4",
+    rowPadding: "px-2.5 py-1.5",
+    rowText: "text-xs",
+    gap: "gap-1.5",
+    iconSize: "w-4 h-4",
+    chevronBox: "w-4 h-4",
+    chevronIcon: "w-3 h-3",
+    headerText: "text-[0.65rem]",
+    headerMargin: "mb-2 px-2.5",
+    listSpace: "space-y-0.5",
+    indentBase: 10,
+    indentStep: 14,
+    dropBadge: "text-[0.55rem] px-1.5 py-1",
+  };
 }
 
 export default function Sidebar({
@@ -57,9 +113,11 @@ export default function Sidebar({
   onReorderFolderCrossParent,
   keybinds,
   onSetFolderIcon,
+  itemSize,
 }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folderId: string | null } | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const draggedFolderRef = useRef<string | null>(null);
@@ -71,11 +129,13 @@ export default function Sidebar({
   const [iconChangeFolderId, setIconChangeFolderId] = useState<string | null>(null);
   const iconFileInputRef = useRef<HTMLInputElement>(null);
   const contextRef = useRef<HTMLDivElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const sidebarRef = useRef<HTMLElement>(null);
   const themeClasses = getThemeClasses(theme);
   const accentClasses = getAccentColorClasses(accentColor, theme);
+  const density = getDensity(itemSize);
 
   useEffect(() => {
     if (renamingFolderId) {
@@ -89,6 +149,9 @@ export default function Sidebar({
     const handleClick = (e: MouseEvent) => {
       if (contextRef.current && !contextRef.current.contains(e.target as Node)) {
         setContextMenu(null);
+      }
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
+        setAccountMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -281,14 +344,14 @@ export default function Sidebar({
         )}
         <div
           data-folder-id={folder.id}
-          className={`group relative flex items-center gap-1 w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer touch-none select-none ${
+          className={`group relative flex items-center ${density.gap} w-full text-left ${density.rowPadding} rounded-md ${density.rowText} font-bold uppercase tracking-wider transition-all cursor-pointer touch-none select-none ${
             isActive && !showSettings
               ? `${accentClasses.textClass} ${accentClasses.lightClass}`
               : dragTargetFolderId === folder.id
                 ? `${accentClasses.borderClass} ${accentClasses.lightClass}`
                 : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
           } ${dragTargetFolderId === folder.id ? `ring-2 ${accentClasses.focusRingClass}` : ''} ${isDragging ? 'opacity-40' : ''} ${isDropTarget ? dropPosition === 'into' ? `${accentClasses.textClass} ${accentClasses.lightClass}` : `${accentClasses.lightClass}` : ''}`}
-          style={{ paddingLeft: `${12 + depth * 16}px` }}
+          style={{ paddingLeft: `${density.indentBase + depth * density.indentStep}px` }}
           onClick={() => onFolderChange(folder.id)}
           onDoubleClick={() => { if (children.length > 0) toggleExpand(folder.id); }}
           onContextMenu={(e) => handleContextMenu(e, folder.id)}
@@ -300,23 +363,23 @@ export default function Sidebar({
             <button
               onClick={(e) => { e.stopPropagation(); toggleExpand(folder.id); }}
               onPointerDown={(e) => e.stopPropagation()}
-              className={`w-4 h-4 flex items-center justify-center flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+              className={`${density.chevronBox} flex items-center justify-center flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={density.chevronIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           ) : (
-            <div className="w-4 h-4 flex-shrink-0" />
+            <div className={`${density.iconSize} flex-shrink-0`} />
           )}
           {folder.icon ? (
-            <img src={folder.icon} alt="" className="w-4 h-4 flex-shrink-0 rounded object-cover" />
+            <img src={folder.icon} alt="" className={`${density.iconSize} flex-shrink-0 rounded object-cover`} />
           ) : children.length > 0 ? (
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`${density.iconSize} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v1.586A1.98 1.98 0 0019.414 10H4.586A1.98 1.98 0 002 11.586V18a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-9l-2-2H4a2 2 0 00-2 2z" />
             </svg>
           ) : (
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`${density.iconSize} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
           )}
@@ -327,23 +390,20 @@ export default function Sidebar({
               onChange={(e) => setRenameValue(e.target.value)}
               onBlur={handleRenameSubmit}
               onKeyDown={(e) => { if (e.key === "Enter") handleRenameSubmit(); if (e.key === "Escape") setRenamingFolderId(null); }}
-              className={`flex-1 min-w-0 bg-transparent outline-none border-b ${accentClasses.borderClass} text-xs font-bold uppercase tracking-wider`}
+              className={`flex-1 min-w-0 bg-transparent outline-none border-b ${accentClasses.borderClass} ${density.rowText} font-bold uppercase tracking-wider`}
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <span className="truncate">{folder.name}</span>
           )}
           {isDropTarget && (
-            <span className={`ml-auto flex-shrink-0 text-[0.5rem] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${dropPosition === 'into' ? 'bg-white/20' : 'bg-white/10'}`}>
+            <span className={`ml-auto flex-shrink-0 ${density.dropBadge} font-bold uppercase tracking-widest rounded ${dropPosition === 'into' ? 'bg-white/20' : 'bg-white/10'}`}>
               {dropPosition === 'into' ? 'Nest' : dropPosition === 'before' ? 'Above' : 'Below'}
             </span>
           )}
-          {isActive && !showSettings && (
-            <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
-          )}
         </div>
         {children.length > 0 && isExpanded && (
-          <ul className="space-y-0.5">
+          <ul className={density.listSpace}>
             {children.map((child) => renderFolderItem(child, depth + 1))}
           </ul>
         )}
@@ -375,32 +435,29 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-5">
+      <nav className={`flex-1 ${density.navPadding} overflow-y-auto custom-scrollbar ${density.navSpace}`}>
         {/* All Entries - standalone button */}
         <div>
           <button
             data-folder-id="root"
             onClick={() => onFolderChange(null)}
             onContextMenu={(e) => handleContextMenu(e, null)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+            className={`w-full flex items-center ${density.gap} ${density.rowPadding} rounded-md ${density.rowText} font-bold uppercase tracking-wider transition-all ${
               activeFolderId === null && !showSettings
                 ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
                 : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
             }`}
           >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`${density.iconSize} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
             <span className="truncate">All Entries</span>
-            {activeFolderId === null && !showSettings && (
-              <motion.div layoutId="active-indicator" className={`w-1.5 h-1.5 rounded-full ml-auto flex-shrink-0 ${accentClasses.onContrast === 'white' ? 'bg-white/40' : 'bg-black/40'}`} />
-            )}
           </button>
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-2.5 px-3">
-            <h3 className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em]`}>
+          <div className={`flex items-center justify-between ${density.headerMargin}`}>
+            <h3 className={`${density.headerText} font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em]`}>
               Folders
             </h3>
             <button
@@ -408,37 +465,13 @@ export default function Sidebar({
               className={`p-1 rounded-md ${themeClasses.textMuted} hover:${themeClasses.text} transition-colors`}
               title="New Folder"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={density.chevronIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
             </button>
           </div>
-          <ul className="space-y-0.5">
+          <ul className={density.listSpace}>
             {rootFolders.map((folder) => renderFolderItem(folder, 0))}
-          </ul>
-        </div>
-
-        <div className={`pt-4 border-t ${themeClasses.border}`}>
-          <h3 className={`text-[0.65rem] font-bold ${themeClasses.textMuted} uppercase tracking-[0.2em] mb-2.5 px-3`}>
-            System
-          </h3>
-          <ul className="space-y-0.5">
-            <li>
-              <button
-                onClick={onSettings}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2.5 ${
-                  showSettings
-                    ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow-lg ${accentClasses.shadowClass}`
-                    : `${themeClasses.textMuted} ${themeClasses.item} hover:${themeClasses.text}`
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Preferences
-              </button>
-            </li>
           </ul>
         </div>
       </nav>
@@ -566,15 +599,47 @@ export default function Sidebar({
               </>
             )}
           </div>
-          <button
-            onClick={onLogout}
-            className={`p-1.5 rounded-lg ${themeClasses.textMuted} hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0`}
-            title="Lock Vault"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
+          <div ref={accountMenuRef} className="relative flex-shrink-0">
+            <button
+              onClick={() => setAccountMenuOpen((v) => !v)}
+              className={`p-1.5 rounded-lg ${themeClasses.textMuted} hover:${themeClasses.text} transition-all`}
+              title="Account menu"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h.01M12 12h.01M19 12h.01" />
+              </svg>
+            </button>
+            {accountMenuOpen && (
+              <div className="absolute bottom-full right-0 mb-2 z-[200] bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden">
+                <button
+                  className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/10 transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    onSettings();
+                    setAccountMenuOpen(false);
+                  }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Preferences
+                </button>
+                <div className="h-px bg-[#333] my-1" />
+                <button
+                  className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    onLogout();
+                    setAccountMenuOpen(false);
+                  }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Lock Vault
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {/* Folder Drag Preview */}
