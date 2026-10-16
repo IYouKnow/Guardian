@@ -35,26 +35,43 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#extension-v}" >> $GITHUB_OUTPUT
 
-      - name: Verify manifest version matches tag
+      - name: Stamp version into manifest
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TAG_VERSION="${{ steps.version.outputs.version }}"
-          MANIFEST_VERSION=$(node -p "require('./apps/extension/manifest.chrome.json').version")
-          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
-            echo "::error::Tag version ($TAG_VERSION) does not match manifest.chrome.json ($MANIFEST_VERSION). Bump the manifest before tagging."
-            exit 1
-          fi
+          node -e '
+            const fs = require("fs");
+            const path = "apps/extension/manifest.chrome.json";
+            const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+            manifest.version = process.env.VERSION;
+            fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + "\n");
+            console.log("Stamped manifest version", manifest.version);
+          '
 
       - name: Build and package Chrome extension
         run: pnpm --filter extension package:chrome
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-chrome-extension
+          path: apps/extension/release/guardian-chrome-*.zip
+          if-no-files-found: error
+
+      - name: Check Chrome Web Store credentials
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CWS_SERVICE_ACCOUNT_JSON: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: node apps/extension/scripts/publish.mjs --check
 
       - name: Publish to Chrome Web Store
         if: startsWith(github.ref, 'refs/tags/')
         env:
           CWS_SERVICE_ACCOUNT_JSON: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
           CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
-          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
         run: node apps/extension/scripts/publish.mjs
 
       - name: Create GitHub Release

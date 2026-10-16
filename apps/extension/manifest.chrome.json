@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Guardian",
-  "version": "0.1.0",
-  "description": "Your forever password vault",
+  "name": "Guardian Password Manager",
+  "version": "0.1",
+  "description": "Offline-first password manager: save, sync and autofill your logins.",
   "icons": {
     "16": "icons/16.png",
     "32": "icons/32.png",
@@ -11,7 +11,7 @@
   },
   "action": {
     "default_popup": "index.html",
-    "default_title": "Guardian",
+    "default_title": "Guardian Password Manager",
     "default_icon": {
       "16": "icons/16.png",
       "32": "icons/32.png",

@@ -2,14 +2,17 @@
 // Chrome Web Store API v2, authenticated with a Google Cloud service
 // account. Dependency-free: JWT signing with node:crypto, HTTP with fetch.
 //
-//   node scripts/publish.mjs [--upload-only]
+//   node scripts/publish.mjs [--upload-only | --check]
+//
+//   --check   authenticate and verify access to the store item, without
+//             uploading or publishing anything. Exits non-zero on failure.
 //
 // Required env:
 //   CWS_SERVICE_ACCOUNT_JSON   service-account key JSON (inline), or
 //   CWS_SERVICE_ACCOUNT_FILE   path to the service-account key JSON
 //   CWS_PUBLISHER_ID           Developer Dashboard -> Publisher -> Settings
-//   CWS_EXTENSION_ID           the 32-character store item id
 // Optional:
+//   CWS_EXTENSION_ID           override the store item id (defaults to STORE_ITEM_ID)
 //   CWS_ZIP                    path to the zip (defaults to newest in release/)
 //
 // The store item must already exist (do one manual upload first). The
@@ -20,6 +23,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSign } from 'node:crypto';
 
+// The Guardian store item. This id is public (it appears in the listing URL)
+// and must never change, or an update would be pushed to a different item —
+// which is exactly the "duplicate listing" violation. Override only if you
+// deliberately migrate to a new item.
+const STORE_ITEM_ID = 'bfjoohlcpkpmdeldpjgiangapiekbbfk';
+
 const API = 'https://chromewebstore.googleapis.com';
 const SCOPE = 'https://www.googleapis.com/auth/chromewebstore';
 const DEFAULT_TOKEN_URI = 'https://oauth2.googleapis.com/token';
@@ -27,6 +36,7 @@ const UPLOAD_POLL_ATTEMPTS = 20;
 const UPLOAD_POLL_INTERVAL_MS = 3000;
 
 const uploadOnly = process.argv.includes('--upload-only');
+const checkOnly = process.argv.includes('--check');
 const extensionRoot = fileURLToPath(new URL('..', import.meta.url));
 
 function base64url(input) {
@@ -116,12 +126,35 @@ async function callJson(url, token, init = {}) {
 async function main() {
   const serviceAccount = loadServiceAccount();
   const publisherId = requireEnv('CWS_PUBLISHER_ID');
-  const extensionId = requireEnv('CWS_EXTENSION_ID');
-  const zipPath = resolveZip();
+  const extensionId = process.env.CWS_EXTENSION_ID || STORE_ITEM_ID;
   const base = `${API}/v2/publishers/${publisherId}/items/${extensionId}`;
 
-  console.log(`Publishing ${zipPath} (item ${extensionId})`);
   const token = await getAccessToken(serviceAccount);
+  console.log('Access token acquired.');
+
+  if (checkOnly) {
+    console.log(`Checking access to publisher ${publisherId}, item ${extensionId}...`);
+    try {
+      const status = await callJson(`${base}:fetchStatus`, token);
+      console.log('fetchStatus:', JSON.stringify(status, null, 2));
+      console.log('\nCredentials are valid: the service account can reach this item.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`\nCredential check FAILED: ${message}`);
+      if (message.includes('403')) {
+        console.error(
+          '403 — authenticated but not authorized. Confirm this service account\'s email is listed under the publisher dashboard Account section.',
+        );
+      } else if (message.includes('404')) {
+        console.error('404 — the publisher id or the store item id is wrong.');
+      }
+      process.exit(1);
+    }
+    return;
+  }
+
+  const zipPath = resolveZip();
+  console.log(`Publishing ${zipPath} (item ${extensionId})`);
 
   const uploadBody = readFileSync(zipPath);
   let upload = await callJson(`${API}/upload/v2/publishers/${publisherId}/items/${extensionId}:upload`, token, {

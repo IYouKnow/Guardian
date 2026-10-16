@@ -32,6 +32,11 @@ Desktop.ini
 *.swp
 *.swo
 
+# Service account keys (never commit these)
+*cws-service-account*.json
+*service-account*.json
+*service_account*.json
+
 # Extension builds
 apps/extension/dist/
 apps/extension/release/
