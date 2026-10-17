@@ -77,6 +77,12 @@ type AuthResponse struct {
 	Salt     string `json:"salt"`
 }
 
+type MeResponse struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	IsAdmin  bool   `json:"is_admin"`
+}
+
 type VaultItem struct {
 	ID            string `json:"id"`
 	EncryptedBlob string `json:"encrypted_blob"`

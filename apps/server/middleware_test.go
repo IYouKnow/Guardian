@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -165,5 +167,38 @@ func TestHandleUpdateUserDisableRevokesExistingToken(t *testing.T) {
 	}
 	if _, err := s.validateToken(authRequest(token)); err == nil {
 		t.Fatal("old token should stay revoked after re-activation")
+	}
+}
+
+func TestHandleMe(t *testing.T) {
+	s, id := newTestServer(t, "ACTIVE", 0)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	r = r.WithContext(context.WithValue(r.Context(), userIDKey, id))
+	rr := httptest.NewRecorder()
+	s.handleMe(rr, r)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	var got MeResponse
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ID != id || got.Username != "alice" {
+		t.Fatalf("got %+v, want id=%d username=alice", got, id)
+	}
+}
+
+func TestHandleMeUnknownUserRejected(t *testing.T) {
+	s, _ := newTestServer(t, "ACTIVE", 0)
+
+	r := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	r = r.WithContext(context.WithValue(r.Context(), userIDKey, 9999))
+	rr := httptest.NewRecorder()
+	s.handleMe(rr, r)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rr.Code)
 	}
 }

@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { authApi } from './api/auth';
 import Layout from './Layout';
@@ -11,11 +13,41 @@ import Storage from './pages/Storage';
 import Backup from './pages/Backup';
 import { getPageNameFromPath } from './utils';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  if (!authApi.isAuthenticated()) {
+// RequireAuth validates the stored token with the server once per app load so a
+// stale session (expired, revoked, or removed account) can't render the admin
+// UI with cached user info. A 401 from /auth/me clears the session and routes
+// to login.
+function RequireAuth() {
+  const [state, setState] = useState<'checking' | 'authed' | 'anon'>(
+    authApi.isAuthenticated() ? 'checking' : 'anon'
+  );
+
+  useEffect(() => {
+    if (state !== 'checking') return;
+    let active = true;
+    authApi.me()
+      .then(() => { if (active) setState('authed'); })
+      .catch(() => {
+        if (!active) return;
+        authApi.logout();
+        setState('anon');
+      });
+    return () => { active = false; };
+  }, [state]);
+
+  if (state === 'checking') {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-zinc-950">
+        <Loader2 className="h-5 w-5 text-yellow-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (state === 'anon') {
     return <Navigate to="/login" replace />;
   }
-  return <>{children}</>;
+
+  return <Outlet />;
 }
 
 function LayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -37,66 +69,56 @@ function App() {
               </Layout>
             }
           />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
+          <Route element={<RequireAuth />}>
+            <Route
+              path="/dashboard"
+              element={
                 <LayoutWrapper>
                   <Dashboard />
                 </LayoutWrapper>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
                 <LayoutWrapper>
                   <Users />
                 </LayoutWrapper>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/invites"
-            element={
-              <ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invites"
+              element={
                 <LayoutWrapper>
                   <Invites />
                 </LayoutWrapper>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
                 <LayoutWrapper>
                   <Settings />
                 </LayoutWrapper>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/storage"
-            element={
-              <ProtectedRoute>
+              }
+            />
+            <Route
+              path="/storage"
+              element={
                 <LayoutWrapper>
                   <Storage />
                 </LayoutWrapper>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/backup"
-            element={
-              <ProtectedRoute>
+              }
+            />
+            <Route
+              path="/backup"
+              element={
                 <LayoutWrapper>
                   <Backup />
                 </LayoutWrapper>
-              </ProtectedRoute>
-            }
-          />
+              }
+            />
+          </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>

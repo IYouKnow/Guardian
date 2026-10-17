@@ -91,6 +91,9 @@ func main() {
 	mux.HandleFunc("POST /auth/validate-invite", server.withAuthRateLimit(withMaxBody(authMaxBodyBytes, server.handleValidateInvite)))
 	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus)
 
+	// Current session — used by clients to validate a stored token on startup.
+	mux.HandleFunc("GET /auth/me", server.withUserAuth(server.handleMe))
+
 	// Admin / Invites
 	mux.HandleFunc("GET /api/admin/invites", server.withAdminAuth(server.handleListInvites))
 	mux.HandleFunc("POST /api/admin/invites", server.withAdminAuth(server.handleGenerateInvite))

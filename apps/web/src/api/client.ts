@@ -32,7 +32,11 @@ apiClient.interceptors.response.use(
             // Clear token and redirect to login
             localStorage.removeItem('guardian_token');
             localStorage.removeItem('guardian_user');
-            window.location.href = '/login';
+            // The startup session check (/auth/me) handles its own redirect via
+            // the router, so don't force a full-page reload for it.
+            if (!error.config?.url?.includes('/auth/me')) {
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }

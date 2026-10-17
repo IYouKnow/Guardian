@@ -32,6 +32,23 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": status})
 }
 
+// handleMe returns the authenticated user. Clients call it on startup to
+// validate a stored token and refresh their cached user info; a 401 means the
+// token is expired, revoked, or belongs to a removed account.
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
+	var id int
+	var username string
+	var isAdmin bool
+	if err := s.systemDB.QueryRow("SELECT id, username, is_admin FROM users WHERE id = ?", userID).Scan(&id, &username, &isAdmin); err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, MeResponse{ID: id, Username: username, IsAdmin: isAdmin})
+}
+
 func (s *Server) handleValidateInvite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`
