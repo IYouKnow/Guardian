@@ -11,6 +11,7 @@ import Invites from './pages/invites';
 import Settings from './pages/Settings';
 import Storage from './pages/Storage';
 import Backup from './pages/Backup';
+import Account from './pages/Account';
 import { getPageNameFromPath } from './utils';
 
 // RequireAuth validates the stored token with the server once per app load so a
@@ -50,6 +51,17 @@ function RequireAuth() {
   return <Outlet />;
 }
 
+// RequireAdmin sits inside RequireAuth, which has already validated the token
+// via /auth/me and refreshed the cached role. This is a UX gate only: the server
+// still enforces admin on every /api/admin/* route, so hiding the UI grants no
+// privilege.
+function RequireAdmin() {
+  if (!authApi.isAdmin()) {
+    return <Navigate to="/account" replace />;
+  }
+  return <Outlet />;
+}
+
 function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const currentPageName = getPageNameFromPath(location.pathname);
@@ -70,6 +82,15 @@ function App() {
             }
           />
           <Route element={<RequireAuth />}>
+            <Route
+              path="/account"
+              element={
+                <LayoutWrapper>
+                  <Account />
+                </LayoutWrapper>
+              }
+            />
+            <Route element={<RequireAdmin />}>
             <Route
               path="/dashboard"
               element={
@@ -118,6 +139,7 @@ function App() {
                 </LayoutWrapper>
               }
             />
+            </Route>
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>

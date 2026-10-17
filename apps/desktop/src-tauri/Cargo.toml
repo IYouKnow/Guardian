@@ -1,8 +1,8 @@
 [package]
 name = "guardian-desktop"
 version = "1.1.0"
-description = "A Tauri App"
-authors = ["Guardian Team"]
+description = "Guardian: offline-first password manager"
+authors = ["Guardian"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

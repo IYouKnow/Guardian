@@ -3,37 +3,49 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { User, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { authApi } from '../api/auth';
+import RegisterForm from '../components/RegisterForm';
 
 export default function Login() {
+    const [mode, setMode] = useState<'signin' | 'register'>('signin');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
         setLoading(true);
 
         try {
             // Artificial delay for smoother UX feeling
             await new Promise(resolve => setTimeout(resolve, 600));
 
-            const response = await authApi.login({ username, password });
-
-            if (!response.is_admin) {
-                setError('Access denied: Admin privileges required');
-                authApi.logout();
-                return;
-            }
-
+            await authApi.login({ username, password });
             navigate('/dashboard');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Invalid credentials');
         } finally {
             setLoading(false);
         }
+    };
+
+    const switchMode = (next: 'signin' | 'register') => {
+        setMode(next);
+        setError('');
+        setSuccess('');
+        setPassword('');
+    };
+
+    const handleRegistered = (registeredUsername: string) => {
+        setMode('signin');
+        setUsername(registeredUsername);
+        setPassword('');
+        setError('');
+        setSuccess('Account created. Sign in to continue.');
     };
 
     return (
@@ -68,13 +80,16 @@ export default function Login() {
                         {/* Header */}
                         <div className="text-center space-y-2">
                             <h1 className="text-3xl font-bold tracking-tight text-white mb-2 font-display">
-                                Welcome back
+                                {mode === 'signin' ? 'Welcome back' : 'Create your account'}
                             </h1>
                             <p className="text-zinc-500 text-sm font-medium">
-                                Enter your credentials to access the admin panel
+                                {mode === 'signin'
+                                    ? 'Enter your credentials to access the panel'
+                                    : 'Redeem an invite token to set up your account'}
                             </p>
                         </div>
                         {/* Form */}
+                        {mode === 'signin' ? (
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
@@ -152,16 +167,26 @@ export default function Login() {
                                 </motion.p>
                             )}
 
-                            <div className="text-center mt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/recover')}
-                                    className="text-xs text-zinc-500 hover:text-yellow-500 font-medium transition-colors"
-                                >
-                                    Recover Account
-                                </button>
-                            </div>
                         </form>
+                        ) : (
+                            <RegisterForm onRegistered={handleRegistered} />
+                        )}
+
+                        {success && (
+                            <p className="text-emerald-400 text-xs font-medium text-center -mt-4">
+                                {success}
+                            </p>
+                        )}
+
+                        <div className="text-center">
+                            <button
+                                type="button"
+                                onClick={() => switchMode(mode === 'signin' ? 'register' : 'signin')}
+                                className="text-xs text-zinc-500 hover:text-yellow-500 font-medium transition-colors"
+                            >
+                                {mode === 'signin' ? 'Create an account' : 'Back to sign in'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </motion.div>

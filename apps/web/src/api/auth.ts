@@ -17,6 +17,17 @@ export interface MeResponse {
     is_admin: boolean;
 }
 
+export interface RegisterRequest {
+    username: string;
+    password: string;
+    invite_token: string;
+    db_name?: string;
+}
+
+export interface SetupStatusResponse {
+    status: 'SETUP' | 'READY';
+}
+
 export const authApi = {
     async login(credentials: LoginRequest): Promise<AuthResponse> {
         const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
@@ -29,6 +40,25 @@ export const authApi = {
         }));
 
         return response.data;
+    },
+
+    // Reports whether the server still needs its first admin (SETUP) or is
+    // accepting invite-based registrations (READY). Public endpoint.
+    async setupStatus(): Promise<SetupStatusResponse> {
+        const response = await apiClient.get<SetupStatusResponse>('/auth/setup-status');
+        return response.data;
+    },
+
+    // Creates an account with an invite token (or the setup code for the first
+    // admin). The server responds 201 and issues no token, so nothing is
+    // persisted here — the user signs in afterwards.
+    async register(payload: RegisterRequest): Promise<void> {
+        await apiClient.post('/auth/register', payload);
+    },
+
+    // Optional pre-check so the form can surface a friendlier error before submit.
+    async validateInvite(token: string): Promise<void> {
+        await apiClient.post('/auth/validate-invite', { token });
     },
 
     // Validates the stored token with the server and refreshes cached user info.

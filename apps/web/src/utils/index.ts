@@ -4,6 +4,7 @@
 export function createPageUrl(pageName: string): string {
   const pageMap: Record<string, string> = {
     'Login': '/login',
+    'Account': '/account',
     'Dashboard': '/dashboard',
     'Users': '/users',
     'Invites': '/invites',
@@ -21,6 +22,7 @@ export function createPageUrl(pageName: string): string {
 export function getPageNameFromPath(path: string): string {
   const pathMap: Record<string, string> = {
     '/login': 'Login',
+    '/account': 'Account',
     '/dashboard': 'Dashboard',
     '/users': 'Users',
     '/invites': 'Invites',

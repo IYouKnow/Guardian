@@ -13,10 +13,12 @@ import {
   UserPlus,
   KeyRound,
   LogOut,
+  User,
   X,
   CornerDownLeft,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { authApi } from '../api/auth';
 
 interface CommandItem {
   id: string;
@@ -26,6 +28,7 @@ interface CommandItem {
   action: () => void;
   category: 'navigation' | 'action' | 'shortcut';
   shortcut?: string;
+  adminOnly?: boolean;
 }
 
 interface CommandPaletteProps {
@@ -40,94 +43,115 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const commands: CommandItem[] = useMemo(() => [
-    {
-      id: 'nav-dashboard',
-      label: 'Go to Dashboard',
-      description: 'View system overview',
-      icon: LayoutDashboard,
-      action: () => navigate(createPageUrl('Dashboard')),
-      category: 'navigation',
-      shortcut: 'GD',
-    },
-    {
-      id: 'nav-users',
-      label: 'Go to Users',
-      description: 'Manage user accounts',
-      icon: Users,
-      action: () => navigate(createPageUrl('Users')),
-      category: 'navigation',
-      shortcut: 'GU',
-    },
-    {
-      id: 'nav-invites',
-      label: 'Go to Invites',
-      description: 'Manage invite codes',
-      icon: Ticket,
-      action: () => navigate(createPageUrl('Invites')),
-      category: 'navigation',
-      shortcut: 'GI',
-    },
-    {
-      id: 'nav-storage',
-      label: 'Go to Storage',
-      description: 'View storage metrics',
-      icon: HardDrive,
-      action: () => navigate(createPageUrl('Storage')),
-      category: 'navigation',
-    },
-    {
-      id: 'nav-backup',
-      label: 'Go to Backup',
-      description: 'Manage backups',
-      icon: ShieldCheck,
-      action: () => navigate(createPageUrl('Backup')),
-      category: 'navigation',
-    },
-    {
-      id: 'nav-settings',
-      label: 'Go to Settings',
-      description: 'Configure preferences',
-      icon: Settings,
-      action: () => navigate(createPageUrl('Settings')),
-      category: 'navigation',
-      shortcut: 'GS',
-    },
-    {
-      id: 'action-create-user',
-      label: 'Create User',
-      description: 'Add a new admin user',
-      icon: UserPlus,
-      action: () => {
-        navigate(createPageUrl('Users'));
-        onOpenChange(false);
+  const commands: CommandItem[] = useMemo(() => {
+    const all: CommandItem[] = [
+      {
+        id: 'nav-account',
+        label: 'Go to Account',
+        description: 'View your account',
+        icon: User,
+        action: () => navigate(createPageUrl('Account')),
+        category: 'navigation',
       },
-      category: 'action',
-    },
-    {
-      id: 'action-create-invite',
-      label: 'Create Invite',
-      description: 'Generate new invite code',
-      icon: KeyRound,
-      action: () => {
-        navigate(createPageUrl('Invites'));
-        onOpenChange(false);
+      {
+        id: 'nav-dashboard',
+        label: 'Go to Dashboard',
+        description: 'View system overview',
+        icon: LayoutDashboard,
+        action: () => navigate(createPageUrl('Dashboard')),
+        category: 'navigation',
+        shortcut: 'GD',
+        adminOnly: true,
       },
-      category: 'action',
-    },
-    {
-      id: 'action-logout',
-      label: 'Sign Out',
-      description: 'Log out of the panel',
-      icon: LogOut,
-      action: () => {
-        localStorage.removeItem('guardian_token');
-        localStorage.removeItem('guardian_user');
-        navigate(createPageUrl('Login'));
+      {
+        id: 'nav-users',
+        label: 'Go to Users',
+        description: 'Manage user accounts',
+        icon: Users,
+        action: () => navigate(createPageUrl('Users')),
+        category: 'navigation',
+        shortcut: 'GU',
+        adminOnly: true,
       },
-      category: 'action',
-    },
-  ], [navigate, onOpenChange]);
+      {
+        id: 'nav-invites',
+        label: 'Go to Invites',
+        description: 'Manage invite codes',
+        icon: Ticket,
+        action: () => navigate(createPageUrl('Invites')),
+        category: 'navigation',
+        shortcut: 'GI',
+        adminOnly: true,
+      },
+      {
+        id: 'nav-storage',
+        label: 'Go to Storage',
+        description: 'View storage metrics',
+        icon: HardDrive,
+        action: () => navigate(createPageUrl('Storage')),
+        category: 'navigation',
+        adminOnly: true,
+      },
+      {
+        id: 'nav-backup',
+        label: 'Go to Backup',
+        description: 'Manage backups',
+        icon: ShieldCheck,
+        action: () => navigate(createPageUrl('Backup')),
+        category: 'navigation',
+        adminOnly: true,
+      },
+      {
+        id: 'nav-settings',
+        label: 'Go to Settings',
+        description: 'Configure preferences',
+        icon: Settings,
+        action: () => navigate(createPageUrl('Settings')),
+        category: 'navigation',
+        shortcut: 'GS',
+        adminOnly: true,
+      },
+      {
+        id: 'action-create-user',
+        label: 'Create User',
+        description: 'Add a new admin user',
+        icon: UserPlus,
+        action: () => {
+          navigate(createPageUrl('Users'));
+          onOpenChange(false);
+        },
+        category: 'action',
+        adminOnly: true,
+      },
+      {
+        id: 'action-create-invite',
+        label: 'Create Invite',
+        description: 'Generate new invite code',
+        icon: KeyRound,
+        action: () => {
+          navigate(createPageUrl('Invites'));
+          onOpenChange(false);
+        },
+        category: 'action',
+        adminOnly: true,
+      },
+      {
+        id: 'action-logout',
+        label: 'Sign Out',
+        description: 'Log out of the panel',
+        icon: LogOut,
+        action: () => {
+          localStorage.removeItem('guardian_token');
+          localStorage.removeItem('guardian_user');
+          navigate(createPageUrl('Login'));
+        },
+        category: 'action',
+      },
+    ];
+
+    const isAdmin = authApi.isAdmin();
+    return all.filter(cmd => isAdmin || !cmd.adminOnly);
+  }, [navigate, onOpenChange]);
 
   const filteredCommands = useMemo(() => {
     if (!query.trim()) return commands;

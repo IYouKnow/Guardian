@@ -6,6 +6,7 @@ import {
   Shield,
   LayoutDashboard,
   Users,
+  User,
   Ticket,
   LogOut,
   Menu,
@@ -29,12 +30,14 @@ import { useSSE } from './hooks/useSSE';
 import { SyncIndicator } from "@guardian/ui";
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { CommandPalette, useCommandPalette } from './components/CommandPalette';
+import { authApi } from './api/auth';
 
 interface NavItem {
   name: string;
   icon: React.ElementType;
   page: string;
   description: string;
+  adminOnly?: boolean;
 }
 
 interface NavSection {
@@ -43,6 +46,7 @@ interface NavSection {
   icon: React.ElementType;
   items: NavItem[];
   defaultOpen?: boolean;
+  adminOnly?: boolean;
 }
 
 const navSections: NavSection[] = [
@@ -50,6 +54,7 @@ const navSections: NavSection[] = [
     id: 'core',
     name: 'Core',
     icon: Server,
+    adminOnly: true,
     items: [
       { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard', description: 'System overview' },
       { name: 'Users', icon: Users, page: 'Users', description: 'Manage admin accounts' },
@@ -61,6 +66,7 @@ const navSections: NavSection[] = [
     id: 'system',
     name: 'System',
     icon: HardDrive,
+    adminOnly: true,
     items: [
       { name: 'Storage', icon: HardDrive, page: 'Storage', description: 'Storage metrics' },
       { name: 'Backup', icon: ShieldCheck, page: 'Backup', description: 'Manage backups' },
@@ -71,8 +77,18 @@ const navSections: NavSection[] = [
     id: 'settings',
     name: 'Settings',
     icon: Cog,
+    adminOnly: true,
     items: [
       { name: 'Settings', icon: Settings, page: 'Settings', description: 'Configure preferences' },
+    ],
+    defaultOpen: true,
+  },
+  {
+    id: 'account',
+    name: 'Account',
+    icon: User,
+    items: [
+      { name: 'Account', icon: User, page: 'Account', description: 'Your account overview' },
     ],
     defaultOpen: true,
   },
@@ -85,6 +101,7 @@ const pageDescriptions: Record<string, string> = {
   Storage: 'Monitor vault storage usage',
   Backup: 'Configure and monitor backups',
   Settings: 'Configure preferences & appearance',
+  Account: 'Your account overview',
 };
 
 interface LayoutProps {
@@ -107,6 +124,11 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   const { isOpen: commandPaletteOpen, setIsOpen: setCommandPaletteOpen } = useCommandPalette();
   const [serverVersion, setServerVersion] = useState<string>('?');
 
+  // Non-admins only see the Account section. The server still enforces admin on
+  // every /api/admin/* route, so this is presentation only.
+  const isAdmin = authApi.isAdmin();
+  const visibleSections = navSections.filter(section => isAdmin || !section.adminOnly);
+
   useEffect(() => {
     fetch('/health')
       .then(res => res.json())
@@ -122,7 +144,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
   };
 
   const getAllItems = () => {
-    return navSections.flatMap(section => section.items);
+    return visibleSections.flatMap(section => section.items);
   };
 
   const currentNavItem = getAllItems().find((item) => item.page === currentPageName);
@@ -251,7 +273,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
           </div>
 
           <nav className={`flex-1 p-2 lg:p-3 space-y-1 overflow-y-auto scrollbar-hide`}>
-            {!sidebarCollapsed && navSections.map((section) => {
+            {!sidebarCollapsed && visibleSections.map((section) => {
               const SectionIcon = section.icon;
               const isExpanded = expandedSections[section.id];
 
