@@ -91,6 +91,18 @@ func main() {
 	defer sysDB.Close()
 	logger.Println("System Database connected at", systemDBPath)
 
+	// 4b. Fail closed on first-run bootstrap: with no admin yet, refuse to start
+	// unless ADMIN_INVITE_CODE is set, so a freshly exposed server can't be claimed
+	// by whoever opens /auth/register first. Existing deployments (users > 0) boot
+	// unchanged even if the code has been cleared.
+	var userCount int
+	if err := sysDB.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount); err != nil {
+		logger.Fatalf("Failed to count users: %v", err)
+	}
+	if err := validateAdminSetup(userCount, os.Getenv("ADMIN_INVITE_CODE")); err != nil {
+		logger.Fatalf("Insecure server setup: %v. Set ADMIN_INVITE_CODE to a strong random string in your environment or .env file before first start.", err)
+	}
+
 	// 5. Setup Server
 	server := &Server{
 		systemDB:       sysDB,

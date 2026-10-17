@@ -56,6 +56,17 @@ func validateSecret(secret string) error {
 	return nil
 }
 
+// validateAdminSetup guards first-run bootstrap. When the server has no users yet,
+// ADMIN_INVITE_CODE must be configured so an exposed server can't be claimed by
+// whoever reaches /auth/register first. Once an admin exists the code is no longer
+// required (operators routinely remove it after setup).
+func validateAdminSetup(userCount int, adminInviteCode string) error {
+	if userCount == 0 && strings.TrimSpace(adminInviteCode) == "" {
+		return errors.New("ADMIN_INVITE_CODE is not set and no admin account exists yet")
+	}
+	return nil
+}
+
 // defaultTrustedProxyNets are always treated as trusted proxies: loopback, RFC1918
 // private, link-local, IPv6 ULA, and CGNAT (Tailscale). This lets a locally-run
 // reverse proxy (cloudflared, nginx, Docker bridge) work with no configuration,

@@ -61,9 +61,13 @@ func (s *Server) handleValidateInvite(w http.ResponseWriter, r *http.Request) {
 	s.systemDB.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 
 	if userCount == 0 {
-		// Setup Mode
+		// Setup Mode: an unconfigured server must not accept any setup token.
 		setupCode := os.Getenv("ADMIN_INVITE_CODE")
-		if setupCode != "" && req.Token != setupCode {
+		if setupCode == "" {
+			http.Error(w, "Server setup is disabled: ADMIN_INVITE_CODE is not configured", http.StatusForbidden)
+			return
+		}
+		if req.Token != setupCode {
 			http.Error(w, "Invalid setup code", http.StatusForbidden)
 			return
 		}
@@ -107,15 +111,19 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	isAdmin := false
 	if userCount == 0 {
-		// First user is Admin
-		// Check for Setup Code in Env
+		// First user is Admin. Fail closed: only allow claiming the admin account
+		// when the operator has configured ADMIN_INVITE_CODE, otherwise anyone
+		// reaching this endpoint first could take over the server.
 		setupCode := os.Getenv("ADMIN_INVITE_CODE")
-		if setupCode != "" {
-			if req.InviteToken != setupCode {
-				s.logger.Println("Failed admin setup attempt: Invalid setup code")
-				http.Error(w, "Invalid admin setup code", http.StatusForbidden)
-				return
-			}
+		if setupCode == "" {
+			s.logger.Println("Refused admin setup: ADMIN_INVITE_CODE is not configured")
+			http.Error(w, "Server setup is disabled: ADMIN_INVITE_CODE is not configured", http.StatusForbidden)
+			return
+		}
+		if req.InviteToken != setupCode {
+			s.logger.Println("Failed admin setup attempt: Invalid setup code")
+			http.Error(w, "Invalid admin setup code", http.StatusForbidden)
+			return
 		}
 
 		isAdmin = true

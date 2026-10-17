@@ -14,6 +14,9 @@ services:
       # REQUIRED: set a strong random value (e.g. `openssl rand -base64 32`).
       # Left empty on purpose — the server refuses to start until you set it.
       JWT_SECRET: ""
+      # REQUIRED for the FIRST boot: while no admin account exists the server
+      # refuses to start without this, and setup/registration is rejected. Set any
+      # strong random string; you can remove it after the admin account is created.
       ADMIN_INVITE_CODE: ""
       # OPTIONAL: trusted reverse-proxy IPs/CIDRs for X-Forwarded-For. Leave empty
       # unless your proxy connects from a PUBLIC address — local/private proxies
@@ -53,7 +56,7 @@ services:
             en_us: "REQUIRED. Random secret used to sign JWTs. Generate with: openssl rand -base64 32"
         - container: ADMIN_INVITE_CODE
           description:
-            en_us: "Optional. Invite code required to create the first admin account"
+            en_us: "REQUIRED for the first boot. Invite code required to create the first admin account; the server won't start without it while no admin exists."
         - container: TRUSTED_PROXIES
           description:
             en_us: "Optional. Trusted reverse-proxy IPs/CIDRs for X-Forwarded-For; only needed for a proxy on a public address"
@@ -85,10 +88,11 @@ x-casaos:
     en_us: |
       Guardian password manager server. After install, open http://<your-host-ip>:8080
       and complete setup. Replace JWT_SECRET with a strong random string before first
-      start; the first user to register becomes admin (use ADMIN_INVITE_CODE to secure
-      this).
+      start; the first user to register becomes admin (ADMIN_INVITE_CODE is required
+      for this).
   tips:
     before_install:
       en_us: |
         REQUIRED: replace JWT_SECRET with a strong random string (e.g. `openssl rand -base64 32`).
-        Optional: set ADMIN_INVITE_CODE to restrict who can create the first admin account.
+        REQUIRED for the first boot: set ADMIN_INVITE_CODE to a strong random string — while no
+        admin account exists the server won't start without it. You can remove it after setup.
