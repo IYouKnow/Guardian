@@ -15,16 +15,39 @@ import (
 
 // --- Admin Handlers ---
 
+const inviteAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+// randomString returns n characters drawn uniformly from inviteAlphabet using
+// rejection sampling. A naive `b % len(inviteAlphabet)` is biased because 256 is
+// not a multiple of 36 (256 % 36 == 4), so the first 4 characters would be
+// slightly over-represented; bytes >= the largest multiple of 36 (252) are
+// rejected and redrawn instead.
+func randomString(n int) (string, error) {
+	const limit = byte(256 - 256%len(inviteAlphabet))
+	out := make([]byte, n)
+	buf := make([]byte, 32)
+	for i := 0; i < n; {
+		if _, err := rand.Read(buf); err != nil {
+			return "", fmt.Errorf("failed to generate random bytes: %w", err)
+		}
+		for _, b := range buf {
+			if b < limit {
+				out[i] = inviteAlphabet[b%byte(len(inviteAlphabet))]
+				i++
+				if i == n {
+					break
+				}
+			}
+		}
+	}
+	return string(out), nil
+}
+
 func generateInviteToken() (string, error) {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	s, err := randomString(16)
+	if err != nil {
+		return "", err
 	}
-	for i := 0; i < 16; i++ {
-		b[i] = charset[b[i]%byte(len(charset))]
-	}
-	s := string(b)
 	return fmt.Sprintf("GRDN-%s-%s-%s-%s", s[0:4], s[4:8], s[8:12], s[12:16]), nil
 }
 
