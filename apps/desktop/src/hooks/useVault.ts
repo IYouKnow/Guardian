@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { VaultEntry, VaultData, VaultSettings, FolderNode, loadVault, createVault } from "@guardian/core/crypto/vault";
 import { deriveKey } from "@guardian/core/crypto/argon2";
-import { encrypt, decrypt, generateNonce } from "@guardian/core/crypto/chacha20";
+import { packBlob, unpackBlob, isLegacyBlob } from "@guardian/core/crypto/chacha20";
 
 interface UseVaultReturn {
   // Common
@@ -137,20 +137,20 @@ export function useVault(): UseVaultReturn {
   async function decryptItemsFromServer(
     items: VaultItem[],
     key: Uint8Array,
-  ): Promise<{ entries: VaultEntry[]; settings: VaultSettings | undefined; folders: FolderNode[] | undefined; successCount: number }> {
+  ): Promise<{ entries: VaultEntry[]; settings: VaultSettings | undefined; folders: FolderNode[] | undefined; successCount: number; legacyFound: boolean }> {
     const entries: VaultEntry[] = [];
     let settings: VaultSettings | undefined;
     let folders: FolderNode[] | undefined;
     let successCount = 0;
+    let legacyFound = false;
 
     for (const item of items) {
       const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
       if (raw.length < 28) continue;
-      const nonce = raw.slice(0, 12);
-      const ciphertext = raw.slice(12);
 
       try {
-        const plaintext = await decrypt(key, nonce, ciphertext) as Uint8Array;
+        if (isLegacyBlob(raw)) legacyFound = true;
+        const plaintext = await unpackBlob(key, raw);
         const jsonStr = new TextDecoder().decode(plaintext);
 
         if (item.id === "settings") {
@@ -166,7 +166,7 @@ export function useVault(): UseVaultReturn {
       }
     }
 
-    return { entries, settings, folders, successCount };
+    return { entries, settings, folders, successCount, legacyFound };
   }
 
   const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<VaultData> => {
@@ -257,13 +257,14 @@ export function useVault(): UseVaultReturn {
       di.step = di.step + '|before-return';
       serverKeyRef.current = key;
 
-      // If legacy fallback was used, re-encrypt everything with the new salted key and save
-      if (usedLegacyFallback) {
-        const newKey = await deriveKey(password, saltBytes);
-        serverKeyRef.current = newKey;
-        // Re-encrypt and push all items back to server with new key
+      // Migrate to the current formats: re-encrypt with the new salted key if the
+      // legacy KDF was used, and/or rewrite any legacy (unmarked) blobs as v2.
+      if (usedLegacyFallback || decryptResult.legacyFound) {
+        const migrationKey = usedLegacyFallback ? await deriveKey(password, saltBytes) : key;
+        serverKeyRef.current = migrationKey;
+        // Re-encrypt and push all items back to server with the current format
         await saveToServer(decryptResult.entries, decryptResult.settings, decryptResult.folders);
-        console.log("[useVault] Migrated vault to per-user random salt key derivation");
+        console.log("[useVault] Migrated vault items to current key derivation and encryption format");
       }
 
       // Clean up junk items with invalid encrypted blobs
@@ -328,16 +329,9 @@ export function useVault(): UseVaultReturn {
     const encryptItem = async (data: any) => {
       const json = JSON.stringify(data);
       const plaintext = new TextEncoder().encode(json);
-      const nonce = generateNonce();
-      const encrypted = await encrypt(key, nonce, plaintext);
 
-      // Pack: Nonce + Encrypted
-      const finalObj = new Uint8Array(nonce.length + encrypted.length);
-      finalObj.set(nonce);
-      finalObj.set(encrypted, nonce.length);
-
-      // To Base64
-      return bytesToBase64(finalObj);
+      // Wire format: [0x02 marker][12-byte nonce][ciphertext + 16-byte tag]
+      return bytesToBase64(await packBlob(key, plaintext));
     }
 
     // 1. Process standard entries

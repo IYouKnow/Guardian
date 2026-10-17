@@ -1,6 +1,6 @@
 import type { VaultEntry, VaultData, VaultSettings } from "@guardian/core/crypto/vault";
 import { deriveKey } from "@guardian/core/crypto/argon2";
-import { decrypt } from "@guardian/core/crypto/chacha20";
+import { unpackBlob } from "@guardian/core/crypto/chacha20";
 import { httpRequest } from "./http";
 import { sha256 } from "./sha256";
 
@@ -110,7 +110,9 @@ async function decryptVaultItems(
       continue;
     }
 
-    // Blob format: [Nonce 12][Ciphertext N][Tag 16] => min length 28.
+    // Blob format: [0x02 marker][Nonce 12][Ciphertext N][Tag 16] => min 29.
+    // Legacy (unmarked) blobs [Nonce 12][Ciphertext N][broken tag 16] are
+    // recovered transparently (min 28).
     if (bytes.length < 28) {
       if (!warnedDecryptIds.has(item.id)) {
         warnedDecryptIds.add(item.id);
@@ -121,11 +123,8 @@ async function decryptVaultItems(
 
     candidateCount += 1;
 
-    const nonce = bytes.slice(0, 12);
-    const ciphertext = bytes.slice(12);
-
     try {
-      const plaintext = await decrypt(key, nonce, ciphertext);
+      const plaintext = await unpackBlob(key, bytes);
       const entryStr = new TextDecoder().decode(plaintext);
       if (item.id === "settings") {
         settings = JSON.parse(entryStr) as VaultSettings;

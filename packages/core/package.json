@@ -3,5 +3,14 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./index.ts",
-  "types": "./index.ts"
+  "types": "./index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.4.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
 }

@@ -3,10 +3,14 @@
  * 
  * .guardian file format:
  * - Bytes 0-7: "GUARDIAN" (ASCII, 8 bytes)
- * - Byte 8: version (1 byte, value: 1)
+ * - Byte 8: version (1 byte). Current version is 2.
  * - Bytes 9-24: random salt (16 bytes)
  * - Bytes 25-36: nonce (12 bytes)
  * - Bytes 37+: ciphertext + Poly1305 tag (16 bytes)
+ *
+ * Version 1 was written with a broken Poly1305 tag that provided no
+ * authentication. Those files are still readable: they are recovered with raw
+ * ChaCha20 and transparently re-encrypted as version 2 on the next save.
  * 
  * Encrypted data is a JSON with:
  * {
@@ -17,7 +21,7 @@
  */
 
 import { deriveKey, deriveKeyLegacy, generateSalt } from './argon2';
-import { encrypt, decrypt, generateNonce } from './chacha20';
+import { encrypt, decrypt, decryptLegacy, generateNonce } from './chacha20';
 
 // Import the fallback function for compatibility
 async function deriveKeyPBKDF2(password: string, salt: Uint8Array): Promise<Uint8Array> {
@@ -54,7 +58,8 @@ async function deriveKeyPBKDF2(password: string, salt: Uint8Array): Promise<Uint
 
 // Format constants
 const MAGIC_HEADER = new TextEncoder().encode('GUARDIAN'); // 8 bytes
-const VERSION = 1; // 1 byte
+const VERSION = 2; // 1 byte
+const LEGACY_VERSION = 1; // broken-tag format, readable via recovery
 const SALT_LENGTH = 16; // 16 bytes
 const NONCE_LENGTH = 12; // 12 bytes
 const TAG_LENGTH = 16; // 16 bytes (Poly1305 tag)
@@ -263,8 +268,8 @@ export async function openVault(
 
   // Byte 8: Reads the version
   const version = vaultData[8];
-  if (version !== VERSION) {
-    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}`);
+  if (version !== VERSION && version !== LEGACY_VERSION) {
+    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}.`);
   }
 
   // Bytes 9-24: Reads the salt (16 bytes)
@@ -276,10 +281,15 @@ export async function openVault(
   // Bytes 37+: Reads the ciphertext + tag
   const ciphertextWithTag = vaultData.slice(37);
 
+  // v1 vaults used the old broken-tag format; recover their plaintext with raw
+  // ChaCha20 (the old tag authenticated nothing). They are re-encrypted as v2
+  // the next time the vault is saved.
+  const cipher = version === LEGACY_VERSION ? decryptLegacy : decrypt;
+
   // Helper function to attempt decryption with a given key derivation function
   const tryDecrypt = async (deriveKeyFn: (password: string, salt: Uint8Array) => Promise<Uint8Array>): Promise<VaultData> => {
     const key = await deriveKeyFn(password, salt);
-    const plaintext = await decrypt(key, nonce, ciphertextWithTag);
+    const plaintext = await cipher(key, nonce, ciphertextWithTag);
     const decryptedString = new TextDecoder().decode(plaintext);
     let data: VaultData;
     try {
@@ -318,34 +328,25 @@ export async function openVault(
     );
   };
 
-  // Try 1: Argon2id with current parameters (32 MiB)
-  try {
-    return await tryDecrypt(deriveKey);
-  } catch (error) {
-    // If it's not an authentication/decryption error, re-throw immediately
-    if (!isAuthOrDecryptError(error)) {
-      throw error;
+  // v2 vaults only ever use the current Argon2id parameters. v1 vaults may
+  // predate those parameters, so fall back through the legacy KDFs.
+  const kdfAttempts = version === LEGACY_VERSION
+    ? [deriveKey, deriveKeyLegacy, deriveKeyPBKDF2]
+    : [deriveKey];
+
+  for (const deriveKeyFn of kdfAttempts) {
+    try {
+      return await tryDecrypt(deriveKeyFn);
+    } catch (error) {
+      // If it's not an authentication/decryption error, re-throw immediately
+      if (!isAuthOrDecryptError(error)) {
+        throw error;
+      }
+      // Otherwise, continue to the next key derivation function
     }
-    // Otherwise, continue to try legacy parameters
   }
 
-  // Try 2: Argon2id with legacy parameters (64 MiB) for backward compatibility
-  try {
-    return await tryDecrypt(deriveKeyLegacy);
-  } catch (error) {
-    // If it's not an authentication/decryption error, re-throw immediately
-    if (!isAuthOrDecryptError(error)) {
-      throw error;
-    }
-    // Otherwise, continue to PBKDF2 fallback
-  }
-
-  // Try 3: PBKDF2 fallback (for very old vaults that were encrypted with PBKDF2)
-  try {
-    return await tryDecrypt(deriveKeyPBKDF2);
-  } catch (error) {
-    throw new Error('Authentication failed: Invalid master password or corrupted vault file.');
-  }
+  throw new Error('Authentication failed: Invalid master password or corrupted vault file.');
 }
 
 /**
@@ -373,8 +374,8 @@ export async function openVaultWithKey(
 
   // Byte 8: Reads the version
   const version = vaultData[8];
-  if (version !== VERSION) {
-    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}`);
+  if (version !== VERSION && version !== LEGACY_VERSION) {
+    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}.`);
   }
 
   // Bytes 25-36: Reads the nonce (12 bytes)
@@ -385,7 +386,9 @@ export async function openVaultWithKey(
   const ciphertextWithTag = vaultData.slice(37);
 
   try {
-    const plaintext = await decrypt(key, nonce, ciphertextWithTag);
+    const plaintext = version === LEGACY_VERSION
+      ? decryptLegacy(key, nonce, ciphertextWithTag)
+      : await decrypt(key, nonce, ciphertextWithTag);
     const decryptedString = new TextDecoder().decode(plaintext);
     let data: VaultData;
     try {

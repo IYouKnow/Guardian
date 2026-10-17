@@ -5,7 +5,8 @@
  * - Argon2id for key derivation (2 seconds of work)
  * - ChaCha20-Poly1305 for encryption
  * 
- * All implementations use Web Crypto API (no external dependencies)
+ * Key derivation uses the Web Crypto API / Argon2 WASM; the AEAD uses the
+ * audited @noble/ciphers library.
  */
 
 export * from "./argon2";

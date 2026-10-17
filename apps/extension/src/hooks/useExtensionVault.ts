@@ -6,7 +6,7 @@ export interface ExtensionVaultData extends VaultData {
     serverKey?: number[];
 }
 import { deriveKey } from "@guardian/core/crypto/argon2";
-import { decrypt } from "@guardian/core/crypto/chacha20";
+import { unpackBlob } from "@guardian/core/crypto/chacha20";
 
 interface UseExtensionVaultReturn {
     isLoading: boolean;
@@ -35,20 +35,21 @@ export function useExtensionVault(): UseExtensionVaultReturn {
         return deriveKey(password, new Uint8Array(saltBuffer).slice(0, 16));
     };
 
-    async function decryptEntries(items: VaultItem[], key: Uint8Array): Promise<VaultEntry[]> {
+    async function decryptEntries(items: VaultItem[], key: Uint8Array): Promise<{ entries: VaultEntry[]; candidateCount: number }> {
         const entries: VaultEntry[] = [];
+        let candidateCount = 0;
         for (const item of items) {
             if (item.id === "settings") continue;
             const raw = Uint8Array.from(atob(item.encrypted_blob), c => c.charCodeAt(0));
             if (raw.length < 28) continue;
-            const nonce = raw.slice(0, 12);
-            const ciphertext = raw.slice(12);
+            candidateCount++;
             try {
-                const plaintext = await decrypt(key, nonce, ciphertext);
+                // Recovers both the current format and legacy (unmarked) blobs.
+                const plaintext = await unpackBlob(key, raw);
                 entries.push(JSON.parse(new TextDecoder().decode(plaintext)));
             } catch { /* skip */ }
         }
-        return entries;
+        return { entries, candidateCount };
     }
 
     const loginToServer = useCallback(async (url: string, username: string, password: string): Promise<ExtensionVaultData> => {
@@ -90,13 +91,19 @@ export function useExtensionVault(): UseExtensionVaultReturn {
             const items: VaultItem[] = await itemsResp.json();
 
             // 4. Try new salted key first
-            let entries = await decryptEntries(items, key);
+            let { entries, candidateCount } = await decryptEntries(items, key);
 
-            // Legacy fallback for existing vaults
+            // Legacy fallback for existing vaults (username-based salt)
             if (entries.length === 0 && items.some(i => i.id !== "settings")) {
                 const legacyKey = await deriveLegacyKey(password, username);
-                entries = await decryptEntries(items, legacyKey);
+                const legacy = await decryptEntries(items, legacyKey);
+                entries = legacy.entries;
+                candidateCount = legacy.candidateCount;
                 if (entries.length > 0) key = legacyKey;
+            }
+
+            if (candidateCount > 0 && entries.length === 0) {
+                throw new Error("Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).");
             }
 
             return {
@@ -133,7 +140,10 @@ export function useExtensionVault(): UseExtensionVaultReturn {
             if (!itemsResp.ok) throw new Error("Failed to fetch vault items");
 
             const items: VaultItem[] = await itemsResp.json();
-            const entries = await decryptEntries(items, key);
+            const { entries, candidateCount } = await decryptEntries(items, key);
+            if (candidateCount > 0 && entries.length === 0) {
+                throw new Error("Failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).");
+            }
 
             return {
                 entries,

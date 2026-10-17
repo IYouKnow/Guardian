@@ -1,5 +1,5 @@
 import type { VaultEntry } from "@guardian/core/crypto/vault";
-import { encrypt, generateNonce } from "@guardian/core/crypto/chacha20";
+import { packBlob } from "@guardian/core/crypto/chacha20";
 import { httpRequest } from "./http";
 
 interface ServerItem {
@@ -27,12 +27,9 @@ function cleanUrl(url: string): string {
 async function encryptEntry(key: Uint8Array, entry: VaultEntry): Promise<ServerItem> {
   const json = JSON.stringify(entry);
   const plaintext = new TextEncoder().encode(json);
-  const nonce = generateNonce();
-  const ciphertext = await encrypt(key, nonce, plaintext);
 
-  const packed = new Uint8Array(nonce.length + ciphertext.length);
-  packed.set(nonce, 0);
-  packed.set(ciphertext, nonce.length);
+  // Wire format: [0x02 marker][12-byte nonce][ciphertext + 16-byte tag]
+  const packed = await packBlob(key, plaintext);
 
   return {
     id: entry.id,
