@@ -105,11 +105,64 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Check User Count
+	// 1. Validate credentials up front so weak/invalid input is rejected before
+	// the expensive password hash.
+	if err := validateUsername(req.Username); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validatePassword(req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 2. Hash the password before opening the transaction, so the single DB
+	// connection isn't held for the duration of bcrypt.
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
+	if err != nil {
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Generate random salt for key derivation
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		http.Error(w, "Failed to generate salt", http.StatusInternalServerError)
+		return
+	}
+	saltB64 := base64.StdEncoding.EncodeToString(salt)
+
+	// 4. Generate DB Path (UUID)
+	userUUID := uuid.New().String()
+	dbFilename := userUUID + ".db"
+	dbPath := filepath.Join(s.config.DataDir, dbFilename)
+
+	friendlyName := req.DBName
+	if friendlyName == "" {
+		friendlyName = req.Username
+	}
+
+	// 5. Decide admin-vs-invite and create the user in one transaction. The pool
+	// is capped at a single connection, so holding a transaction here serialises
+	// the "first user becomes admin" count check with the insert — two concurrent
+	// first registrations can no longer both be treated as admin.
+	tx, err := s.systemDB.BeginTx(r.Context(), nil)
+	if err != nil {
+		s.logger.Println("Register error: begin tx:", err)
+		http.Error(w, "Registration failed", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
 	var userCount int
-	s.systemDB.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
+	if err := tx.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount); err != nil {
+		s.logger.Println("Register error: count users:", err)
+		http.Error(w, "Registration failed", http.StatusInternalServerError)
+		return
+	}
 
 	isAdmin := false
+	role := "User"
 	if userCount == 0 {
 		// First user is Admin. Fail closed: only allow claiming the admin account
 		// when the operator has configured ADMIN_INVITE_CODE, otherwise anyone
@@ -127,6 +180,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 
 		isAdmin = true
+		role = "Admin"
 		s.logger.Println("Registering first user as ADMIN:", req.Username)
 	} else {
 		// Validate Invite
@@ -140,7 +194,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		var status string
 		var expiresAt *time.Time
 
-		err := s.systemDB.QueryRow(`
+		err := tx.QueryRow(`
 			SELECT id, use_count, max_uses, status, expires_at FROM invites 
 			WHERE token = ?
 		`, req.InviteToken).Scan(&inviteID, &useCount, &maxUses, &status, &expiresAt)
@@ -162,7 +216,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		// Check Expiry
 		if expiresAt != nil && expiresAt.Before(time.Now()) {
 			// Update status to EXPIRED if it wasn't already caught (usually background task or on-the-fly)
-			s.systemDB.Exec("UPDATE invites SET status = 'EXPIRED' WHERE id = ?", inviteID)
+			tx.Exec("UPDATE invites SET status = 'EXPIRED' WHERE id = ?", inviteID)
 			http.Error(w, "Invite has expired", http.StatusForbidden)
 			return
 		}
@@ -174,38 +228,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 2. Generate random salt for key derivation
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		http.Error(w, "Failed to generate salt", http.StatusInternalServerError)
-		return
-	}
-	saltB64 := base64.StdEncoding.EncodeToString(salt)
-
-	// 3. Hash Password
-	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		http.Error(w, "Error processing password", http.StatusInternalServerError)
-		return
-	}
-
-	// 3. Generate DB Path (UUID)
-	userUUID := uuid.New().String()
-	dbFilename := userUUID + ".db"
-	dbPath := filepath.Join(s.config.DataDir, dbFilename)
-
-	friendlyName := req.DBName
-	if friendlyName == "" {
-		friendlyName = req.Username
-	}
-
-	// 4. Create User in System DB
-	role := "User"
-	if isAdmin {
-		role = "Admin"
-	}
-
-	res, err := s.systemDB.Exec(`
+	// 6. Create User in System DB
+	res, err := tx.Exec(`
 		INSERT INTO users (username, password_hash, is_admin, db_path, friendly_name, status, role, salt) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, req.Username, string(hashed), isAdmin, dbFilename, friendlyName, "ACTIVE", role, saltB64)
@@ -222,9 +246,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	newUserID, _ := res.LastInsertId()
 
-	// 5. Update Invite Usage (if applicable)
+	// 7. Update Invite Usage (if applicable)
 	if !isAdmin {
-		_, err := s.systemDB.Exec(`
+		if _, err := tx.Exec(`
 			UPDATE invites 
 			SET use_count = use_count + 1, 
 			    used_at = CURRENT_TIMESTAMP,
@@ -234,13 +258,18 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 				END,
 			    status = CASE WHEN max_uses > 0 AND use_count + 1 >= max_uses THEN 'USED' ELSE status END
 			WHERE token = ?
-		`, newUserID, newUserID, req.InviteToken)
-		if err != nil {
+		`, newUserID, newUserID, req.InviteToken); err != nil {
 			s.logger.Println("Warning: Failed to update invite usage:", err)
 		}
 	}
 
-	// 6. Init User Database
+	if err := tx.Commit(); err != nil {
+		s.logger.Println("Register error: commit:", err)
+		http.Error(w, "Registration failed", http.StatusInternalServerError)
+		return
+	}
+
+	// 8. Init User Database
 	if err := initUserDB(dbPath); err != nil {
 		// Rollback user creation ideally, but for now just log error
 		s.logger.Println("CRITICAL: Failed to init user db:", err)
@@ -261,7 +290,7 @@ var (
 
 func burnPasswordCompare(password string) {
 	dummyHashOnce.Do(func() {
-		dummyHash, _ = bcrypt.GenerateFromPassword([]byte("guardian-timing-equalizer"), bcrypt.DefaultCost)
+		dummyHash, _ = bcrypt.GenerateFromPassword([]byte("guardian-timing-equalizer"), bcryptCost)
 	})
 	bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 }
