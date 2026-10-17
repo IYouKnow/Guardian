@@ -260,7 +260,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var passwordHash string
 	var isAdmin bool
 	var salt string
-	err := s.systemDB.QueryRow("SELECT id, password_hash, is_admin, salt FROM users WHERE username = ?", req.Username).Scan(&id, &passwordHash, &isAdmin, &salt)
+	var status string
+	var tokenVersion int
+	err := s.systemDB.QueryRow("SELECT id, password_hash, is_admin, salt, status, COALESCE(token_version, 0) FROM users WHERE username = ?", req.Username).Scan(&id, &passwordHash, &isAdmin, &salt, &status, &tokenVersion)
 	if err == sql.ErrNoRows {
 		burnPasswordCompare(req.Password)
 		s.authLockouts.recordFailure(accountKey)
@@ -277,6 +279,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the real password first (above) so timing stays equalised, then
+	// reject accounts that have been disabled or suspended.
+	if status != "ACTIVE" {
+		http.Error(w, "Account is disabled", http.StatusUnauthorized)
+		return
+	}
+
 	s.authLockouts.clear(accountKey)
 
 	// Retroactively generate salt for existing users who don't have one
@@ -290,7 +299,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.systemDB.Exec("UPDATE users SET salt = ? WHERE id = ?", salt, id)
 	}
 
-	token, err := createToken(id)
+	token, err := createToken(id, tokenVersion)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return

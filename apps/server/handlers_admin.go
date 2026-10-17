@@ -351,7 +351,14 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid status. Must be ACTIVE, DISABLED, or SUSPENDED", http.StatusBadRequest)
 			return
 		}
-		_, err := s.systemDB.Exec("UPDATE users SET status = ? WHERE id = ?", *req.Status, id)
+		// Disabling or suspending an account bumps token_version so every
+		// outstanding session is revoked immediately. Re-activating does not.
+		var err error
+		if *req.Status == "ACTIVE" {
+			_, err = s.systemDB.Exec("UPDATE users SET status = ? WHERE id = ?", *req.Status, id)
+		} else {
+			_, err = s.systemDB.Exec("UPDATE users SET status = ?, token_version = token_version + 1 WHERE id = ?", *req.Status, id)
+		}
 		if err != nil {
 			s.logger.Println("handleUpdateUser: status error:", err)
 			http.Error(w, "Database error", http.StatusInternalServerError)

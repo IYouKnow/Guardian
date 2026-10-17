@@ -120,17 +120,38 @@ func (s *Server) validateToken(r *http.Request) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("invalid user id")
 	}
+	userID := int(userIDFloat)
 
-	return int(userIDFloat), nil
+	// Tokens issued before this claim existed have no "ver" and default to 0.
+	tokenVersion, _ := claims["ver"].(float64)
+
+	// Reject tokens for accounts that are no longer active, and tokens whose
+	// version no longer matches the stored one (revoked by disable/suspend).
+	var status string
+	var dbVersion int
+	if err := s.systemDB.QueryRow(
+		"SELECT status, COALESCE(token_version, 0) FROM users WHERE id = ?", userID,
+	).Scan(&status, &dbVersion); err != nil {
+		return 0, fmt.Errorf("user lookup failed")
+	}
+	if status != "ACTIVE" {
+		return 0, fmt.Errorf("account is not active")
+	}
+	if int(tokenVersion) != dbVersion {
+		return 0, fmt.Errorf("token has been revoked")
+	}
+
+	return userID, nil
 }
 
 // --- Helpers ---
 
-func createToken(userID int) (string, error) {
+func createToken(userID int, tokenVersion int) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID,
 		"iss": "guardian-server",
 		"exp": time.Now().Add(TokenDuration).Unix(),
+		"ver": tokenVersion,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(SecretKey))

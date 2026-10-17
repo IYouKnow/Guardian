@@ -154,6 +154,12 @@ export default function UserTable({ users, loading, onEditUser }: UserTableProps
                       </DropdownMenuItem>
                       <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer`}>
                         <Key className="w-4 h-4 mr-2" /> Reset Password
+                        <Badge
+                          variant="outline"
+                          className="ml-auto text-[10px] font-medium uppercase tracking-wide bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        >
+                          Soon
+                        </Badge>
                       </DropdownMenuItem>
                       <DropdownMenuItem className={`hover:${themeClasses.hoverBg} cursor-pointer text-yellow-400`}>
                         <UserX className="w-4 h-4 mr-2" /> Suspend User

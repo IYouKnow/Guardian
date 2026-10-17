@@ -44,6 +44,7 @@ func initSystemDB(path string) (*sql.DB, error) {
 		friendly_name TEXT,
 		status TEXT DEFAULT 'ACTIVE',
 		role TEXT DEFAULT 'User',
+		token_version INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		last_login DATETIME
 	);
@@ -74,6 +75,7 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE users ADD COLUMN preferences TEXT DEFAULT '{}'")
 	db.Exec("ALTER TABLE users ADD COLUMN salt TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE users ADD COLUMN max_ws_per_ip INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0")
 
 	db.Exec(`
 		CREATE TABLE IF NOT EXISTS server_settings (
