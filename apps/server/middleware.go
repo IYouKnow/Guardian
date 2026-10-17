@@ -48,7 +48,7 @@ func (s *Server) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 // is read so oversized/expensive requests are rejected early.
 func (s *Server) withAuthRateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if ok, retry := s.authIPLimiter.allow(getClientIP(r)); !ok {
+		if ok, retry := s.authIPLimiter.allow(s.getClientIP(r)); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{
 				"message": "Too many attempts. Try again later.",

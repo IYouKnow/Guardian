@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path"
@@ -24,13 +25,14 @@ var content embed.FS
 
 // --- Server ---
 type Server struct {
-	systemDB      *sql.DB
-	config        Config
-	logger        *log.Logger
-	userDBs       sync.Map // map[string]*sql.DB - cached user DB connections
-	sseHub        *SSEHub
-	authIPLimiter *rateLimiter
-	authLockouts  *lockoutTracker
+	systemDB       *sql.DB
+	config         Config
+	logger         *log.Logger
+	userDBs        sync.Map // map[string]*sql.DB - cached user DB connections
+	sseHub         *SSEHub
+	authIPLimiter  *rateLimiter
+	authLockouts   *lockoutTracker
+	trustedProxies []netip.Prefix
 }
 
 func main() {
@@ -56,6 +58,15 @@ func main() {
 		logger.Fatalf("Insecure JWT_SECRET: %v. Generate one with `openssl rand -base64 32` and set it in your environment or .env file.", err)
 	}
 
+	// 3b. Extra trusted proxy ranges for X-Forwarded-For. Local/private peers are
+	// always trusted (see defaultTrustedProxyNets); this adds public ones. Fail
+	// closed on malformed entries so a typo can't silently change what is trusted.
+	trustedProxies, err := parseTrustedProxies(os.Getenv("TRUSTED_PROXIES"))
+	if err != nil {
+		logger.Fatalf("Invalid TRUSTED_PROXIES: %v", err)
+	}
+	logger.Printf("Trusting X-Forwarded-For from local/private networks + %d configured range(s)", len(trustedProxies))
+
 	// 4. Ensure Data Directory
 	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
 		logger.Fatalf("Failed to create data directory: %v", err)
@@ -72,12 +83,13 @@ func main() {
 
 	// 5. Setup Server
 	server := &Server{
-		systemDB:      sysDB,
-		config:        config,
-		logger:        logger,
-		sseHub:        NewSSEHub(),
-		authIPLimiter: newRateLimiter(authIPMaxRequests, authIPWindow),
-		authLockouts:  newLockoutTracker(loginMaxFailures, loginLockoutDuration),
+		systemDB:       sysDB,
+		config:         config,
+		logger:         logger,
+		sseHub:         NewSSEHub(),
+		authIPLimiter:  newRateLimiter(authIPMaxRequests, authIPWindow),
+		authLockouts:   newLockoutTracker(loginMaxFailures, loginLockoutDuration),
+		trustedProxies: trustedProxies,
 	}
 
 	mux := http.NewServeMux()

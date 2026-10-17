@@ -15,6 +15,10 @@ services:
       # Left empty on purpose — the server refuses to start until you set it.
       JWT_SECRET: ""
       ADMIN_INVITE_CODE: ""
+      # OPTIONAL: trusted reverse-proxy IPs/CIDRs for X-Forwarded-For. Leave empty
+      # unless your proxy connects from a PUBLIC address — local/private proxies
+      # (Cloudflare Tunnel, Docker, same-host nginx, Tailscale) are trusted automatically.
+      TRUSTED_PROXIES: ""
     volumes:
       # Host path follows the CasaOS convention. On plain Docker, either create
       # this folder (mkdir -p /DATA/AppData/guardian-server/data) or change it
@@ -45,6 +49,9 @@ services:
         - container: ADMIN_INVITE_CODE
           description:
             en_us: "Optional. Invite code required to create the first admin account"
+        - container: TRUSTED_PROXIES
+          description:
+            en_us: "Optional. Trusted reverse-proxy IPs/CIDRs for X-Forwarded-For; only needed for a proxy on a public address"
 
 networks:
   guardian-network:

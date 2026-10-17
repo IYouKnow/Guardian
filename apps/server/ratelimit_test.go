@@ -191,3 +191,29 @@ func TestWithAuthRateLimit(t *testing.T) {
 		t.Fatal("429 response missing Retry-After header")
 	}
 }
+
+func TestWithAuthRateLimitIgnoresSpoofedXFFFromPublicPeer(t *testing.T) {
+	s := &Server{authIPLimiter: newRateLimiter(2, time.Minute)}
+	next := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
+	h := s.withAuthRateLimit(next)
+
+	call := func(xff string) *httptest.ResponseRecorder {
+		rr := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/auth/login", nil)
+		r.RemoteAddr = "203.0.113.7:12345"
+		r.Header.Set("X-Forwarded-For", xff)
+		h(rr, r)
+		return rr
+	}
+
+	if rr := call("1.1.1.1"); rr.Code != http.StatusOK {
+		t.Fatalf("request 1: status = %d, want 200", rr.Code)
+	}
+	if rr := call("2.2.2.2"); rr.Code != http.StatusOK {
+		t.Fatalf("request 2: status = %d, want 200", rr.Code)
+	}
+	// Rotating X-Forwarded-For must not reset a public peer's bucket.
+	if rr := call("3.3.3.3"); rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("request 3: status = %d, want 429", rr.Code)
+	}
+}

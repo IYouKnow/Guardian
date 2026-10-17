@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,16 +69,63 @@ type wsMessage struct {
 	Timestamp int64  `json:"timestamp,omitempty"`
 }
 
-func getClientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		parts := strings.Split(fwd, ",")
-		return strings.TrimSpace(parts[0])
+// getClientIP returns the rate-limit/connection key for a request. X-Forwarded-For
+// is only honoured when the direct peer is a trusted proxy (local/private by default,
+// or configured via TRUSTED_PROXIES); the chain is walked right-to-left and the first
+// non-proxy hop is returned.
+func (s *Server) getClientIP(r *http.Request) string {
+	remote, ok := parseIP(r.RemoteAddr)
+	if !ok {
+		return r.RemoteAddr // unparsable peer: fall back to raw, non-empty key
 	}
-	idx := strings.LastIndex(r.RemoteAddr, ":")
-	if idx == -1 {
-		return r.RemoteAddr
+	if !s.isTrustedProxy(remote) {
+		return remote.String()
 	}
-	return r.RemoteAddr[:idx]
+	var hops []string
+	for _, raw := range r.Header.Values("X-Forwarded-For") {
+		hops = append(hops, strings.Split(raw, ",")...)
+	}
+	// Walk right-to-left, skipping trusted proxies: the first untrusted hop is the
+	// real client (a client-supplied leftmost entry can't spoof its way through).
+	for i := len(hops) - 1; i >= 0; i-- {
+		ip, ok := parseIP(strings.TrimSpace(hops[i]))
+		if !ok || s.isTrustedProxy(ip) {
+			continue
+		}
+		return ip.String()
+	}
+	return remote.String() // all hops trusted (or none present)
+}
+
+// isTrustedProxy reports whether addr is a local/private address or matched a
+// configured TRUSTED_PROXIES range.
+func (s *Server) isTrustedProxy(addr netip.Addr) bool {
+	addr = addr.Unmap()
+	for _, p := range defaultTrustedProxyNets {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	for _, p := range s.trustedProxies {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseIP accepts "1.2.3.4", "1.2.3.4:80", "[2001:db8::1]:443", "2001:db8::1".
+func parseIP(host string) (netip.Addr, bool) {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	} else {
+		host = strings.Trim(host, "[]")
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return addr.Unmap(), true
 }
 
 func (s *Server) getMaxWsPerIP() int {
@@ -105,7 +154,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Read global default from DB
 	maxConns := s.getMaxWsPerIP()
 
-	clientIP := getClientIP(r)
+	clientIP := s.getClientIP(r)
 
 	// Pre-auth: check against global default
 	wsConnCountsMu.Lock()

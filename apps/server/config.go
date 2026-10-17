@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -52,6 +53,46 @@ func validateSecret(secret string) error {
 		return fmt.Errorf("JWT_SECRET must be at least %d characters", minSecretLen)
 	}
 	return nil
+}
+
+// defaultTrustedProxyNets are always treated as trusted proxies: loopback, RFC1918
+// private, link-local, IPv6 ULA, and CGNAT (Tailscale). This lets a locally-run
+// reverse proxy (cloudflared, nginx, Docker bridge) work with no configuration,
+// while a public peer can never match these and so cannot spoof X-Forwarded-For.
+var defaultTrustedProxyNets = []netip.Prefix{
+	netip.MustParsePrefix("127.0.0.0/8"),
+	netip.MustParsePrefix("::1/128"),
+	netip.MustParsePrefix("10.0.0.0/8"),
+	netip.MustParsePrefix("172.16.0.0/12"),
+	netip.MustParsePrefix("192.168.0.0/16"),
+	netip.MustParsePrefix("169.254.0.0/16"),
+	netip.MustParsePrefix("fe80::/10"),
+	netip.MustParsePrefix("fc00::/7"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+}
+
+// parseTrustedProxies parses extra trusted proxy ranges from a comma-separated
+// list of IPs ("1.2.3.4") and CIDRs ("203.0.113.0/24"). Empty input adds nothing.
+// Bare IPs become /32 or /128. Entries are ADDED to defaultTrustedProxyNets.
+func parseTrustedProxies(s string) ([]netip.Prefix, error) {
+	var prefixes []netip.Prefix
+	for _, raw := range strings.Split(s, ",") {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(entry); err == nil {
+			prefixes = append(prefixes, p.Masked())
+			continue
+		}
+		addr, err := netip.ParseAddr(entry)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TRUSTED_PROXIES entry %q (expected an IP or CIDR, not a hostname): %w", entry, err)
+		}
+		addr = addr.Unmap()
+		prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	return prefixes, nil
 }
 
 // loadEnv is a simple helper to load .env files without external dependencies
