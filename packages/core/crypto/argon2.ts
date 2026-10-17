@@ -25,12 +25,6 @@ export const ARGON2_PARAMS = {
 } as const;
 
 /**
- * Checks if in development mode
- * Compatible with browser and Node.js
- */
-
-
-/**
  * Lists all exports from the WASM module (useful for debugging)
  */
 function listWasmExports(instance: WebAssembly.Instance): string[] {
@@ -484,22 +478,11 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Uin
   const memoryCost = ARGON2_PARAMS.memoryCost;
 
   try {
-    const key = await deriveKeyWithParams(password, salt, memoryCost);
-    if (typeof window !== 'undefined') {
-      (window as any).__keyDerivation = 'argon2';
-    }
-    return key;
-  } catch (error) {
-    // Marks Argon2 as unavailable
+    return await deriveKeyWithParams(password, salt, memoryCost);
+  } catch {
+    // Marks Argon2 as unavailable, then falls back to PBKDF2 if the WASM fails
     argon2Available = false;
-
-    // Fallback to PBKDF2 if WASM fails
-    if (typeof window !== 'undefined') {
-      (window as any).__keyDerivation = 'pbkdf2';
-      (window as any).__argon2Error = error instanceof Error ? error.message : String(error);
-    }
-    const fallbackKey = await deriveKeyFallback(password, salt);
-    return fallbackKey;
+    return deriveKeyFallback(password, salt);
   }
 }
 

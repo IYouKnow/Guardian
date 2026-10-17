@@ -35,4 +35,16 @@ describe('deriveKey', () => {
     const b = await deriveKey('password', generateSalt());
     expect(toHex(a)).not.toBe(toHex(b));
   });
+
+  it('does not write debug state onto the global window', async () => {
+    const fakeWindow: Record<string, unknown> = {};
+    (globalThis as any).window = fakeWindow;
+    try {
+      await deriveKey('password', generateSalt());
+      expect(fakeWindow).not.toHaveProperty('__keyDerivation');
+      expect(fakeWindow).not.toHaveProperty('__argon2Error');
+    } finally {
+      delete (globalThis as any).window;
+    }
+  });
 });
