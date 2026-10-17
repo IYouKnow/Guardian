@@ -71,6 +71,7 @@ COPY --from=server-builder /build/server /app/guardian-server
 
 USER guardian
 ENV PORT=8080
+ENV GUARDIAN_ENV=production
 ENV JWT_SECRET=""
 VOLUME ["/app/data"]
 EXPOSE 8080

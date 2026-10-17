@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // --- Middleware ---
@@ -176,11 +177,13 @@ func (s *Server) validateToken(r *http.Request) (int, error) {
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
 		return []byte(SecretKey), nil
-	})
+	},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer(jwtIssuer),
+		jwt.WithIssuedAt(),
+		jwt.WithExpirationRequired(),
+	)
 
 	if err != nil || !token.Valid {
 		return 0, fmt.Errorf("invalid token")
@@ -222,10 +225,13 @@ func (s *Server) validateToken(r *http.Request) (int, error) {
 // --- Helpers ---
 
 func createToken(userID int, tokenVersion int) (string, error) {
+	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub": userID,
-		"iss": "guardian-server",
-		"exp": time.Now().Add(TokenDuration).Unix(),
+		"iss": jwtIssuer,
+		"iat": now.Unix(),
+		"exp": now.Add(TokenDuration).Unix(),
+		"jti": uuid.NewString(),
 		"ver": tokenVersion,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

@@ -10,6 +10,9 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Production mode: the server ignores any .env file in its working
+      # directory, so secrets must come from the environment (as below).
+      GUARDIAN_ENV: "production"
       PORT: "8080"
       # REQUIRED: set a strong random value (e.g. `openssl rand -base64 32`).
       # Left empty on purpose — the server refuses to start until you set it.
@@ -51,6 +54,9 @@ services:
           description:
             en_us: "SQLite databases and app data"
       envs:
+        - container: GUARDIAN_ENV
+          description:
+            en_us: "Optional. Set to 'production' (the image default) to ignore any .env in the working directory; use 'development' to load one."
         - container: JWT_SECRET
           description:
             en_us: "REQUIRED. Random secret used to sign JWTs. Generate with: openssl rand -base64 32"

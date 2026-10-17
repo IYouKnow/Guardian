@@ -60,3 +60,26 @@ func TestValidateAdminSetup(t *testing.T) {
 		})
 	}
 }
+
+func TestDotenvEnabled(t *testing.T) {
+	tests := []struct {
+		name        string
+		guardianEnv string
+		want        bool
+	}{
+		{"unset", "", true},
+		{"development", "development", true},
+		{"arbitrary", "staging", true},
+		{"production", "production", false},
+		{"production uppercase", "PRODUCTION", false},
+		{"production padded", " production ", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := dotenvEnabled(tt.guardianEnv); got != tt.want {
+				t.Fatalf("dotenvEnabled(%q) = %v, want %v", tt.guardianEnv, got, tt.want)
+			}
+		})
+	}
+}

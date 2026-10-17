@@ -18,6 +18,10 @@ var (
 	Version       = "dev" // Default version, will be overridden by CI/CD during tagged builds
 )
 
+// jwtIssuer is the "iss" claim stamped into every token and required on every
+// validation, so a token signed with the same secret by another service is rejected.
+const jwtIssuer = "guardian-server"
+
 // minSecretLen is the minimum accepted length for JWT_SECRET. Shorter secrets are
 // brute-forceable, which would let an attacker forge authentication tokens.
 const minSecretLen = 32
@@ -207,8 +211,20 @@ func parseAllowedOrigins(s string) (originAllowlist, error) {
 	return list, nil
 }
 
+// dotenvEnabled reports whether a .env file in the working directory should be
+// loaded. It is disabled in production so a writable CWD can't inject
+// JWT_SECRET/ADMIN_INVITE_CODE/PORT; any other value (including unset) keeps the
+// zero-config local-dev default.
+func dotenvEnabled(guardianEnv string) bool {
+	return !strings.EqualFold(strings.TrimSpace(guardianEnv), "production")
+}
+
 // loadEnv is a simple helper to load .env files without external dependencies
 func loadEnv() {
+	if !dotenvEnabled(os.Getenv("GUARDIAN_ENV")) {
+		fmt.Fprintln(os.Stderr, "[GUARDIAN-API] GUARDIAN_ENV=production: ignoring .env; configure secrets via the real environment")
+		return
+	}
 	f, err := os.Open(".env")
 	if err != nil {
 		return // No .env file, skip
