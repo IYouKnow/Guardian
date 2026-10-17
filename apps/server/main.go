@@ -47,7 +47,14 @@ func main() {
 	logger := log.New(os.Stdout, "[GUARDIAN-API] ", log.LstdFlags)
 	logger.Println("Starting Guardian Server (Multi-Tenant)...")
 
-	// 3. Ensure Data Directory
+	// 3. Load and validate the JWT signing secret. Fail closed on missing,
+	// placeholder, or too-short values so tokens can't be forged.
+	SecretKey = os.Getenv("JWT_SECRET")
+	if err := validateSecret(SecretKey); err != nil {
+		logger.Fatalf("Insecure JWT_SECRET: %v. Generate one with `openssl rand -base64 32` and set it in your environment or .env file.", err)
+	}
+
+	// 4. Ensure Data Directory
 	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
 		logger.Fatalf("Failed to create data directory: %v", err)
 	}

@@ -2,7 +2,8 @@ package main
 
 import (
 	"bufio"
-	"log"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -15,15 +16,42 @@ var (
 	Version       = "dev" // Default version, will be overridden by CI/CD during tagged builds
 )
 
+// minSecretLen is the minimum accepted length for JWT_SECRET. Shorter secrets are
+// brute-forceable, which would let an attacker forge authentication tokens.
+const minSecretLen = 32
+
+// insecureSecrets are well-known placeholder values that must never be used to
+// sign tokens. They are compared case-insensitively.
+var insecureSecrets = map[string]struct{}{
+	"change_me_to_a_random_secret":        {},
+	"replace_with_a_secure_random_string": {},
+	"changeme":                            {},
+	"change_me":                           {},
+	"secret":                              {},
+	"password":                            {},
+	"jwt_secret":                          {},
+	"your_secret_here":                    {},
+}
+
 func init() {
 	// Try to load .env file if it exists
 	loadEnv()
+}
 
-	SecretKey = os.Getenv("JWT_SECRET")
-	if SecretKey == "" {
-		log.Println("WARNING: JWT_SECRET environment variable is not set.")
-		log.Fatal("Please set JWT_SECRET in your .env file or environment variables to secure your tokens.")
+// validateSecret rejects missing, placeholder, or too-short JWT secrets so the
+// server fails closed instead of running with a guessable signing key.
+func validateSecret(secret string) error {
+	trimmed := strings.TrimSpace(secret)
+	if trimmed == "" {
+		return errors.New("JWT_SECRET is not set")
 	}
+	if _, insecure := insecureSecrets[strings.ToLower(trimmed)]; insecure {
+		return errors.New("JWT_SECRET is set to a known placeholder value")
+	}
+	if len(trimmed) < minSecretLen {
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", minSecretLen)
+	}
+	return nil
 }
 
 // loadEnv is a simple helper to load .env files without external dependencies
