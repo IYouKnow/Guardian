@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,11 +35,35 @@ func (s *Server) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, err := s.validateToken(r)
 		if err != nil {
-			http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+			s.logger.Println("withUserAuth: token validation failed:", err)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next(w, r.WithContext(ctx))
+	}
+}
+
+// withAuthRateLimit throttles auth routes by client IP. It runs before the body
+// is read so oversized/expensive requests are rejected early.
+func (s *Server) withAuthRateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ok, retry := s.authIPLimiter.allow(getClientIP(r)); !ok {
+			w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{
+				"message": "Too many attempts. Try again later.",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// withMaxBody caps the number of bytes a handler will read from the request body.
+func withMaxBody(limit int64, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		next(w, r)
 	}
 }
 
@@ -114,6 +140,24 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+// decodeJSON decodes a JSON request body into dst. On failure it writes the
+// response itself (413 when the body exceeds the cap, 400 otherwise) and
+// reports false so the caller can return immediately.
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
+				"message": "Request body too large",
+			})
+			return false
+		}
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return false
+	}
+	return true
 }
 
 func formatBytes(b int64) string {

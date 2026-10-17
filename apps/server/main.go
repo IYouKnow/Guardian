@@ -24,11 +24,13 @@ var content embed.FS
 
 // --- Server ---
 type Server struct {
-	systemDB *sql.DB
-	config   Config
-	logger   *log.Logger
-	userDBs  sync.Map // map[string]*sql.DB - cached user DB connections
-	sseHub   *SSEHub
+	systemDB      *sql.DB
+	config        Config
+	logger        *log.Logger
+	userDBs       sync.Map // map[string]*sql.DB - cached user DB connections
+	sseHub        *SSEHub
+	authIPLimiter *rateLimiter
+	authLockouts  *lockoutTracker
 }
 
 func main() {
@@ -70,10 +72,12 @@ func main() {
 
 	// 5. Setup Server
 	server := &Server{
-		systemDB: sysDB,
-		config:   config,
-		logger:   logger,
-		sseHub:   NewSSEHub(),
+		systemDB:      sysDB,
+		config:        config,
+		logger:        logger,
+		sseHub:        NewSSEHub(),
+		authIPLimiter: newRateLimiter(authIPMaxRequests, authIPWindow),
+		authLockouts:  newLockoutTracker(loginMaxFailures, loginLockoutDuration),
 	}
 
 	mux := http.NewServeMux()
@@ -81,10 +85,10 @@ func main() {
 	// 6. Define Routes
 	mux.HandleFunc("GET /health", server.handleHealth)
 
-	// Auth
-	mux.HandleFunc("POST /auth/register", server.handleRegister)
-	mux.HandleFunc("POST /auth/login", server.handleLogin)
-	mux.HandleFunc("POST /auth/validate-invite", server.handleValidateInvite)
+	// Auth — rate limited by client IP and body-capped (payloads here are tiny).
+	mux.HandleFunc("POST /auth/register", server.withAuthRateLimit(withMaxBody(authMaxBodyBytes, server.handleRegister)))
+	mux.HandleFunc("POST /auth/login", server.withAuthRateLimit(withMaxBody(authMaxBodyBytes, server.handleLogin)))
+	mux.HandleFunc("POST /auth/validate-invite", server.withAuthRateLimit(withMaxBody(authMaxBodyBytes, server.handleValidateInvite)))
 	mux.HandleFunc("GET /auth/setup-status", server.handleSetupStatus)
 
 	// Admin / Invites
@@ -173,7 +177,7 @@ func main() {
 	// 7. Setup HTTP Server with graceful shutdown
 	httpServer := &http.Server{
 		Addr:         ":" + config.Port,
-		Handler:      corsHandler(mux),
+		Handler:      corsHandler(http.MaxBytesHandler(mux, maxRequestBodyBytes)),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -191,8 +195,9 @@ func main() {
 		}
 	}()
 
-	// Periodic WAL checkpoint to keep -wal/-shm files small
-	checkpointDone := make(chan struct{})
+	// Periodic maintenance: WAL checkpoint plus pruning of stale rate-limit
+	// buckets and expired lockouts so those maps stay bounded.
+	maintenanceDone := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -200,7 +205,9 @@ func main() {
 			select {
 			case <-ticker.C:
 				server.checkpointAllDBs()
-			case <-checkpointDone:
+				server.authIPLimiter.sweep()
+				server.authLockouts.sweep()
+			case <-maintenanceDone:
 				return
 			}
 		}
@@ -213,8 +220,8 @@ func main() {
 	// Close SSE hub to unblock all SSE connections
 	server.sseHub.shutdown()
 
-	// Stop the checkpoint ticker
-	close(checkpointDone)
+	// Stop the maintenance ticker
+	close(maintenanceDone)
 
 	// Create shutdown context with timeout
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

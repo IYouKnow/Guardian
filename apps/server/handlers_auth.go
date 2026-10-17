@@ -4,11 +4,12 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,8 +36,7 @@ func (s *Server) handleValidateInvite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -80,8 +80,7 @@ func (s *Server) handleValidateInvite(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -227,10 +226,33 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]string{"message": "User registered successfully"})
 }
 
+// dummyHash is a lazily generated bcrypt hash used to equalize the time spent
+// on logins for unknown users, so response timing can't reveal whether a
+// username exists.
+var (
+	dummyHashOnce sync.Once
+	dummyHash     []byte
+)
+
+func burnPasswordCompare(password string) {
+	dummyHashOnce.Do(func() {
+		dummyHash, _ = bcrypt.GenerateFromPassword([]byte("guardian-timing-equalizer"), bcrypt.DefaultCost)
+	})
+	bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+}
+
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	accountKey := normalizeAccountKey(req.Username)
+	if locked, retry := s.authLockouts.isLocked(accountKey); locked {
+		w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"message": "Account temporarily locked. Try again later.",
+		})
 		return
 	}
 
@@ -240,6 +262,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var salt string
 	err := s.systemDB.QueryRow("SELECT id, password_hash, is_admin, salt FROM users WHERE username = ?", req.Username).Scan(&id, &passwordHash, &isAdmin, &salt)
 	if err == sql.ErrNoRows {
+		burnPasswordCompare(req.Password)
+		s.authLockouts.recordFailure(accountKey)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	} else if err != nil {
@@ -248,9 +272,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+		s.authLockouts.recordFailure(accountKey)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
+
+	s.authLockouts.clear(accountKey)
 
 	// Retroactively generate salt for existing users who don't have one
 	if salt == "" {

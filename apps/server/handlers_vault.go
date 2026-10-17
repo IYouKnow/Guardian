@@ -80,7 +80,8 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 		if item.Revision <= 0 || strings.TrimSpace(item.EncryptedBlob) == "" {
 			if _, err := tx.Exec("DELETE FROM vault_items WHERE id = ?", item.ID); err != nil {
 				tx.Rollback()
-				http.Error(w, "Delete failed: "+err.Error(), http.StatusInternalServerError)
+				s.logger.Println("handleUpsertItems: delete failed:", err)
+				http.Error(w, "Delete failed", http.StatusInternalServerError)
 				return
 			}
 			continue
@@ -89,7 +90,8 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 		_, err := stmt.Exec(item.ID, item.EncryptedBlob, item.Revision)
 		if err != nil {
 			tx.Rollback()
-			http.Error(w, "Save failed: "+err.Error(), http.StatusInternalServerError)
+			s.logger.Println("handleUpsertItems: save failed:", err)
+			http.Error(w, "Save failed", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -124,7 +126,8 @@ func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
 
 	res, err := db.Exec("DELETE FROM vault_items WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, "Delete failed: "+err.Error(), http.StatusInternalServerError)
+		s.logger.Println("handleDeleteItem: delete failed:", err)
+		http.Error(w, "Delete failed", http.StatusInternalServerError)
 		return
 	}
 
