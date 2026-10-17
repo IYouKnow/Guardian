@@ -9,6 +9,22 @@ let wasmModulePromise: Promise<WebAssembly.Instance> | null = null;
 let argon2Available: boolean | null = null;
 
 /**
+ * Argon2id cost parameters.
+ *
+ * 64 MiB / t=4 / p=1. OWASP's stated minimum is 19 MiB / t=2 / p=1; the 46 MiB
+ * figure often quoted is just the first of several equivalent-defence configs.
+ *
+ * These values are part of the on-disk format: changing them changes the derived
+ * key and makes existing vaults and synced blobs unreadable.
+ */
+export const ARGON2_PARAMS = {
+  memoryCost: 64 * 1024, // 64 MiB
+  timeCost: 4, // 4 passes
+  parallelism: 1, // WebAssembly has no real threads
+  hashLength: 32, // 32-byte output
+} as const;
+
+/**
  * Checks if in development mode
  * Compatible with browser and Node.js
  */
@@ -199,8 +215,8 @@ async function loadArgon2Module(): Promise<WebAssembly.Instance> {
  * - PBKDF2: Secure, widely supported, but not memory-hard
  * 
  * PBKDF2 is safe for production use, but Argon2 offers better protection
- * against attacks with specialized hardware. The number of iterations (100000) was
- * calibrated for approximately 2 seconds of work, similar to Argon2.
+ * against attacks with specialized hardware. The iteration count follows OWASP's
+ * PBKDF2-HMAC-SHA256 recommendation (600000).
  */
 async function deriveKeyFallback(password: string, salt: Uint8Array): Promise<Uint8Array> {
   const passwordBytes = new TextEncoder().encode(password);
@@ -213,9 +229,8 @@ async function deriveKeyFallback(password: string, salt: Uint8Array): Promise<Ui
     ['deriveBits']
   );
 
-  // Iteration adjustment for approximately 2 seconds of work
-  // This value should be calibrated based on the execution environment
-  const iterations = 100000;
+  // OWASP recommends 600000 iterations for PBKDF2-HMAC-SHA256
+  const iterations = 600000;
 
   // Creates a copy of the salt to ensure type compatibility
   const saltBuffer = new Uint8Array(salt).buffer;
@@ -264,9 +279,7 @@ async function deriveKeyWithParams(
 
     // Fixed parameters - MUST match encryption parameters
     // NOTE: WebAssembly does not support real threads, so parallelism must be 1
-    const timeCost = 4; // 4 iterations - FIXED
-    const parallelism = 1; // WASM does not support real threads - FIXED
-    const hashLength = 32; // 32 bytes output - FIXED
+    const { timeCost, parallelism, hashLength } = ARGON2_PARAMS;
 
     // Gets exported functions from WASM
     // Tries different common function names
@@ -457,8 +470,8 @@ async function deriveKeyWithParams(
 /**
  * Derives a key from a password using Argon2id
  * 
- * Fixed configuration:
- * - Memory: 32 MiB (current standard)
+ * Fixed configuration (see ARGON2_PARAMS):
+ * - Memory: 64 MiB
  * - Iterations: 4
  * - Parallelism: 1
  * - Hash size: 32 bytes
@@ -468,43 +481,25 @@ async function deriveKeyWithParams(
  * @returns Derived key of 32 bytes
  */
 export async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
-  // Use current standard parameters (32 MiB)
-  const memoryCost = 32 * 1024; // 32 MiB - current standard
+  const memoryCost = ARGON2_PARAMS.memoryCost;
 
   try {
     const key = await deriveKeyWithParams(password, salt, memoryCost);
-    (window as any).__keyDerivation = 'argon2';
+    if (typeof window !== 'undefined') {
+      (window as any).__keyDerivation = 'argon2';
+    }
     return key;
   } catch (error) {
     // Marks Argon2 as unavailable
     argon2Available = false;
 
     // Fallback to PBKDF2 if WASM fails
-    (window as any).__keyDerivation = 'pbkdf2';
-    (window as any).__argon2Error = error instanceof Error ? error.message : String(error);
+    if (typeof window !== 'undefined') {
+      (window as any).__keyDerivation = 'pbkdf2';
+      (window as any).__argon2Error = error instanceof Error ? error.message : String(error);
+    }
     const fallbackKey = await deriveKeyFallback(password, salt);
     return fallbackKey;
-  }
-}
-
-/**
- * Derives a key using Argon2id with legacy 64 MiB parameters
- * Used for backward compatibility with vaults encrypted with older parameters
- * 
- * @param password - The master password
- * @param salt - Random salt of 16 bytes
- * @returns Derived key of 32 bytes
- */
-export async function deriveKeyLegacy(password: string, salt: Uint8Array): Promise<Uint8Array> {
-  // Use legacy parameters (64 MiB) for backward compatibility
-  const memoryCost = 64 * 1024; // 64 MiB - legacy parameter
-
-  try {
-    return await deriveKeyWithParams(password, salt, memoryCost);
-  } catch (error) {
-    // If legacy Argon2 fails, don't fallback to PBKDF2 here
-    // Let the caller handle the error (they may want to try PBKDF2 separately)
-    throw error;
   }
 }
 

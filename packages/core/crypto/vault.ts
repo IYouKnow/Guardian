@@ -20,7 +20,7 @@
  * }
  */
 
-import { deriveKey, deriveKeyLegacy, generateSalt } from './argon2';
+import { deriveKey, generateSalt } from './argon2';
 import { encrypt, decrypt, decryptLegacy, generateNonce } from './chacha20';
 
 // Import the fallback function for compatibility
@@ -35,7 +35,7 @@ async function deriveKeyPBKDF2(password: string, salt: Uint8Array): Promise<Uint
     ['deriveBits']
   );
 
-  const iterations = 100000;
+  const iterations = 600000;
   const saltBuffer = new Uint8Array(salt).buffer;
 
   const derivedBits = await crypto.subtle.deriveBits(
@@ -331,7 +331,7 @@ export async function openVault(
   // v2 vaults only ever use the current Argon2id parameters. v1 vaults may
   // predate those parameters, so fall back through the legacy KDFs.
   const kdfAttempts = version === LEGACY_VERSION
-    ? [deriveKey, deriveKeyLegacy, deriveKeyPBKDF2]
+    ? [deriveKey, deriveKeyPBKDF2]
     : [deriveKey];
 
   for (const deriveKeyFn of kdfAttempts) {
