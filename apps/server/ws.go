@@ -24,23 +24,15 @@ const (
 	wsDefaultMaxPerIP = 5
 )
 
-var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" || origin == "null" {
-			return true
-		}
-		// Allow same-origin (web admin panel) and common dev patterns
-		if strings.Contains(origin, r.Host) ||
-			strings.Contains(origin, "://localhost") ||
-			strings.Contains(origin, "://tauri") ||
-			strings.Contains(origin, "://capacitor") ||
-			strings.HasPrefix(origin, "chrome-extension://") ||
-			strings.HasPrefix(origin, "moz-extension://") {
-			return true
-		}
-		return false
-	},
+// wsCheckOrigin validates the WebSocket handshake Origin against the same
+// allowlist as CORS. A missing Origin is allowed (non-browser clients);
+// otherwise the origin must be on the allowlist, loopback, or same-origin.
+func (s *Server) wsCheckOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	return s.originPermitted(r, origin)
 }
 
 type pendingChallenge struct {
@@ -185,7 +177,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}()
 	})
 
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	upgrader := websocket.Upgrader{CheckOrigin: s.wsCheckOrigin}
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		s.logger.Println("WebSocket upgrade failed:", err)
 		wsConnCountsMu.Lock()

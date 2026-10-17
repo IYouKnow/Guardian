@@ -33,6 +33,7 @@ type Server struct {
 	authIPLimiter  *rateLimiter
 	authLockouts   *lockoutTracker
 	trustedProxies []netip.Prefix
+	allowedOrigins originAllowlist
 }
 
 func main() {
@@ -67,6 +68,15 @@ func main() {
 	}
 	logger.Printf("Trusting X-Forwarded-For from local/private networks + %d configured range(s)", len(trustedProxies))
 
+	// 3c. Extra permitted browser origins for CORS and the WebSocket handshake.
+	// The bundled native clients and loopback are always allowed; this adds
+	// whatever an operator lists. Fail closed on malformed entries.
+	extraOrigins, err := parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
+	if err != nil {
+		logger.Fatalf("Invalid ALLOWED_ORIGINS: %v", err)
+	}
+	logger.Printf("CORS/WebSocket origins: built-in native/loopback defaults + %d configured origin(s), %d scheme(s)", len(extraOrigins.exact), len(extraOrigins.schemes))
+
 	// 4. Ensure Data Directory
 	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
 		logger.Fatalf("Failed to create data directory: %v", err)
@@ -90,6 +100,7 @@ func main() {
 		authIPLimiter:  newRateLimiter(authIPMaxRequests, authIPWindow),
 		authLockouts:   newLockoutTracker(loginMaxFailures, loginLockoutDuration),
 		trustedProxies: trustedProxies,
+		allowedOrigins: defaultOriginAllowlist().withExtra(extraOrigins),
 	}
 
 	mux := http.NewServeMux()
@@ -192,7 +203,7 @@ func main() {
 	// 7. Setup HTTP Server with graceful shutdown
 	httpServer := &http.Server{
 		Addr:         ":" + config.Port,
-		Handler:      corsHandler(http.MaxBytesHandler(mux, maxRequestBodyBytes)),
+		Handler:      server.corsHandler(http.MaxBytesHandler(mux, maxRequestBodyBytes)),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

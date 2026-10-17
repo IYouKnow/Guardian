@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -93,6 +94,106 @@ func parseTrustedProxies(s string) ([]netip.Prefix, error) {
 		prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
 	}
 	return prefixes, nil
+}
+
+// originAllowlist is the set of browser origins permitted to talk to the server
+// cross-origin (CORS) or to open a WebSocket. It holds exact origins plus scheme
+// prefixes for browser extensions, whose IDs aren't known ahead of time.
+type originAllowlist struct {
+	exact   map[string]struct{}
+	schemes []string
+}
+
+// defaultOriginAllowlist are origins trusted with no configuration: the fixed
+// origins the bundled native clients use, plus extension schemes. Loopback is
+// handled inside allows, so arbitrary websites are never matched.
+func defaultOriginAllowlist() originAllowlist {
+	return originAllowlist{
+		exact: map[string]struct{}{
+			"tauri://localhost":      {}, // Tauri desktop (macOS/Linux)
+			"http://tauri.localhost": {}, // Tauri desktop (Windows WebView2)
+			"capacitor://localhost":  {}, // Capacitor mobile (iOS)
+		},
+		schemes: []string{
+			"chrome-extension://",
+			"moz-extension://",
+		},
+	}
+}
+
+// withExtra merges another allowlist (from ALLOWED_ORIGINS) into a copy of this
+// one. The defaults are always retained.
+func (a originAllowlist) withExtra(extra originAllowlist) originAllowlist {
+	merged := originAllowlist{
+		exact:   make(map[string]struct{}, len(a.exact)+len(extra.exact)),
+		schemes: append([]string(nil), a.schemes...),
+	}
+	for k := range a.exact {
+		merged.exact[k] = struct{}{}
+	}
+	for k := range extra.exact {
+		merged.exact[k] = struct{}{}
+	}
+	merged.schemes = append(merged.schemes, extra.schemes...)
+	return merged
+}
+
+// allows reports whether origin is permitted: an exact allowlist match, an
+// allowed extension scheme, or a loopback host on any port. The origin is parsed
+// rather than substring-matched, so "http://localhost.attacker.tld" is rejected.
+func (a originAllowlist) allows(origin string) bool {
+	normalized := strings.ToLower(strings.TrimRight(strings.TrimSpace(origin), "/"))
+	if normalized == "" {
+		return false
+	}
+	if _, ok := a.exact[normalized]; ok {
+		return true
+	}
+	for _, scheme := range a.schemes {
+		if strings.HasPrefix(normalized, scheme) {
+			return true
+		}
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" {
+		return true
+	}
+	if addr, err := netip.ParseAddr(host); err == nil && addr.IsLoopback() {
+		return true
+	}
+	return false
+}
+
+// parseAllowedOrigins parses extra permitted origins from a comma-separated list.
+// Entries ending in "://" are treated as scheme prefixes (e.g. "chrome-extension://");
+// everything else must be an exact origin like "https://vault.example.com". Malformed
+// entries fail closed so a typo can't silently weaken the allowlist.
+func parseAllowedOrigins(s string) (originAllowlist, error) {
+	list := originAllowlist{exact: map[string]struct{}{}}
+	for _, raw := range strings.Split(s, ",") {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+		lower := strings.ToLower(entry)
+		if strings.HasSuffix(lower, "://") {
+			if strings.TrimSuffix(lower, "://") == "" {
+				return originAllowlist{}, fmt.Errorf("invalid ALLOWED_ORIGINS entry %q (missing scheme)", entry)
+			}
+			list.schemes = append(list.schemes, lower)
+			continue
+		}
+		u, err := url.Parse(entry)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return originAllowlist{}, fmt.Errorf("invalid ALLOWED_ORIGINS entry %q (expected an origin like https://host[:port], or a scheme prefix ending in '://')", entry)
+		}
+		list.exact[strings.TrimRight(lower, "/")] = struct{}{}
+	}
+	return list, nil
 }
 
 // loadEnv is a simple helper to load .env files without external dependencies

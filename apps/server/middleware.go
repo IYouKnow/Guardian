@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -15,14 +16,39 @@ import (
 
 // --- Middleware ---
 
-func corsHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+// originPermitted reports whether a browser Origin may be trusted: it is on the
+// configured/default allowlist, or it is same-origin with the request (the
+// embedded admin SPA). Used by both CORS and the WebSocket handshake.
+func (s *Server) originPermitted(r *http.Request, origin string) bool {
+	if s.allowedOrigins.allows(origin) {
+		return true
+	}
+	if u, err := url.Parse(origin); err == nil && strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	return false
+}
 
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+// corsHandler applies CORS only for permitted origins, echoing the caller's
+// origin instead of the wildcard so any website can no longer read responses.
+func (s *Server) corsHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
+
+		origin := r.Header.Get("Origin")
+		allowed := origin != "" && s.originPermitted(r, origin)
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		}
+
+		if r.Method == http.MethodOptions {
+			if origin != "" && !allowed {
+				http.Error(w, "CORS origin not allowed", http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 

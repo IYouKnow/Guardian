@@ -19,6 +19,11 @@ services:
       # unless your proxy connects from a PUBLIC address — local/private proxies
       # (Cloudflare Tunnel, Docker, same-host nginx, Tailscale) are trusted automatically.
       TRUSTED_PROXIES: ""
+      # OPTIONAL: extra browser origins for CORS + the WebSocket handshake.
+      # The web panel is same-origin and the bundled native clients are already
+      # allowed, so leave empty unless serving the panel from another origin.
+      # Example: "https://vault.example.com"
+      ALLOWED_ORIGINS: ""
     volumes:
       # Host path follows the CasaOS convention. On plain Docker, either create
       # this folder (mkdir -p /DATA/AppData/guardian-server/data) or change it
@@ -52,6 +57,9 @@ services:
         - container: TRUSTED_PROXIES
           description:
             en_us: "Optional. Trusted reverse-proxy IPs/CIDRs for X-Forwarded-For; only needed for a proxy on a public address"
+        - container: ALLOWED_ORIGINS
+          description:
+            en_us: "Optional. Extra browser origins for CORS + WebSocket when serving the panel from another origin"
 
 networks:
   guardian-network:
