@@ -56,6 +56,55 @@ func (s *Server) corsHandler(next http.Handler) http.Handler {
 	})
 }
 
+// cspPolicy locks the served admin panel down to same-origin assets. Scripts stay
+// same-origin (the panel keeps its bearer token in localStorage, so XSS is the
+// main risk); frame-ancestors/X-Frame-Options block clickjacking; connect-src
+// allows the same-origin events WebSocket.
+const cspPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; " +
+	"img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; " +
+	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
+// hstsPolicy pins browsers to HTTPS for a year once a secure request is seen.
+// includeSubDomains is intentionally omitted so a self-hosted domain's other
+// hosts aren't forced to HTTPS.
+const hstsPolicy = "max-age=31536000"
+
+// securityHeaders hardens every response, including the SPA fallback and API
+// responses. It is applied outermost so headers are present even on errors.
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", cspPolicy)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+		if s.requestIsHTTPS(r) {
+			h.Set("Strict-Transport-Security", hstsPolicy)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// requestIsHTTPS reports whether the client reached the edge over HTTPS: either
+// the server terminated TLS itself, or a trusted proxy did and forwarded
+// X-Forwarded-Proto: https. The header is honoured only from a trusted peer, so a
+// client can't force HSTS onto a plaintext connection.
+func (s *Server) requestIsHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	remote, ok := parseIP(r.RemoteAddr)
+	if !ok || !s.isTrustedProxy(remote) {
+		return false
+	}
+	proto := r.Header.Get("X-Forwarded-Proto")
+	if i := strings.IndexByte(proto, ','); i >= 0 {
+		proto = proto[:i]
+	}
+	return strings.EqualFold(strings.TrimSpace(proto), "https")
+}
+
 // withUserAuth validates JWT and adds user_id to context
 func (s *Server) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

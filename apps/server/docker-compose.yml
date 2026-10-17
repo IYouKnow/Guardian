@@ -96,3 +96,10 @@ x-casaos:
         REQUIRED: replace JWT_SECRET with a strong random string (e.g. `openssl rand -base64 32`).
         REQUIRED for the first boot: set ADMIN_INVITE_CODE to a strong random string — while no
         admin account exists the server won't start without it. You can remove it after setup.
+    after_install:
+      en_us: |
+        For access beyond your LAN, put the server behind a TLS-terminating reverse proxy
+        (Cloudflare Tunnel, nginx, Caddy, Traefik) and have it forward X-Forwarded-Proto: https;
+        HSTS is then sent automatically. Local/private proxies are trusted for this by default.
+        Every response already ships a strict CSP plus clickjacking, MIME-sniffing, referrer and
+        permissions headers.

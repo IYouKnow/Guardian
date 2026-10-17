@@ -215,7 +215,7 @@ func main() {
 	// 7. Setup HTTP Server with graceful shutdown
 	httpServer := &http.Server{
 		Addr:         ":" + config.Port,
-		Handler:      server.corsHandler(http.MaxBytesHandler(mux, maxRequestBodyBytes)),
+		Handler:      server.securityHeaders(server.corsHandler(http.MaxBytesHandler(mux, maxRequestBodyBytes))),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
