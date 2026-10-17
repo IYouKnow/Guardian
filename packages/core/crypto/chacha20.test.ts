@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { chacha20poly1305 } from '@noble/ciphers/chacha.js';
+import { chacha20poly1305, xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import {
   encrypt,
   decrypt,
+  encryptXChaCha,
+  decryptXChaCha,
   decryptLegacy,
   packBlob,
   unpackBlob,
   isLegacyBlob,
   generateNonce,
+  generateXNonce,
+  BLOB_FORMAT_V2,
+  BLOB_FORMAT_V3,
 } from './chacha20';
 
 const hex = (s: string): Uint8Array =>
@@ -92,6 +97,69 @@ describe('ChaCha20-Poly1305 AEAD', () => {
   });
 });
 
+// draft-irtf-cfrg-xchacha-03 §A.3.1
+const XCHACHA_NONCE = hex('404142434445464748494a4b4c4d4e4f5051525354555657');
+const XCHACHA_CIPHERTEXT = hex(
+  'bd6d179d3e83d43b9576579493c0e939572a1700252bfaccbed2902c21396cbb' +
+    '731c7f1b0b4aa6440bf3a82f4eda7e39ae64c6708c54c216cb96b72e1213b452' +
+    '2f8c9ba40db5d945b11b69b982c1bb9e3f3fac2bc369488f76b2383565d3fff9' +
+    '21f9664c97637da9768812f615c68b13b52e'
+);
+const XCHACHA_TAG = hex('c0875924c1c7987947deafd8780acf49');
+
+describe('XChaCha20-Poly1305 AEAD', () => {
+  it('matches the draft-irtf-cfrg-xchacha-03 §A.3.1 known-answer vector', () => {
+    const out = xchacha20poly1305(AEAD_KEY, XCHACHA_NONCE, AEAD_AAD).encrypt(
+      AEAD_PLAINTEXT
+    );
+    const ciphertext = out.subarray(0, out.length - 16);
+    const tag = out.subarray(out.length - 16);
+
+    expect(toHex(ciphertext)).toBe(toHex(XCHACHA_CIPHERTEXT));
+    expect(toHex(tag)).toBe(toHex(XCHACHA_TAG));
+  });
+
+  it('wrapper produces the same output as the underlying AEAD', async () => {
+    const plaintext = new TextEncoder().encode('hello guardian');
+    const nonce = new Uint8Array(24).fill(9);
+
+    const ours = await encryptXChaCha(AEAD_KEY, nonce, plaintext);
+    const reference = xchacha20poly1305(AEAD_KEY, nonce).encrypt(plaintext);
+
+    expect(toHex(ours)).toBe(toHex(reference));
+  });
+
+  it('round-trips plaintext through encryptXChaCha/decryptXChaCha', async () => {
+    const key = randomKey();
+    const nonce = generateXNonce();
+    const plaintext = new TextEncoder().encode('a'.repeat(500));
+
+    const ciphertext = await encryptXChaCha(key, nonce, plaintext);
+    const recovered = await decryptXChaCha(key, nonce, ciphertext);
+
+    expect(toHex(recovered)).toBe(toHex(plaintext));
+  });
+
+  it('rejects tampered ciphertext', async () => {
+    const key = randomKey();
+    const nonce = generateXNonce();
+    const ciphertext = await encryptXChaCha(key, nonce, new TextEncoder().encode('secret'));
+
+    ciphertext[ciphertext.length - 1] ^= 0x01;
+
+    await expect(decryptXChaCha(key, nonce, ciphertext)).rejects.toThrow();
+  });
+
+  it('rejects the wrong key', async () => {
+    const key = randomKey();
+    const otherKey = randomKey();
+    const nonce = generateXNonce();
+    const ciphertext = await encryptXChaCha(key, nonce, new TextEncoder().encode('secret'));
+
+    await expect(decryptXChaCha(otherKey, nonce, ciphertext)).rejects.toThrow();
+  });
+});
+
 describe('per-item blob wire format', () => {
   const key = hex('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f');
 
@@ -99,13 +167,31 @@ describe('per-item blob wire format', () => {
     const plaintext = new TextEncoder().encode(JSON.stringify({ id: 'x', password: 'p' }));
     const blob = await packBlob(key, plaintext);
 
+    expect(blob[0]).toBe(BLOB_FORMAT_V3);
     expect(isLegacyBlob(blob)).toBe(false);
+    expect(await unpackBlob(key, blob)).toEqual(plaintext);
+  });
+
+  it('recovers a v2 blob (0x02 || nonce 12 || ciphertext || tag)', async () => {
+    const plaintext = new TextEncoder().encode('v2 payload');
+    const nonce = generateNonce();
+    const ciphertext = await encrypt(key, nonce, plaintext);
+
+    const blob = new Uint8Array(1 + nonce.length + ciphertext.length);
+    blob[0] = BLOB_FORMAT_V2;
+    blob.set(nonce, 1);
+    blob.set(ciphertext, 1 + nonce.length);
+
+    expect(isLegacyBlob(blob)).toBe(true);
     expect(await unpackBlob(key, blob)).toEqual(plaintext);
   });
 
   it('recovers a legacy blob (nonce || ciphertext || broken tag)', async () => {
     const plaintext = new TextEncoder().encode('legacy payload');
     const nonce = generateNonce();
+    // Legacy blobs are unmarked and detected by exclusion, so keep the first
+    // byte from colliding with the v2/v3 markers.
+    nonce[0] = 0x00;
 
     // Legacy ciphertext is identical to the current stream output; only the
     // (worthless) 16-byte tag differed. Build a legacy blob by hand.

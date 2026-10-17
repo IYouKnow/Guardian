@@ -32,38 +32,40 @@ function cleanUrl(url: string): string {
   return url.replace(/\/$/, "");
 }
 
-async function encryptEntry(
+async function encryptValue(
   key: Uint8Array,
-  entry: VaultEntry,
+  id: string,
+  value: unknown,
 ): Promise<ServerItem> {
-  const json = JSON.stringify(entry);
+  const json = JSON.stringify(value);
   const plaintext = new TextEncoder().encode(json);
 
-  // Wire format: [0x02 marker][12-byte nonce][ciphertext + 16-byte tag]
+  // Wire format: [0x03 marker][24-byte nonce][ciphertext + 16-byte tag]
   const packed = await packBlob(key, plaintext);
 
   return {
-    id: entry.id,
+    id,
     encrypted_blob: bytesToBase64(packed),
     revision: 1,
   };
 }
 
 /**
- * Encrypt and upsert the given entries on the server. Used for both
- * single-item updates (pass one entry) and bulk saves.
+ * Encrypt and upsert arbitrary id/value pairs on the server. Used to push
+ * entries, and to eagerly re-encrypt legacy (v1/v2) items into the current
+ * (v3) format.
  */
-export async function pushEntriesToServer(
+export async function pushValuesToServer(
   serverUrl: string,
   authToken: string,
   serverKey: Uint8Array,
-  entries: VaultEntry[],
+  values: { id: string; value: unknown }[],
 ): Promise<void> {
-  if (entries.length === 0) return;
+  if (values.length === 0) return;
 
   const items: ServerItem[] = [];
-  for (const entry of entries) {
-    items.push(await encryptEntry(serverKey, entry));
+  for (const { id, value } of values) {
+    items.push(await encryptValue(serverKey, id, value));
   }
 
   const resp = await fetch(`${cleanUrl(serverUrl)}/vault/items`, {
@@ -79,6 +81,24 @@ export async function pushEntriesToServer(
     const body = await resp.text().catch(() => "");
     throw new Error(`Server push failed (${resp.status}): ${body}`);
   }
+}
+
+/**
+ * Encrypt and upsert the given entries on the server. Used for both
+ * single-item updates (pass one entry) and bulk saves.
+ */
+export async function pushEntriesToServer(
+  serverUrl: string,
+  authToken: string,
+  serverKey: Uint8Array,
+  entries: VaultEntry[],
+): Promise<void> {
+  await pushValuesToServer(
+    serverUrl,
+    authToken,
+    serverKey,
+    entries.map((entry) => ({ id: entry.id, value: entry })),
+  );
 }
 
 /**

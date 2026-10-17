@@ -1,16 +1,19 @@
 /**
  * Vault - Binary .guardian format
  * 
- * .guardian file format:
+ * .guardian file format (current version 3):
  * - Bytes 0-7: "GUARDIAN" (ASCII, 8 bytes)
- * - Byte 8: version (1 byte). Current version is 2.
+ * - Byte 8: version (1 byte). Current version is 3.
  * - Bytes 9-24: random salt (16 bytes)
- * - Bytes 25-36: nonce (12 bytes)
- * - Bytes 37+: ciphertext + Poly1305 tag (16 bytes)
+ * - Bytes 25-48: nonce (24 bytes)
+ * - Bytes 49+: ciphertext + Poly1305 tag (16 bytes)
+ *
+ * Version 3 uses XChaCha20-Poly1305 with a 24-byte nonce. Version 2 used
+ * ChaCha20-Poly1305 with a 12-byte nonce (nonce at 25-36, ciphertext at 37+).
  *
  * Version 1 was written with a broken Poly1305 tag that provided no
  * authentication. Those files are still readable: they are recovered with raw
- * ChaCha20 and transparently re-encrypted as version 2 on the next save.
+ * ChaCha20 and transparently re-encrypted as the current version on the next save.
  * 
  * Encrypted data is a JSON with:
  * {
@@ -21,7 +24,13 @@
  */
 
 import { deriveKey, generateSalt } from './argon2';
-import { encrypt, decrypt, decryptLegacy, generateNonce } from './chacha20';
+import {
+  encryptXChaCha,
+  decryptXChaCha,
+  decrypt,
+  decryptLegacy,
+  generateXNonce,
+} from './chacha20';
 
 // Import the fallback function for compatibility
 async function deriveKeyPBKDF2(password: string, salt: Uint8Array): Promise<Uint8Array> {
@@ -58,11 +67,21 @@ async function deriveKeyPBKDF2(password: string, salt: Uint8Array): Promise<Uint
 
 // Format constants
 const MAGIC_HEADER = new TextEncoder().encode('GUARDIAN'); // 8 bytes
-const VERSION = 2; // 1 byte
+const VERSION = 3; // 1 byte, XChaCha20-Poly1305, 24-byte nonce
+const LEGACY_AEAD_VERSION = 2; // ChaCha20-Poly1305, 12-byte nonce
 const LEGACY_VERSION = 1; // broken-tag format, readable via recovery
 const SALT_LENGTH = 16; // 16 bytes
-const NONCE_LENGTH = 12; // 12 bytes
+const NONCE_LENGTH = 12; // 12 bytes (v1/v2)
+const XCHACHA_NONCE_LENGTH = 24; // 24 bytes (v3)
 const TAG_LENGTH = 16; // 16 bytes (Poly1305 tag)
+
+// Byte offsets of the salt/nonce/body in the fixed header.
+const SALT_OFFSET = 9;
+const NONCE_OFFSET = SALT_OFFSET + SALT_LENGTH; // 25
+
+// Minimum file sizes (magic + version + salt + nonce + tag).
+const MIN_V1V2_SIZE = 8 + 1 + SALT_LENGTH + NONCE_LENGTH + TAG_LENGTH; // 53
+const MIN_V3_SIZE = 8 + 1 + SALT_LENGTH + XCHACHA_NONCE_LENGTH + TAG_LENGTH; // 65
 
 export interface VaultSettings {
   theme?: string;
@@ -117,6 +136,33 @@ export interface VaultData {
 }
 
 /**
+ * Assembles the binary .guardian container from its parts.
+ * Layout: [magic 8][version 1][salt 16][nonce 24][ciphertext + tag]
+ */
+function packVaultFile(
+  salt: Uint8Array,
+  nonce: Uint8Array,
+  ciphertextWithTag: Uint8Array
+): Uint8Array {
+  const vault = new Uint8Array(
+    MAGIC_HEADER.length + 1 + SALT_LENGTH + XCHACHA_NONCE_LENGTH + ciphertextWithTag.length
+  );
+
+  let offset = 0;
+  vault.set(MAGIC_HEADER, offset);
+  offset += MAGIC_HEADER.length;
+  vault[offset] = VERSION;
+  offset += 1;
+  vault.set(salt, offset);
+  offset += SALT_LENGTH;
+  vault.set(nonce, offset);
+  offset += XCHACHA_NONCE_LENGTH;
+  vault.set(ciphertextWithTag, offset);
+
+  return vault;
+}
+
+/**
  * Creates an encrypted vault in binary .guardian format
  * 
  * @param password - Master password to derive the key
@@ -131,7 +177,7 @@ export async function createVault(
 ): Promise<Uint8Array> {
   // Generates random salt and nonce
   const salt = generateSalt();
-  const nonce = generateNonce();
+  const nonce = generateXNonce();
 
   // Derives the key using Argon2id
   const key = await deriveKey(password, salt);
@@ -148,44 +194,16 @@ export async function createVault(
   const jsonData = JSON.stringify(data);
   const plaintext = new TextEncoder().encode(jsonData);
 
-  // Encrypts data using ChaCha20-Poly1305
-  // The encrypt function returns ciphertext + tag (16 bytes) concatenated
-  const ciphertextWithTag = await encrypt(key, nonce, plaintext);
+  // Encrypts data using XChaCha20-Poly1305 (ciphertext + 16-byte tag)
+  const ciphertextWithTag = await encryptXChaCha(key, nonce, plaintext);
 
-  // Constructs the binary .guardian format
-  // Total size: 8 (magic) + 1 (version) + 16 (salt) + 12 (nonce) + ciphertextWithTag.length
-  const vault = new Uint8Array(
-    MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + ciphertextWithTag.length
-  );
-
-  let offset = 0;
-
-  // Bytes 0-7: "GUARDIAN"
-  vault.set(MAGIC_HEADER, offset);
-  offset += MAGIC_HEADER.length;
-
-  // Byte 8: version
-  vault[offset] = VERSION;
-  offset += 1;
-
-  // Bytes 9-24: salt (16 bytes)
-  vault.set(salt, offset);
-  offset += SALT_LENGTH;
-
-  // Bytes 25-36: nonce (12 bytes)
-  vault.set(nonce, offset);
-  offset += NONCE_LENGTH;
-
-  // Bytes 37+: ciphertext + tag (16 bytes)
-  vault.set(ciphertextWithTag, offset);
-
-  return vault;
+  return packVaultFile(salt, nonce, ciphertextWithTag);
 }
 
 /**
  * Creates an encrypted vault in binary .guardian format using a pre-derived symmetric key
  * 
- * @param key - 32-byte symmetric key for ChaCha20 encryption
+ * @param key - 32-byte symmetric key for XChaCha20 encryption
  * @param entries - Array of vault entries
  * @returns Encrypted vault as Uint8Array
  */
@@ -197,7 +215,7 @@ export async function createVaultWithKey(
 ): Promise<Uint8Array> {
   // Generates random salt and nonce
   const salt = generateSalt();
-  const nonce = generateNonce();
+  const nonce = generateXNonce();
 
   // Prepares data for encryption
   const data: VaultData = {
@@ -211,36 +229,72 @@ export async function createVaultWithKey(
   const jsonData = JSON.stringify(data);
   const plaintext = new TextEncoder().encode(jsonData);
 
-  // Encrypts data using ChaCha20-Poly1305
-  const ciphertextWithTag = await encrypt(key, nonce, plaintext);
+  // Encrypts data using XChaCha20-Poly1305
+  const ciphertextWithTag = await encryptXChaCha(key, nonce, plaintext);
 
-  // Constructs the binary .guardian format
-  const vault = new Uint8Array(
-    MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + ciphertextWithTag.length
-  );
+  return packVaultFile(salt, nonce, ciphertextWithTag);
+}
 
-  let offset = 0;
+type VaultCipher = (
+  key: Uint8Array,
+  nonce: Uint8Array,
+  ciphertext: Uint8Array
+) => Promise<Uint8Array>;
 
-  // Bytes 0-7: "GUARDIAN"
-  vault.set(MAGIC_HEADER, offset);
-  offset += MAGIC_HEADER.length;
+interface ParsedVaultFile {
+  version: number;
+  salt: Uint8Array;
+  nonce: Uint8Array;
+  ciphertextWithTag: Uint8Array;
+  cipher: VaultCipher;
+}
 
-  // Byte 8: version
-  vault[offset] = VERSION;
-  offset += 1;
+/**
+ * Validates the fixed .guardian header and extracts the salt, nonce, body and
+ * the version-appropriate cipher. Supports v3 (XChaCha20-Poly1305, 24-byte
+ * nonce), v2 (ChaCha20-Poly1305, 12-byte nonce) and v1 (broken-tag recovery).
+ */
+function parseVaultHeader(vaultData: Uint8Array): ParsedVaultFile {
+  if (vaultData.length < MIN_V1V2_SIZE) {
+    throw new Error('Invalid vault format: file too short');
+  }
 
-  // Bytes 9-24: salt (16 bytes)
-  vault.set(salt, offset);
-  offset += SALT_LENGTH;
+  // Bytes 0-7: Verifies the magic header "GUARDIAN"
+  const magic = new TextDecoder().decode(vaultData.slice(0, MAGIC_HEADER.length));
+  if (magic !== 'GUARDIAN') {
+    throw new Error('Invalid vault format: incorrect magic header');
+  }
 
-  // Bytes 25-36: nonce (12 bytes)
-  vault.set(nonce, offset);
-  offset += NONCE_LENGTH;
+  // Byte 8: Reads the version
+  const version = vaultData[8];
+  if (version !== VERSION && version !== LEGACY_AEAD_VERSION && version !== LEGACY_VERSION) {
+    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}.`);
+  }
 
-  // Bytes 37+: ciphertext + tag (16 bytes)
-  vault.set(ciphertextWithTag, offset);
+  const isV3 = version === VERSION;
+  const nonceLength = isV3 ? XCHACHA_NONCE_LENGTH : NONCE_LENGTH;
+  const minSize = isV3 ? MIN_V3_SIZE : MIN_V1V2_SIZE;
+  if (vaultData.length < minSize) {
+    throw new Error('Invalid vault format: file too short');
+  }
 
-  return vault;
+  const salt = new Uint8Array(vaultData.slice(SALT_OFFSET, SALT_OFFSET + SALT_LENGTH));
+  const nonce = new Uint8Array(vaultData.slice(NONCE_OFFSET, NONCE_OFFSET + nonceLength));
+  const ciphertextWithTag = vaultData.slice(NONCE_OFFSET + nonceLength);
+
+  // v1 vaults used the old broken-tag format; recover their plaintext with raw
+  // ChaCha20 (the old tag authenticated nothing). They are re-encrypted as the
+  // current version the next time the vault is saved.
+  let cipher: VaultCipher;
+  if (isV3) {
+    cipher = decryptXChaCha;
+  } else if (version === LEGACY_VERSION) {
+    cipher = async (key, n, data) => decryptLegacy(key, n, data);
+  } else {
+    cipher = decrypt;
+  }
+
+  return { version, salt, nonce, ciphertextWithTag, cipher };
 }
 
 /**
@@ -254,37 +308,7 @@ export async function openVault(
   password: string,
   vaultData: Uint8Array
 ): Promise<VaultData> {
-  // Checks minimum size
-  const minSize = MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + TAG_LENGTH;
-  if (vaultData.length < minSize) {
-    throw new Error('Invalid vault format: file too short');
-  }
-
-  // Bytes 0-7: Verifies the magic header "GUARDIAN"
-  const magic = new TextDecoder().decode(vaultData.slice(0, MAGIC_HEADER.length));
-  if (magic !== 'GUARDIAN') {
-    throw new Error('Invalid vault format: incorrect magic header');
-  }
-
-  // Byte 8: Reads the version
-  const version = vaultData[8];
-  if (version !== VERSION && version !== LEGACY_VERSION) {
-    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}.`);
-  }
-
-  // Bytes 9-24: Reads the salt (16 bytes)
-  const salt = new Uint8Array(vaultData.slice(9, 9 + SALT_LENGTH));
-
-  // Bytes 25-36: Reads the nonce (12 bytes)
-  const nonce = new Uint8Array(vaultData.slice(25, 25 + NONCE_LENGTH));
-
-  // Bytes 37+: Reads the ciphertext + tag
-  const ciphertextWithTag = vaultData.slice(37);
-
-  // v1 vaults used the old broken-tag format; recover their plaintext with raw
-  // ChaCha20 (the old tag authenticated nothing). They are re-encrypted as v2
-  // the next time the vault is saved.
-  const cipher = version === LEGACY_VERSION ? decryptLegacy : decrypt;
+  const { version, salt, nonce, ciphertextWithTag, cipher } = parseVaultHeader(vaultData);
 
   // Helper function to attempt decryption with a given key derivation function
   const tryDecrypt = async (deriveKeyFn: (password: string, salt: Uint8Array) => Promise<Uint8Array>): Promise<VaultData> => {
@@ -328,7 +352,7 @@ export async function openVault(
     );
   };
 
-  // v2 vaults only ever use the current Argon2id parameters. v1 vaults may
+  // v2/v3 vaults only ever use the current Argon2id parameters. v1 vaults may
   // predate those parameters, so fall back through the legacy KDFs.
   const kdfAttempts = version === LEGACY_VERSION
     ? [deriveKey, deriveKeyPBKDF2]
@@ -360,35 +384,10 @@ export async function openVaultWithKey(
   key: Uint8Array,
   vaultData: Uint8Array
 ): Promise<VaultData> {
-  // Checks minimum size
-  const minSize = MAGIC_HEADER.length + 1 + SALT_LENGTH + NONCE_LENGTH + TAG_LENGTH;
-  if (vaultData.length < minSize) {
-    throw new Error('Invalid vault format: file too short');
-  }
-
-  // Bytes 0-7: Verifies the magic header "GUARDIAN"
-  const magic = new TextDecoder().decode(vaultData.slice(0, MAGIC_HEADER.length));
-  if (magic !== 'GUARDIAN') {
-    throw new Error('Invalid vault format: incorrect magic header');
-  }
-
-  // Byte 8: Reads the version
-  const version = vaultData[8];
-  if (version !== VERSION && version !== LEGACY_VERSION) {
-    throw new Error(`Unsupported vault version: ${version}. Expected version: ${VERSION}.`);
-  }
-
-  // Bytes 25-36: Reads the nonce (12 bytes)
-  // Skip over the salt (Bytes 9-24) as we have the key directly
-  const nonce = new Uint8Array(vaultData.slice(25, 25 + NONCE_LENGTH));
-
-  // Bytes 37+: Reads the ciphertext + tag
-  const ciphertextWithTag = vaultData.slice(37);
+  const { nonce, ciphertextWithTag, cipher } = parseVaultHeader(vaultData);
 
   try {
-    const plaintext = version === LEGACY_VERSION
-      ? decryptLegacy(key, nonce, ciphertextWithTag)
-      : await decrypt(key, nonce, ciphertextWithTag);
+    const plaintext = await cipher(key, nonce, ciphertextWithTag);
     const decryptedString = new TextDecoder().decode(plaintext);
     let data: VaultData;
     try {

@@ -258,7 +258,7 @@ export function useVault(): UseVaultReturn {
       serverKeyRef.current = key;
 
       // Migrate to the current formats: re-encrypt with the new salted key if the
-      // legacy KDF was used, and/or rewrite any legacy (unmarked) blobs as v2.
+      // legacy KDF was used, and/or rewrite any legacy (v1/v2) blobs as v3.
       if (usedLegacyFallback || decryptResult.legacyFound) {
         const migrationKey = usedLegacyFallback ? await deriveKey(password, saltBytes) : key;
         serverKeyRef.current = migrationKey;
@@ -330,7 +330,7 @@ export function useVault(): UseVaultReturn {
       const json = JSON.stringify(data);
       const plaintext = new TextEncoder().encode(json);
 
-      // Wire format: [0x02 marker][12-byte nonce][ciphertext + 16-byte tag]
+      // Wire format: [0x03 marker][24-byte nonce][ciphertext + 16-byte tag]
       return bytesToBase64(await packBlob(key, plaintext));
     }
 
@@ -443,6 +443,12 @@ export function useVault(): UseVaultReturn {
       const decryptResult = await decryptItemsFromServer(items, serverKeyRef.current);
       console.log(`[useVault] Sync decrypted ${decryptResult.successCount}/${items.length} items, returning ${decryptResult.entries.length} entries`);
       const { entries, folders, settings } = decryptResult;
+
+      // Eagerly re-encrypt any legacy (v1/v2) items to the current (v3) format.
+      if (decryptResult.legacyFound) {
+        await saveToServer(entries, settings, folders);
+        console.log("[useVault] Migrated legacy vault items to the current encryption format");
+      }
 
       // Clean up junk items with invalid encrypted blobs
       const shortBlobIds = items

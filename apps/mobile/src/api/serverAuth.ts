@@ -1,7 +1,8 @@
 import type { VaultEntry, VaultData, VaultSettings } from "@guardian/core/crypto/vault";
 import { deriveKey } from "@guardian/core/crypto/argon2";
-import { unpackBlob } from "@guardian/core/crypto/chacha20";
+import { unpackBlob, isLegacyBlob } from "@guardian/core/crypto/chacha20";
 import { httpRequest } from "./http";
+import { pushValuesToServer } from "./serverSync";
 import { sha256 } from "./sha256";
 
 export interface ServerAuthResponse {
@@ -95,10 +96,11 @@ function decodeBase64ToBytes(input: string): Uint8Array | null {
 async function decryptVaultItems(
   items: VaultItem[],
   key: Uint8Array,
-): Promise<{ entries: VaultEntry[]; settings?: VaultSettings; candidateCount: number }> {
+): Promise<{ entries: VaultEntry[]; settings?: VaultSettings; candidateCount: number; legacyFound: boolean }> {
   const entries: VaultEntry[] = [];
   let settings: VaultSettings | undefined;
   let candidateCount = 0;
+  let legacyFound = false;
 
   for (const item of items) {
     const bytes = decodeBase64ToBytes(item.encrypted_blob);
@@ -110,9 +112,9 @@ async function decryptVaultItems(
       continue;
     }
 
-    // Blob format: [0x02 marker][Nonce 12][Ciphertext N][Tag 16] => min 29.
-    // Legacy (unmarked) blobs [Nonce 12][Ciphertext N][broken tag 16] are
-    // recovered transparently (min 28).
+    // Blob format v3: [0x03 marker][Nonce 24][Ciphertext N][Tag 16] => min 41.
+    // Legacy v2 [0x02 marker][Nonce 12][Ciphertext N][Tag 16] (min 29) and v1
+    // (unmarked, broken tag) are recovered transparently (min 28).
     if (bytes.length < 28) {
       if (!warnedDecryptIds.has(item.id)) {
         warnedDecryptIds.add(item.id);
@@ -124,6 +126,7 @@ async function decryptVaultItems(
     candidateCount += 1;
 
     try {
+      if (isLegacyBlob(bytes)) legacyFound = true;
       const plaintext = await unpackBlob(key, bytes);
       const entryStr = new TextDecoder().decode(plaintext);
       if (item.id === "settings") {
@@ -140,7 +143,7 @@ async function decryptVaultItems(
     }
   }
 
-  return { entries, settings, candidateCount };
+  return { entries, settings, candidateCount, legacyFound };
 }
 
 export async function fetchVaultFromServer(session: ServerSession): Promise<VaultData> {
@@ -162,6 +165,14 @@ export async function fetchVaultFromServer(session: ServerSession): Promise<Vaul
     throw new Error(
       "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
     );
+  }
+
+  // Eagerly re-encrypt any legacy (v1/v2) items to the current (v3) format.
+  if (decrypted.legacyFound && decrypted.entries.length > 0) {
+    await pushValuesToServer(session.serverUrl, session.authToken, session.serverKey, [
+      ...decrypted.entries.map((e) => ({ id: e.id, value: e })),
+      ...(decrypted.settings ? [{ id: "settings", value: decrypted.settings }] : []),
+    ]);
   }
 
   return {
@@ -277,12 +288,15 @@ export async function loginToServerAndFetchVault(
 
   // 4) Try new salted key first
   let decrypted = await decryptVaultItems(items, key);
+  let usedLegacyKey = false;
 
   // Try legacy username-based salt as fallback (migration for existing vaults)
   if (decrypted.entries.length === 0 && decrypted.candidateCount > 0 && items.some(i => i.id !== "settings")) {
     const legacyKey = await deriveKey(password, sha256(new TextEncoder().encode(username)).slice(0, 16));
-    decrypted = await decryptVaultItems(items, legacyKey);
-    if (decrypted.entries.length > 0) {
+    const legacyDecrypted = await decryptVaultItems(items, legacyKey);
+    if (legacyDecrypted.entries.length > 0) {
+      decrypted = legacyDecrypted;
+      usedLegacyKey = true;
       console.log("[serverAuth] Used legacy key derivation (username-based salt). Vault will be migrated on next desktop sync.");
     }
   }
@@ -291,6 +305,16 @@ export async function loginToServerAndFetchVault(
     throw new Error(
       "Signed in, but failed to decrypt any vault items. Check your password, or verify your device supports the required crypto (Argon2/WebAssembly).",
     );
+  }
+
+  // Eagerly re-encrypt any legacy (v1/v2) items to the current (v3) format.
+  // Only when the current salted key was used — a legacy-key vault is left for
+  // the desktop client's KDF migration.
+  if (!usedLegacyKey && decrypted.legacyFound && decrypted.entries.length > 0) {
+    await pushValuesToServer(base, token, key, [
+      ...decrypted.entries.map((e) => ({ id: e.id, value: e })),
+      ...(decrypted.settings ? [{ id: "settings", value: decrypted.settings }] : []),
+    ]);
   }
 
   // Persist minimal session info for later use.

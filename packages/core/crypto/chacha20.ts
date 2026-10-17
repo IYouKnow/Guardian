@@ -1,7 +1,10 @@
 /**
- * ChaCha20-Poly1305 (RFC 8439) AEAD
+ * ChaCha20-Poly1305 (RFC 8439) and XChaCha20-Poly1305 AEAD
  *
- * The AEAD itself uses the audited @noble/ciphers implementation.
+ * Both AEADs use the audited @noble/ciphers implementation. XChaCha's 192-bit
+ * nonce is used on paths that reuse a long-lived key (the .guardian vault
+ * format and the per-item server-sync blobs), where random 96-bit nonces would
+ * otherwise be collision-prone.
  *
  * A private, legacy raw-ChaCha20 routine is retained solely to RECOVER data
  * written by an older build whose Poly1305 tag was broken (it truncated 26-bit
@@ -10,15 +13,19 @@
  * ever used to read v1 data, which is then re-encrypted under the real AEAD.
  */
 
-import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { chacha20poly1305, xchacha20poly1305 } from "@noble/ciphers/chacha.js";
 
 const CHACHA20_KEY_SIZE = 32; // 256 bits
 const CHACHA20_NONCE_SIZE = 12; // 96 bits
+const XCHACHA20_NONCE_SIZE = 24; // 192 bits
 const CHACHA20_BLOCK_SIZE = 64; // 512 bits
 export const POLY1305_TAG_SIZE = 16; // 128 bits
 
 // First byte of the per-item wire format produced by packBlob().
+// v2 = ChaCha20-Poly1305 (12-byte nonce), v3 = XChaCha20-Poly1305 (24-byte nonce).
+// v3 is the current format; v2 is still readable.
 export const BLOB_FORMAT_V2 = 0x02;
+export const BLOB_FORMAT_V3 = 0x03;
 
 function assertKeyNonce(key: Uint8Array, nonce: Uint8Array): void {
   if (key.length !== CHACHA20_KEY_SIZE) {
@@ -26,6 +33,15 @@ function assertKeyNonce(key: Uint8Array, nonce: Uint8Array): void {
   }
   if (nonce.length !== CHACHA20_NONCE_SIZE) {
     throw new Error("Nonce must be 12 bytes");
+  }
+}
+
+function assertKeyNonceX(key: Uint8Array, nonce: Uint8Array): void {
+  if (key.length !== CHACHA20_KEY_SIZE) {
+    throw new Error("Key must be 32 bytes");
+  }
+  if (nonce.length !== XCHACHA20_NONCE_SIZE) {
+    throw new Error("Nonce must be 24 bytes");
   }
 }
 
@@ -70,6 +86,54 @@ export async function decrypt(
  */
 export function generateNonce(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(CHACHA20_NONCE_SIZE));
+}
+
+/**
+ * Encrypts data using XChaCha20-Poly1305 (24-byte extended nonce).
+ *
+ * Unlike ChaCha20-Poly1305, XChaCha's 192-bit nonce is safe to generate
+ * randomly even under a long-lived fixed key.
+ *
+ * @param key - 32-byte key
+ * @param nonce - 24-byte nonce
+ * @param plaintext - Data to encrypt
+ * @returns Ciphertext + Poly1305 tag (16 bytes) concatenated
+ */
+export async function encryptXChaCha(
+  key: Uint8Array,
+  nonce: Uint8Array,
+  plaintext: Uint8Array
+): Promise<Uint8Array> {
+  assertKeyNonceX(key, nonce);
+  return xchacha20poly1305(key, nonce).encrypt(plaintext);
+}
+
+/**
+ * Decrypts data using XChaCha20-Poly1305 (24-byte extended nonce).
+ *
+ * @param key - 32-byte key
+ * @param nonce - 24-byte nonce
+ * @param ciphertext - Ciphertext + tag (16 bytes) concatenated
+ * @returns Decrypted plaintext
+ * @throws if the authentication tag does not verify
+ */
+export async function decryptXChaCha(
+  key: Uint8Array,
+  nonce: Uint8Array,
+  ciphertext: Uint8Array
+): Promise<Uint8Array> {
+  assertKeyNonceX(key, nonce);
+  if (ciphertext.length < POLY1305_TAG_SIZE) {
+    throw new Error("Ciphertext is too short");
+  }
+  return xchacha20poly1305(key, nonce).decrypt(ciphertext);
+}
+
+/**
+ * Generates a random 24-byte XChaCha20 nonce
+ */
+export function generateXNonce(): Uint8Array {
+  return crypto.getRandomValues(new Uint8Array(XCHACHA20_NONCE_SIZE));
 }
 
 // --- V1 recovery (legacy, broken-tag format) --------------------------------
@@ -193,34 +257,45 @@ export function decryptLegacy(
 }
 
 // --- Per-item wire format ---------------------------------------------------
-// [0x02][nonce 12][ciphertext + 16-byte tag]
+// v3 (current): [0x03][nonce 24][ciphertext + 16-byte tag]   (XChaCha20-Poly1305)
+// v2 (legacy):  [0x02][nonce 12][ciphertext + 16-byte tag]   (ChaCha20-Poly1305)
+// v1 (legacy):  [nonce 12][ciphertext + broken tag 16]       (unmarked, unauthenticated)
 
 /**
- * Encrypts a payload into the current per-item wire format.
+ * Encrypts a payload into the current per-item wire format (v3).
  */
 export async function packBlob(key: Uint8Array, plaintext: Uint8Array): Promise<Uint8Array> {
-  const nonce = generateNonce();
-  const ciphertext = await encrypt(key, nonce, plaintext);
+  const nonce = generateXNonce();
+  const ciphertext = await encryptXChaCha(key, nonce, plaintext);
 
-  const packed = new Uint8Array(1 + CHACHA20_NONCE_SIZE + ciphertext.length);
-  packed[0] = BLOB_FORMAT_V2;
+  const packed = new Uint8Array(1 + XCHACHA20_NONCE_SIZE + ciphertext.length);
+  packed[0] = BLOB_FORMAT_V3;
   packed.set(nonce, 1);
-  packed.set(ciphertext, 1 + CHACHA20_NONCE_SIZE);
+  packed.set(ciphertext, 1 + XCHACHA20_NONCE_SIZE);
 
   return packed;
 }
 
 /**
- * Decrypts a per-item blob, transparently recovering the legacy (unmarked)
- * format. Callers should check `isLegacyBlob()` to know whether a recovered
+ * Decrypts a per-item blob, transparently reading the current (v3) format and
+ * recovering the legacy v2 (12-byte nonce) and v1 (unmarked, broken tag)
+ * formats. Callers should check `isLegacyBlob()` to know whether a recovered
  * item needs to be re-uploaded in the current format.
  */
 export async function unpackBlob(key: Uint8Array, blob: Uint8Array): Promise<Uint8Array> {
+  if (blob.length > 0 && blob[0] === BLOB_FORMAT_V3) {
+    return decryptXChaCha(
+      key,
+      blob.subarray(1, 1 + XCHACHA20_NONCE_SIZE),
+      blob.subarray(1 + XCHACHA20_NONCE_SIZE)
+    );
+  }
+
   if (blob.length > 0 && blob[0] === BLOB_FORMAT_V2) {
     return decrypt(key, blob.subarray(1, 1 + CHACHA20_NONCE_SIZE), blob.subarray(1 + CHACHA20_NONCE_SIZE));
   }
 
-  // Legacy: [nonce 12][ciphertext + broken tag 16]
+  // Legacy v1: [nonce 12][ciphertext + broken tag 16]
   if (blob.length < CHACHA20_NONCE_SIZE + POLY1305_TAG_SIZE) {
     throw new Error("Encrypted blob is too short");
   }
@@ -228,8 +303,9 @@ export async function unpackBlob(key: Uint8Array, blob: Uint8Array): Promise<Uin
 }
 
 /**
- * Returns true if the blob is in the legacy (pre-v2) format.
+ * Returns true if the blob is not in the current (v3) format, i.e. it is a
+ * legacy v1 or v2 blob that should be re-encrypted on the next save.
  */
 export function isLegacyBlob(blob: Uint8Array): boolean {
-  return !(blob.length > 0 && blob[0] === BLOB_FORMAT_V2);
+  return !(blob.length > 0 && blob[0] === BLOB_FORMAT_V3);
 }
