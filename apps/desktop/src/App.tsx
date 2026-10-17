@@ -809,6 +809,8 @@ function App() {
           theme={activeTheme}
           accentColor={preferences.accentColor}
           mini={isMiniMode}
+          onExpandMini={() => setMiniMode(false)}
+          onCollapseMini={() => setMiniMode(true)}
         />
         <ToastContainer toasts={preferences.showNotifications ? toasts : []} onRemove={removeToast} theme={preferences.theme} accentColor={preferences.accentColor} />
       </>

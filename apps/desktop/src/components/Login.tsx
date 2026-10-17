@@ -15,6 +15,8 @@ interface LoginProps {
   theme?: Theme;
   accentColor?: AccentColor;
   mini?: boolean;
+  onExpandMini?: () => void;
+  onCollapseMini?: () => void;
 }
 
 export default function Login({
@@ -26,7 +28,9 @@ export default function Login({
   onModeChange,
   theme = "dark",
   accentColor = "yellow",
-  mini = false
+  mini = false,
+  onExpandMini,
+  onCollapseMini
 }: LoginProps) {
   const [mode, setMode] = useState<"local" | "server">(defaultMode);
   const [masterPassword, setMasterPassword] = useState("");
@@ -120,25 +124,39 @@ export default function Login({
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`${mini ? 'px-3' : `${themeClasses.card} rounded-[1.25rem] border ${themeClasses.border} overflow-hidden shadow-2xl p-6 max-w-sm mx-auto`}`}
+            className={`${mini ? 'px-3' : `relative ${themeClasses.card} rounded-[1.25rem] border ${themeClasses.border} overflow-hidden shadow-2xl p-6 max-w-sm mx-auto`}`}
           >
             {mini ? (
               <>
-                  <div className="flex p-0.5 mb-3 bg-black/20 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => { setMode("local"); onModeChange?.("local"); }}
-                      className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "local" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
-                    >
-                      Local File
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setMode("server"); onModeChange?.("server"); }}
-                      className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "server" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
-                    >
-                      Server
-                    </button>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex flex-1 p-0.5 bg-black/20 rounded-lg">
+                      <button
+                        type="button"
+                        onClick={() => { setMode("local"); onModeChange?.("local"); }}
+                        className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "local" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+                      >
+                        Local File
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setMode("server"); onModeChange?.("server"); }}
+                        className={`flex-1 py-1.5 text-[0.6rem] font-bold uppercase tracking-wider rounded-md transition-all ${mode === "server" ? `${accentClasses.bgClass} ${accentClasses.onContrastClass} shadow` : `${themeClasses.textMuted} hover:${themeClasses.text}`}`}
+                      >
+                        Server
+                      </button>
+                    </div>
+                    {onExpandMini && (
+                      <button
+                        type="button"
+                        onClick={onExpandMini}
+                        title="Expand to full window"
+                        className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg ${themeClasses.input} border ${themeClasses.border} ${themeClasses.textMuted} hover:${themeClasses.text} hover:border-white/10 transition-colors`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
 
                 <form onSubmit={handleLogin} className="space-y-2.5">
@@ -233,6 +251,18 @@ export default function Login({
               </>
             ) : (
               <>
+                {onCollapseMini && (
+                  <button
+                    type="button"
+                    onClick={onCollapseMini}
+                    title="Shrink to mini mode"
+                    className={`absolute top-3 right-3 z-10 p-1.5 rounded-lg ${themeClasses.textMuted} hover:${themeClasses.text} ${themeClasses.hoverBg} transition-colors`}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                    </svg>
+                  </button>
+                )}
                 <div className={`text-center mb-6`}>
                   <h1 className="text-2xl font-bold tracking-tight mb-0.5">Welcome Back</h1>
                   <p className={`${themeClasses.textMuted} text-xs font-medium`}>Unlock your secure workspace</p>
