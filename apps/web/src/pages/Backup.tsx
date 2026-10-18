@@ -7,6 +7,7 @@ import {
     Download, Eye, EyeOff, Copy, RotateCcw, History, Zap, Server, TriangleAlert
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { MockNotice } from '@/components/ui/mock-badge';
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
@@ -216,14 +217,9 @@ export default function Backup() {
             </motion.div>
 
             {/* Mock Data Warning */}
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500"
-            >
-                <TriangleAlert className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium text-sm">Notice: Backup metrics are simulated. Real-time backup status is not yet connected.</span>
-            </motion.div>
+            <MockNotice>
+                Backup metrics are simulated. Providers, history, schedule, and the encryption key shown here are placeholder data and not yet connected to the server.
+            </MockNotice>
 
             {/* Stats Row */}
             <motion.div

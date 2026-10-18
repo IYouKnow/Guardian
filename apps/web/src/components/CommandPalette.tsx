@@ -18,6 +18,7 @@ import {
   CornerDownLeft,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { MockBadge } from './ui/mock-badge';
 import { authApi } from '../api/auth';
 
 interface CommandItem {
@@ -29,6 +30,7 @@ interface CommandItem {
   category: 'navigation' | 'action' | 'shortcut';
   shortcut?: string;
   adminOnly?: boolean;
+  mock?: boolean;
 }
 
 interface CommandPaletteProps {
@@ -62,6 +64,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         category: 'navigation',
         shortcut: 'GD',
         adminOnly: true,
+        mock: true,
       },
       {
         id: 'nav-users',
@@ -91,6 +94,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         action: () => navigate(createPageUrl('Storage')),
         category: 'navigation',
         adminOnly: true,
+        mock: true,
       },
       {
         id: 'nav-backup',
@@ -100,6 +104,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         action: () => navigate(createPageUrl('Backup')),
         category: 'navigation',
         adminOnly: true,
+        mock: true,
       },
       {
         id: 'nav-settings',
@@ -377,9 +382,12 @@ function CommandItemRow({ command, isSelected, onSelect, themeClasses }: Command
     >
       <Icon className={`w-4 h-4 ${themeClasses.textSecondary}`} />
       <div className="flex-1 text-left">
-        <p className={`text-sm ${themeClasses.text}`}>
-          {command.label}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm ${themeClasses.text}`}>
+            {command.label}
+          </p>
+          {command.mock && <MockBadge />}
+        </div>
         {command.description && (
           <p className={`text-xs ${themeClasses.textTertiary}`}>
             {command.description}

@@ -30,6 +30,7 @@ import { useSSE } from './hooks/useSSE';
 import { SyncIndicator } from "@guardian/ui";
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { CommandPalette, useCommandPalette } from './components/CommandPalette';
+import { MockBadge } from './components/ui/mock-badge';
 import { authApi } from './api/auth';
 
 interface NavItem {
@@ -38,6 +39,7 @@ interface NavItem {
   page: string;
   description: string;
   adminOnly?: boolean;
+  mock?: boolean;
 }
 
 interface NavSection {
@@ -56,7 +58,7 @@ const navSections: NavSection[] = [
     icon: Server,
     adminOnly: true,
     items: [
-      { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard', description: 'System overview' },
+      { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard', description: 'System overview', mock: true },
       { name: 'Users', icon: Users, page: 'Users', description: 'Manage admin accounts' },
       { name: 'Invites', icon: Ticket, page: 'Invites', description: 'Manage invite codes' },
     ],
@@ -68,8 +70,8 @@ const navSections: NavSection[] = [
     icon: HardDrive,
     adminOnly: true,
     items: [
-      { name: 'Storage', icon: HardDrive, page: 'Storage', description: 'Storage metrics' },
-      { name: 'Backup', icon: ShieldCheck, page: 'Backup', description: 'Manage backups' },
+      { name: 'Storage', icon: HardDrive, page: 'Storage', description: 'Storage metrics', mock: true },
+      { name: 'Backup', icon: ShieldCheck, page: 'Backup', description: 'Manage backups', mock: true },
     ],
     defaultOpen: true,
   },
@@ -321,6 +323,7 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
                               >
                                 <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? accentClasses.onContrastClass : ''}`} />
                                 <span className={`text-sm font-medium ${isActive ? accentClasses.onContrastClass : ''}`}>{item.name}</span>
+                                {item.mock && !isActive && <MockBadge className="ml-auto" />}
                                 {isActive && <ChevronRight className={`w-3.5 h-3.5 ml-auto ${accentClasses.onContrastClass}`} />}
                               </Link>
                             );
@@ -344,15 +347,16 @@ export default function Layout({ children, currentPageName }: LayoutProps) {
                       to={createPageUrl(item.page)}
                       onClick={() => setSidebarOpen(false)}
                       className={`
-                        flex items-center justify-center px-3 py-2.5 rounded-lg transition-all duration-150
+                        relative flex items-center justify-center px-3 py-2.5 rounded-lg transition-all duration-150
                         ${isActive
                           ? `${accentClasses.bgClass} ${accentClasses.onContrastClass}`
                           : `${themeClasses.textSecondary} ${themeClasses.hoverBg} hover:${themeClasses.text}`
                         }
                       `}
-                      title={item.name}
+                      title={item.mock ? `${item.name} (mock data)` : item.name}
                     >
                       <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? accentClasses.onContrastClass : ''}`} />
+                      {item.mock && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-500" />}
                     </Link>
                   );
                 })}

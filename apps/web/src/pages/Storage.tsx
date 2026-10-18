@@ -7,6 +7,7 @@ import {
     ArrowUpRight, ArrowDownRight, Gauge, Layers, ChartPie, ChartBar
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { MockNotice } from '@/components/ui/mock-badge';
 import { Button } from "@/components/ui/button";
 
 interface UserQuota {
@@ -124,6 +125,10 @@ export default function Storage() {
 
     return (
         <div className="space-y-6">
+            <MockNotice>
+                Storage metrics are simulated. Quotas, usage, growth trends, and disk health are placeholder data and not yet connected to the server.
+            </MockNotice>
+
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}

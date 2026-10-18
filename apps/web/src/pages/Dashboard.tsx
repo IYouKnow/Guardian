@@ -4,6 +4,7 @@ import StatsCard, { type StatsCardProps } from '@/components/dashboard/StatsCard
 import ActivityChart from '@/components/dashboard/ActivityChart';
 import RecentActivity from '@/components/dashboard/RecentActivity';
 import { useTheme } from '../context/ThemeContext';
+import { MockNotice } from '@/components/ui/mock-badge';
 
 export default function Dashboard() {
   const { themeClasses, accentClasses } = useTheme();
@@ -17,6 +18,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5">
+      <MockNotice>
+        This dashboard is a preview. Statistics, weekly activity, recent events, and server health are placeholder data and not yet connected to live server metrics.
+      </MockNotice>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((stat, index) => (
           <StatsCard key={stat.title} {...stat} delay={index * 0.05} />
