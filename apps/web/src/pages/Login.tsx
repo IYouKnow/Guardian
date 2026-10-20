@@ -25,9 +25,10 @@ export default function Login() {
             await new Promise(resolve => setTimeout(resolve, 600));
 
             await authApi.login({ username, password });
-            navigate('/dashboard');
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Invalid credentials');
+            navigate('/');
+        } catch (err: unknown) {
+            const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+            setError(message || 'Invalid credentials');
         } finally {
             setLoading(false);
         }

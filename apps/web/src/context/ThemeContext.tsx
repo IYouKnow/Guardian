@@ -121,6 +121,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     );
 }
 
+// Context + provider + hook live together by design; the fast-refresh rule only
+// applies to modules that export components alongside non-components.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
     const context = useContext(ThemeContext);
     if (context === undefined) {

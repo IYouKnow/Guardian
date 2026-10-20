@@ -20,4 +20,12 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Ported shadcn/ui components (and the template ThemeProvider) co-export
+    // their variant helpers and hooks by convention, which this rule flags.
+    files: ['src/next/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

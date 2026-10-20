@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { authApi } from './api/auth';
-import Layout from './Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Users from './pages/users';
-import Invites from './pages/invites';
-import Settings from './pages/Settings';
-import Storage from './pages/Storage';
-import Backup from './pages/Backup';
-import Account from './pages/Account';
-import { getPageNameFromPath } from './utils';
+import { ThemeProvider as ConsoleThemeProvider } from '@next/components/ThemeProvider';
+import ConsoleLayout from '@next/components/Layout';
+import Overview from '@next/pages/Overview';
+import Users from '@next/pages/Users';
+import Invitations from '@next/pages/Invitations';
+import Storage from '@next/pages/Storage';
+import Backups from '@next/pages/Backups';
+import Settings from '@next/pages/Settings';
+import Account from '@next/pages/Account';
 
 // RequireAuth validates the stored token with the server once per app load so a
 // stale session (expired, revoked, or removed account) can't render the admin
@@ -38,8 +38,8 @@ function RequireAuth() {
 
   if (state === 'checking') {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-zinc-950">
-        <Loader2 className="h-5 w-5 text-yellow-500 animate-spin" />
+      <div className="min-h-screen w-full flex items-center justify-center bg-background">
+        <Loader2 className="h-5 w-5 text-primary animate-spin" />
       </div>
     );
   }
@@ -62,88 +62,44 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
-function LayoutWrapper({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-  const currentPageName = getPageNameFromPath(location.pathname);
-  return <Layout currentPageName={currentPageName}>{children}</Layout>;
-}
-
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <Layout currentPageName="Login">
-                <Login />
-              </Layout>
-            }
-          />
-          <Route element={<RequireAuth />}>
-            <Route
-              path="/account"
-              element={
-                <LayoutWrapper>
-                  <Account />
-                </LayoutWrapper>
-              }
-            />
-            <Route element={<RequireAdmin />}>
-            <Route
-              path="/dashboard"
-              element={
-                <LayoutWrapper>
-                  <Dashboard />
-                </LayoutWrapper>
-              }
-            />
-            <Route
-              path="/users"
-              element={
-                <LayoutWrapper>
-                  <Users />
-                </LayoutWrapper>
-              }
-            />
-            <Route
-              path="/invites"
-              element={
-                <LayoutWrapper>
-                  <Invites />
-                </LayoutWrapper>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <LayoutWrapper>
-                  <Settings />
-                </LayoutWrapper>
-              }
-            />
-            <Route
-              path="/storage"
-              element={
-                <LayoutWrapper>
-                  <Storage />
-                </LayoutWrapper>
-              }
-            />
-            <Route
-              path="/backup"
-              element={
-                <LayoutWrapper>
-                  <Backup />
-                </LayoutWrapper>
-              }
-            />
+      <ConsoleThemeProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+
+            <Route element={<RequireAuth />}>
+              <Route element={<ConsoleLayout />}>
+                <Route path="/account" element={<Account />} />
+                <Route element={<RequireAdmin />}>
+                  <Route path="/" element={<Overview />} />
+                  <Route path="/users" element={<Users />} />
+                  <Route path="/invitations" element={<Invitations />} />
+                  <Route path="/storage" element={<Storage />} />
+                  <Route path="/backups" element={<Backups />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Route>
+              </Route>
             </Route>
-          </Route>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </BrowserRouter>
+
+            {/* Legacy URLs kept working for existing links/bookmarks. */}
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
+            <Route path="/invites" element={<Navigate to="/invitations" replace />} />
+            <Route path="/backup" element={<Navigate to="/backups" replace />} />
+            <Route path="/next" element={<Navigate to="/" replace />} />
+            <Route path="/next/users" element={<Navigate to="/users" replace />} />
+            <Route path="/next/invitations" element={<Navigate to="/invitations" replace />} />
+            <Route path="/next/storage" element={<Navigate to="/storage" replace />} />
+            <Route path="/next/backups" element={<Navigate to="/backups" replace />} />
+            <Route path="/next/settings" element={<Navigate to="/settings" replace />} />
+            <Route path="/next/account" element={<Navigate to="/account" replace />} />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ConsoleThemeProvider>
     </ThemeProvider>
   );
 }

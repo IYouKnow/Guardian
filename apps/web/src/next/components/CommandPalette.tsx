@@ -1,0 +1,90 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@next/components/ui/command';
+import { navItems, users, backupProviders } from '@next/lib/mockData';
+import { Icon } from '@next/components/Icon';
+import { authApi } from '@/api/auth';
+import { Search, ArrowRight } from 'lucide-react';
+
+interface CommandPaletteProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export default function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+  const navigate = useNavigate();
+  const isAdmin = authApi.isAdmin();
+  const items = isAdmin ? navItems : navItems.filter((item) => !item.adminOnly);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        onOpenChange(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onOpenChange]);
+
+  const go = (path: string) => {
+    onOpenChange(false);
+    navigate(path);
+  };
+
+  return (
+    <CommandDialog open={open} onOpenChange={onOpenChange} className="max-w-xl rounded-sm border-border">
+      <CommandInput placeholder="Search vaults, users, pages, run commands…" className="font-mono text-[13px]" />
+      <CommandList className="max-h-[420px]">
+        <CommandEmpty className="font-mono text-[11px] uppercase tracking-wider">No results found.</CommandEmpty>
+
+        <CommandGroup heading="Navigate">
+          {items.map((item, i) => (
+            <CommandItem key={item.id} onSelect={() => go(item.path)} className="gap-3 rounded-sm">
+              <span className="w-4 font-mono text-[10px] tabular-nums text-muted-foreground/50">{String(i + 1).padStart(2, '0')}</span>
+              <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
+              <span>{item.label}</span>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+
+        {isAdmin && (
+          <>
+            <CommandGroup heading="Users">
+              {users.slice(0, 5).map((u) => (
+                <CommandItem key={u.id} onSelect={() => go('/users')} className="gap-3 rounded-sm">
+                  <span className="grid h-6 w-6 place-items-center border border-border bg-primary/10 font-mono text-[10px] font-semibold text-primary">{u.avatar}</span>
+                  <span className="flex-1">{u.name}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{u.email}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Backup Providers">
+              {backupProviders.slice(0, 4).map((p) => (
+                <CommandItem key={p.id} onSelect={() => go('/backups')} className="gap-3 rounded-sm">
+                  <Icon name={p.icon} className="h-4 w-4 text-muted-foreground" />
+                  <span className="flex-1">{p.name}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{p.status}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandGroup heading="Actions">
+              <CommandItem onSelect={() => go('/invitations')} className="gap-3 rounded-sm">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <span>Invite new user</span>
+                <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+              </CommandItem>
+              <CommandItem onSelect={() => go('/settings')} className="gap-3 rounded-sm">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <span>Open settings</span>
+                <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+              </CommandItem>
+            </CommandGroup>
+          </>
+        )}
+      </CommandList>
+    </CommandDialog>
+  );
+}

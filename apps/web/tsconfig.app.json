@@ -26,6 +26,9 @@
       "@/*": [
         "./src/*"
       ],
+      "@next/*": [
+        "./src/next/*"
+      ],
       "@guardian/core": [
         "../../packages/core/index.ts"
       ],
