@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -336,6 +337,53 @@ func (s *Server) handleUpdateSetting(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Setting updated"})
+}
+
+// platformInfoResponse is the payload for GET /api/admin/platform. It reports
+// live, server-sourced details for the console's Platform information panel.
+type platformInfoResponse struct {
+	Version       string `json:"version"`
+	Status        string `json:"status"`
+	UptimeSeconds int64  `json:"uptime_seconds"`
+	Environment   string `json:"environment"`
+	GoVersion     string `json:"go_version"`
+	OS            string `json:"os"`
+	Arch          string `json:"arch"`
+	DatabaseSize  string `json:"database_size"`
+	Users         int    `json:"users"`
+}
+
+// handlePlatformInfo reports live platform details derived from the running
+// server: build version, uptime, runtime, and system database stats.
+func (s *Server) handlePlatformInfo(w http.ResponseWriter, r *http.Request) {
+	var users int
+	if err := s.systemDB.QueryRow("SELECT COUNT(*) FROM users").Scan(&users); err != nil {
+		s.logger.Println("handlePlatformInfo: user count error:", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	var dbSize int64
+	if info, err := os.Stat(filepath.Join(s.config.DataDir, "system.db")); err == nil {
+		dbSize = info.Size()
+	}
+
+	env := strings.TrimSpace(os.Getenv("GUARDIAN_ENV"))
+	if env == "" {
+		env = "development"
+	}
+
+	writeJSON(w, http.StatusOK, platformInfoResponse{
+		Version:       Version,
+		Status:        "operational",
+		UptimeSeconds: int64(time.Since(s.startedAt).Seconds()),
+		Environment:   env,
+		GoVersion:     runtime.Version(),
+		OS:            runtime.GOOS,
+		Arch:          runtime.GOARCH,
+		DatabaseSize:  formatBytes(dbSize),
+		Users:         users,
+	})
 }
 
 // handleUpdateUser updates fields on a user by ID

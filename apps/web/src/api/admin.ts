@@ -26,6 +26,18 @@ export interface UserStats {
     active_sessions: number;
 }
 
+export interface PlatformInfo {
+    version: string;
+    status: string;
+    uptime_seconds: number;
+    environment: string;
+    go_version: string;
+    os: string;
+    arch: string;
+    database_size: string;
+    users: number;
+}
+
 export interface AdminUser {
     id: number;
     username: string;
@@ -89,6 +101,11 @@ export const adminApi = {
 
     async updateSetting(key: string, value: string): Promise<void> {
         await apiClient.put('/api/admin/settings', { key, value });
+    },
+
+    async getPlatformInfo(): Promise<PlatformInfo> {
+        const response = await apiClient.get<PlatformInfo>('/api/admin/platform');
+        return response.data;
     },
 
     // Mock endpoints - to be implemented later

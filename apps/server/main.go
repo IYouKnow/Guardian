@@ -5,9 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"flag"
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
@@ -34,6 +36,7 @@ type Server struct {
 	authLockouts   *lockoutTracker
 	trustedProxies []netip.Prefix
 	allowedOrigins originAllowlist
+	startedAt      time.Time
 }
 
 func main() {
@@ -43,7 +46,14 @@ func main() {
 		port = "8080"
 	}
 
+	// -host selects the bind address. Empty (the default) listens on all
+	// interfaces; the web dev script passes 127.0.0.1 so Windows does not raise
+	// a firewall/UAC prompt for a loopback-only listener.
+	host := flag.String("host", "", "bind address (default: all interfaces)")
+	flag.Parse()
+
 	config := Config{
+		Host:    *host,
 		Port:    port,
 		DataDir: "./data",
 	}
@@ -113,6 +123,7 @@ func main() {
 		authLockouts:   newLockoutTracker(loginMaxFailures, loginLockoutDuration),
 		trustedProxies: trustedProxies,
 		allowedOrigins: defaultOriginAllowlist().withExtra(extraOrigins),
+		startedAt:      time.Now(),
 	}
 
 	mux := http.NewServeMux()
@@ -139,6 +150,7 @@ func main() {
 	// Admin / Settings
 	mux.HandleFunc("GET /api/admin/settings", server.withAdminAuth(server.handleListSettings))
 	mux.HandleFunc("PUT /api/admin/settings", server.withAdminAuth(server.handleUpdateSetting))
+	mux.HandleFunc("GET /api/admin/platform", server.withAdminAuth(server.handlePlatformInfo))
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
@@ -214,7 +226,7 @@ func main() {
 
 	// 7. Setup HTTP Server with graceful shutdown
 	httpServer := &http.Server{
-		Addr:         ":" + config.Port,
+		Addr:         net.JoinHostPort(config.Host, config.Port),
 		Handler:      server.securityHeaders(server.corsHandler(http.MaxBytesHandler(mux, maxRequestBodyBytes))),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,

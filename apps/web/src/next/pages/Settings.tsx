@@ -6,7 +6,6 @@ import { Input } from '@next/components/ui/input';
 import { Switch } from '@next/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@next/components/ui/tabs';
 import { Label } from '@next/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@next/components/ui/select';
 import { useTheme } from '@next/components/ThemeProvider';
 import {
   ACCENT_OPTIONS,
@@ -14,8 +13,7 @@ import {
   accentSwatch,
   consoleThemeClass,
 } from '@next/lib/appearance';
-import { useServerHealth } from '@next/lib/useServerHealth';
-import { adminApi } from '@/api/admin';
+import { adminApi, type PlatformInfo } from '@/api/admin';
 import { toast } from 'sonner';
 import { Check, Loader2, Lock, RotateCw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -151,16 +149,61 @@ function ServerSettings() {
   );
 }
 
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+// Live platform details reported by GET /api/admin/platform. Mounted inside the
+// Server tab so it only fetches when that tab is viewed.
+function PlatformInfoPanel() {
+  const [info, setInfo] = useState<PlatformInfo | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    adminApi
+      .getPlatformInfo()
+      .then((data) => { if (active) setInfo(data); })
+      .catch(() => { if (active) setInfo(null); });
+    return () => { active = false; };
+  }, []);
+
+  const cells = [
+    { label: 'Version', value: info ? `v${info.version}` : '—' },
+    { label: 'Status', value: info?.status ?? '—' },
+    { label: 'Uptime', value: info ? formatUptime(info.uptime_seconds) : '—' },
+    { label: 'Environment', value: info?.environment ?? '—' },
+    { label: 'Runtime', value: info?.go_version ?? '—' },
+    { label: 'Platform', value: info ? `${info.os}/${info.arch}` : '—' },
+    { label: 'Database', value: info?.database_size ?? '—' },
+    { label: 'Users', value: info ? String(info.users) : '—' },
+  ];
+
+  return (
+    <Section title="Platform information" subtitle="Reported by the server">
+      <div className="grid grid-cols-2 gap-px border border-border bg-border lg:grid-cols-4">
+        {cells.map((c) => (
+          <div key={c.label} className="bg-card p-3.5">
+            <p className="text-eyebrow">{c.label}</p>
+            <p className="mt-1.5 truncate font-mono text-[13px] text-foreground" title={c.value}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 export default function Settings() {
   const { mode, setTheme, accentColor, setAccentColor } = useTheme();
-  const [density, setDensity] = useState('comfortable');
-  const [grid, setGrid] = useState(true);
-  const [animations, setAnimations] = useState(true);
   const [twoFactor, setTwoFactor] = useState(true);
   const [autoBackup, setAutoBackup] = useState(true);
 
   const swatchTheme = consoleThemeClass(mode);
-  const { version, status: serverStatus } = useServerHealth();
 
   return (
     <div className="animate-fade-in-up">
@@ -233,65 +276,12 @@ export default function Settings() {
               ))}
             </div>
           </Section>
-
-          <Section title="Display">
-            <Row
-              label="Density"
-              desc="Compact rows fit more data per screen."
-              control={
-                <Select value={density} onValueChange={setDensity}>
-                  <SelectTrigger className="h-8 w-[140px] rounded-sm border-border bg-background font-mono text-[10px] uppercase tracking-wider"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="comfortable">Comfortable</SelectItem><SelectItem value="compact">Compact</SelectItem></SelectContent>
-                </Select>
-              }
-            />
-            <Row label="Grid texture" desc="Subtle background grid for the console feel." control={<Switch checked={grid} onCheckedChange={setGrid} />} />
-            <Row label="Animations" desc="Enable transitions and micro-interactions." control={<Switch checked={animations} onCheckedChange={setAnimations} />} />
-          </Section>
         </TabsContent>
 
         <TabsContent value="server" className="space-y-5">
           <ServerSettings />
 
-          <Section title="Region & deployment" subtitle="Where Guardian is hosted">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-eyebrow">Primary region</Label>
-                <Select defaultValue="eu-west-1">
-                  <SelectTrigger className="rounded-sm border-border bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="eu-west-1">Europe (Ireland)</SelectItem>
-                    <SelectItem value="us-east-1">US East (Virginia)</SelectItem>
-                    <SelectItem value="ap-southeast-1">Asia Pacific (Singapore)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-eyebrow">Replica region</Label>
-                <Select defaultValue="us-east-1">
-                  <SelectTrigger className="rounded-sm border-border bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="us-east-1">US East (Virginia)</SelectItem>
-                    <SelectItem value="eu-central-1">Europe (Frankfurt)</SelectItem>
-                    <SelectItem value="none">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </Section>
-          <Section title="Platform information" subtitle="Reported by the server">
-            <div className="grid grid-cols-2 gap-px border border-border bg-border">
-              {[
-                { label: 'Version', value: version ? `v${version}` : '—' },
-                { label: 'Status', value: serverStatus || '—' },
-              ].map((s) => (
-                <div key={s.label} className="bg-card p-3.5">
-                  <p className="text-eyebrow">{s.label}</p>
-                  <p className="mt-1.5 font-mono text-[13px] text-foreground">{s.value}</p>
-                </div>
-              ))}
-            </div>
-          </Section>
+          <PlatformInfoPanel />
         </TabsContent>
 
         <TabsContent value="security" className="space-y-5">

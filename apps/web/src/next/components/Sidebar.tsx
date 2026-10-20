@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Shield, ChevronsLeft } from 'lucide-react';
+import { Lock, ChevronsLeft } from 'lucide-react';
 import { navItems, platformMeta } from '@next/lib/mockData';
 import { useServerHealth } from '@next/lib/useServerHealth';
 import { Icon } from '@next/components/Icon';
@@ -29,7 +29,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Brand */}
       <div className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border', collapsed ? 'justify-center px-0' : 'px-4')}>
         <div className="grid h-8 w-8 shrink-0 place-items-center border border-primary/45 bg-primary/5">
-          <Shield className="h-4 w-4 text-primary" strokeWidth={2} />
+          <Lock className="h-4 w-4 text-primary" strokeWidth={2} />
         </div>
         {!collapsed && (
           <div className="min-w-0">
@@ -47,7 +47,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav className="scrollbar-thin flex-1 overflow-y-auto py-4">
         {!collapsed && <p className="text-eyebrow px-4 pb-3">Console</p>}
         <div className={cn('space-y-px', collapsed ? 'px-2' : 'px-2')}>
-          {items.map((item, i) => {
+          {items.map((item) => {
             const active = location.pathname === item.path;
             return (
               <NavLink
@@ -65,11 +65,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 )}
               >
                 {active && <span className="absolute left-0 top-0 h-full w-[2px] bg-primary" />}
-                {!collapsed && (
-                  <span className={cn('w-4 shrink-0 font-mono text-[10px] tabular-nums', active ? 'text-primary' : 'text-muted-foreground/45')}>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                )}
                 <Icon name={item.icon} className={cn('h-[17px] w-[17px] shrink-0', active && 'text-primary')} />
                 {!collapsed && <span className="truncate">{item.label}</span>}
                 {collapsed && hovered === item.id && (

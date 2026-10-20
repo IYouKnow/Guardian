@@ -250,6 +250,7 @@ func loadEnv() {
 }
 
 type Config struct {
+	Host    string
 	Port    string
 	DataDir string
 }
