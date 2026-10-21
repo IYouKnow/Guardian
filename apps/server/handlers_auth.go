@@ -369,6 +369,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.systemDB.Exec("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", id)
 
 	s.recordActivity(req.Username, "signed in", "", "auth")
+	s.recordTraffic(0, 0, 1)
 
 	writeJSON(w, http.StatusOK, AuthResponse{Token: token, Username: req.Username, IsAdmin: isAdmin, Salt: salt})
 }

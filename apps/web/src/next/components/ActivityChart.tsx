@@ -1,7 +1,13 @@
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
-import { activitySeries } from '@next/lib/mockData';
+
+interface ChartPoint {
+  day: string;
+  uploads: number;
+  downloads: number;
+  signins: number;
+}
 
 interface ChartTooltipPayloadItem {
   dataKey?: string | number;
@@ -33,17 +39,17 @@ function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
   );
 }
 
-export default function ActivityChart() {
+export default function ActivityChart({ data }: { data: ChartPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={252}>
-      <LineChart data={activitySeries} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
         <CartesianGrid strokeDasharray="2 6" stroke="hsl(var(--border))" strokeOpacity={0.6} vertical={false} />
         <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono' }} dy={8} />
-        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono' }} width={48} />
+        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontFamily: 'JetBrains Mono' }} width={48} allowDecimals={false} />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'hsl(var(--foreground))', strokeOpacity: 0.18, strokeWidth: 1 }} />
         <Line type="monotone" dataKey="uploads" stroke="hsl(var(--chart-1))" strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
         <Line type="monotone" dataKey="downloads" stroke="hsl(var(--chart-2))" strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
-        <Line type="monotone" dataKey="backups" stroke="hsl(var(--chart-3))" strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+        <Line type="monotone" dataKey="signins" stroke="hsl(var(--chart-3))" strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
       </LineChart>
     </ResponsiveContainer>
   );

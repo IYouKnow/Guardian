@@ -20,16 +20,6 @@ export const backupsMetric = {
   icon: 'archive',
 };
 
-export const activitySeries = [
-  { day: 'Mon', uploads: 4200, downloads: 2800, backups: 1800 },
-  { day: 'Tue', uploads: 3800, downloads: 3100, backups: 2100 },
-  { day: 'Wed', uploads: 5100, downloads: 3400, backups: 1900 },
-  { day: 'Thu', uploads: 4600, downloads: 3900, backups: 2400 },
-  { day: 'Fri', uploads: 6200, downloads: 4200, backups: 2200 },
-  { day: 'Sat', uploads: 3400, downloads: 2600, backups: 1500 },
-  { day: 'Sun', uploads: 2900, downloads: 2300, backups: 1700 },
-];
-
 export const users = [
   { id: 'u1', name: 'Elena Vasquez', email: 'elena.v@guardian.io', role: 'admin', status: 'active', plan: 'Enterprise', storage: '184 GB', quota: '1 TB', lastActive: '2 min ago', joined: '2023-04-12', vaults: 14, avatar: 'EV' },
   { id: 'u2', name: 'Marcus Chen', email: 'm.chen@guardian.io', role: 'user', status: 'active', plan: 'Pro', storage: '42 GB', quota: '200 GB', lastActive: '11 min ago', joined: '2023-08-30', vaults: 6, avatar: 'MC' },

@@ -6,7 +6,7 @@ import { Card } from '@next/components/ui/card';
 import { Button } from '@next/components/ui/button';
 import { backupsMetric } from '@next/lib/mockData';
 import { useOverviewData } from '@next/lib/useOverviewData';
-import { formatBytes, formatRelativeTime, formatUptime, parseBytes } from '@next/lib/format';
+import { formatBytes, formatDayLabel, formatRelativeTime, formatUptime, parseBytes } from '@next/lib/format';
 import { withinDays } from '@next/lib/csv';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,8 +39,12 @@ function PanelHeader({ title, subtitle, right }: PanelHeaderProps) {
 }
 
 export default function Overview() {
-  const { platform, users, activity, loading } = useOverviewData();
+  const { platform, users, activity, traffic, loading } = useOverviewData();
   const events = activity ?? [];
+  const chartData = useMemo(
+    () => (traffic ?? []).map((p) => ({ ...p, day: formatDayLabel(p.day) })),
+    [traffic],
+  );
 
   const metrics = useMemo<MetricRailItem[]>(() => {
     const list = users ?? [];
@@ -114,7 +118,7 @@ export default function Overview() {
                 {[
                   { label: 'Uploads', color: 'hsl(var(--chart-1))' },
                   { label: 'Downloads', color: 'hsl(var(--chart-2))' },
-                  { label: 'Backups', color: 'hsl(var(--chart-3))' },
+                  { label: 'Sign-ins', color: 'hsl(var(--chart-3))' },
                 ].map((l) => (
                   <span key={l.label} className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     <span className="h-2 w-2" style={{ background: l.color }} />
@@ -125,7 +129,7 @@ export default function Overview() {
             }
           />
           <div className="px-3 pb-3 pt-4">
-            <ActivityChart />
+            <ActivityChart data={chartData} />
           </div>
         </Card>
 

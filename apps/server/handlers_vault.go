@@ -36,6 +36,10 @@ func (s *Server) handleListItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(items) > 0 {
+		s.recordTraffic(0, len(items), 0)
+	}
+
 	writeJSON(w, http.StatusOK, items)
 }
 
@@ -58,6 +62,8 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
+
+	saved := 0
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO vault_items (id, encrypted_blob, revision, updated_at) 
@@ -94,11 +100,16 @@ func (s *Server) handleUpsertItems(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Save failed", http.StatusInternalServerError)
 			return
 		}
+		saved++
 	}
 
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "Commit failed", http.StatusInternalServerError)
 		return
+	}
+
+	if saved > 0 {
+		s.recordTraffic(saved, 0, 0)
 	}
 
 	// Retrieve user ID from context safely (to use for broadcasting event)

@@ -47,6 +47,13 @@ export interface ActivityEntry {
     created_at: string;
 }
 
+export interface TrafficPoint {
+    day: string;
+    uploads: number;
+    downloads: number;
+    signins: number;
+}
+
 export interface AdminUser {
     id: number;
     username: string;
@@ -119,6 +126,11 @@ export const adminApi = {
 
     async getActivity(limit = 20): Promise<ActivityEntry[]> {
         const response = await apiClient.get<ActivityEntry[]>('/api/admin/activity', { params: { limit } });
+        return response.data;
+    },
+
+    async getTraffic(days = 7): Promise<TrafficPoint[]> {
+        const response = await apiClient.get<TrafficPoint[]>('/api/admin/traffic', { params: { days } });
         return response.data;
     },
 

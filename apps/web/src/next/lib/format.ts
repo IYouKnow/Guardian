@@ -1,4 +1,4 @@
-import { formatDistanceToNowStrict } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
 
@@ -36,4 +36,15 @@ export function formatRelativeTime(iso: string): string {
   const date = new Date(iso);
   if (isNaN(date.getTime())) return '';
   return `${formatDistanceToNowStrict(date)} ago`;
+}
+
+/**
+ * Renders a `YYYY-MM-DD` bucket as a short weekday (`Mon`). Parsed from its
+ * parts rather than `new Date(day)` so a UTC-midnight string can't shift to the
+ * previous day in a negative-offset timezone.
+ */
+export function formatDayLabel(day: string): string {
+  const [year, month, date] = day.split('-').map(Number);
+  if (!year || !month || !date) return day;
+  return format(new Date(year, month - 1, date), 'EEE');
 }

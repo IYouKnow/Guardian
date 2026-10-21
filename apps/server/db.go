@@ -73,6 +73,13 @@ func initSystemDB(path string) (*sql.DB, error) {
 		category TEXT NOT NULL DEFAULT 'system',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS traffic_daily (
+		day TEXT PRIMARY KEY,
+		uploads INTEGER NOT NULL DEFAULT 0,
+		downloads INTEGER NOT NULL DEFAULT 0,
+		signins INTEGER NOT NULL DEFAULT 0
+	);
 	`
 	_, err = db.Exec(query)
 

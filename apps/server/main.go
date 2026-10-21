@@ -152,6 +152,7 @@ func main() {
 	mux.HandleFunc("PUT /api/admin/settings", server.withAdminAuth(server.handleUpdateSetting))
 	mux.HandleFunc("GET /api/admin/platform", server.withAdminAuth(server.handlePlatformInfo))
 	mux.HandleFunc("GET /api/admin/activity", server.withAdminAuth(server.handleListActivity))
+	mux.HandleFunc("GET /api/admin/traffic", server.withAdminAuth(server.handleTraffic))
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
