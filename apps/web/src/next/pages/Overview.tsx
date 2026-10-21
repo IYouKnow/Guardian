@@ -1,12 +1,14 @@
-import type { ReactNode } from 'react';
-import PageHeader, { StatusBadge } from '@next/components/PageHeader';
-import MetricRail from '@next/components/MetricRail';
+import { useMemo, type ReactNode } from 'react';
+import PageHeader from '@next/components/PageHeader';
+import MetricRail, { type MetricRailItem } from '@next/components/MetricRail';
 import ActivityChart from '@next/components/ActivityChart';
-import { Icon } from '@next/components/Icon';
 import { Card } from '@next/components/ui/card';
 import { Button } from '@next/components/ui/button';
-import { overviewStats, recentActivity, serverHealth } from '@next/lib/mockData';
-import { ArrowUpRight, MoreHorizontal } from 'lucide-react';
+import { backupsMetric, recentActivity } from '@next/lib/mockData';
+import { useOverviewData } from '@next/lib/useOverviewData';
+import { formatBytes, formatUptime, parseBytes } from '@next/lib/format';
+import { withinDays } from '@next/lib/csv';
+import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const activityBar: Record<string, string> = {
@@ -36,13 +38,45 @@ function PanelHeader({ title, subtitle, right }: PanelHeaderProps) {
   );
 }
 
-function meterColor(v: number): string {
-  if (v >= 80) return 'bg-rose-500';
-  if (v >= 60) return 'bg-amber-500';
-  return 'bg-emerald-500';
-}
-
 export default function Overview() {
+  const { platform, users, loading } = useOverviewData();
+
+  const metrics = useMemo<MetricRailItem[]>(() => {
+    const list = users ?? [];
+    const activeUsers = list.filter((u) => u.status === 'ACTIVE').length;
+    const newThisWeek = list.filter((u) => withinDays(u.created_at, 7)).length;
+    const usedBytes = list.reduce((sum, u) => sum + parseBytes(u.used_space), 0);
+    const overheadBytes = list.reduce((sum, u) => sum + parseBytes(u.used_space_overhead), 0);
+    const unavailable = loading ? 'loading…' : 'unavailable';
+
+    return [
+      {
+        id: 'users',
+        label: 'Active Users',
+        icon: 'users',
+        value: users ? activeUsers.toLocaleString() : '—',
+        delta: newThisWeek > 0 ? `+${newThisWeek}` : undefined,
+        trend: 'up',
+        sub: users ? `${list.length} total` : unavailable,
+      },
+      {
+        id: 'storage',
+        label: 'Storage Used',
+        icon: 'database',
+        value: users ? formatBytes(usedBytes) : '—',
+        sub: users ? `${list.length} vaults · ${formatBytes(overheadBytes)} overhead` : unavailable,
+      },
+      backupsMetric,
+      {
+        id: 'uptime',
+        label: 'Platform Uptime',
+        icon: 'activity',
+        value: platform ? formatUptime(platform.uptime_seconds) : '—',
+        sub: platform ? `${platform.environment} · v${platform.version}` : unavailable,
+      },
+    ];
+  }, [platform, users, loading]);
+
   return (
     <div className="animate-fade-in-up">
       <PageHeader
@@ -66,7 +100,7 @@ export default function Overview() {
       />
 
       {/* Telemetry band */}
-      <MetricRail items={overviewStats} />
+      <MetricRail items={metrics} />
 
       {/* Activity chart + log */}
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -118,69 +152,6 @@ export default function Overview() {
           </div>
         </Card>
       </div>
-
-      {/* Server health */}
-      <Card className="mt-5 rounded-sm">
-        <PanelHeader
-          title="Server Health"
-          subtitle="Infrastructure across regions"
-          right={
-            <button className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground">
-              Monitor →
-            </button>
-          }
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th className="text-eyebrow px-5 py-2.5 font-medium">Node</th>
-                <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Region</th>
-                <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">CPU</th>
-                <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Memory</th>
-                <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Disk</th>
-                <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Latency</th>
-                <th className="text-eyebrow px-5 py-2.5 font-medium">Status</th>
-                <th className="px-5 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {serverHealth.map((s) => (
-                <tr key={s.id} className="border-b border-border/60 transition-colors last:border-0 hover:bg-background/50">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="grid h-6 w-6 place-items-center border border-border text-muted-foreground"><Icon name="Server" className="h-3 w-3" /></span>
-                      <span className="font-mono text-[12px] text-foreground">{s.name}</span>
-                    </div>
-                  </td>
-                  <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground md:table-cell">{s.region}</td>
-                  {[
-                    { v: s.cpu, label: 'CPU' },
-                    { v: s.mem, label: 'MEM' },
-                    { v: s.disk, label: 'DISK' },
-                  ].map((m) => (
-                    <td key={m.label} className="hidden px-5 py-3 md:table-cell">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-[3px] w-16 overflow-hidden bg-muted">
-                          <div className={cn('h-full transition-all', meterColor(m.v))} style={{ width: `${m.v}%` }} />
-                        </div>
-                        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{m.v}%</span>
-                      </div>
-                    </td>
-                  ))}
-                  <td className="hidden px-5 py-3 lg:table-cell">
-                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{s.latency}ms</span>
-                  </td>
-                  <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
-                  <td className="px-5 py-3 text-right">
-                    <button className="grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   );
 }

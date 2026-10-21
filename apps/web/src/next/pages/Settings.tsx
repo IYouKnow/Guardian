@@ -14,6 +14,7 @@ import {
   consoleThemeClass,
 } from '@next/lib/appearance';
 import { adminApi, type PlatformInfo } from '@/api/admin';
+import { formatUptime } from '@next/lib/format';
 import { toast } from 'sonner';
 import { Check, Loader2, Lock, RotateCw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -147,16 +148,6 @@ function ServerSettings() {
       </p>
     </Section>
   );
-}
-
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
 }
 
 // Live platform details reported by GET /api/admin/platform. Mounted inside the

@@ -2,13 +2,13 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface MetricRailItem {
+export interface MetricRailItem {
   id: string;
   label: string;
   value: string;
-  delta: string;
-  trend: string;
-  sub: string;
+  delta?: string;
+  trend?: string;
+  sub?: string;
   icon?: string;
 }
 
@@ -26,7 +26,7 @@ export default function MetricRail({ items }: MetricRailProps) {
   return (
     <div className="flex flex-col divide-y divide-border border border-border bg-card sm:flex-row sm:divide-x sm:divide-y-0">
       {items.map((s, i) => {
-        const { Icon: TrendIcon, cls } = trendMap[s.trend] || trendMap.flat;
+        const { Icon: TrendIcon, cls } = trendMap[s.trend ?? 'flat'] ?? trendMap.flat;
         return (
           <div
             key={s.id}
@@ -43,13 +43,17 @@ export default function MetricRail({ items }: MetricRailProps) {
             <p className="mt-3 font-heading text-[30px] font-semibold leading-none tracking-tight tabular-nums text-foreground">
               {s.value}
             </p>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className={cn('flex items-center gap-1 font-mono text-[11px] font-medium tabular-nums', cls)}>
-                <TrendIcon className="h-3 w-3" />
-                {s.delta}
-              </span>
-              <span className="truncate text-[11px] text-muted-foreground">{s.sub}</span>
-            </div>
+            {(s.delta || s.sub) && (
+              <div className="mt-2.5 flex items-baseline gap-2">
+                {s.delta && (
+                  <span className={cn('flex items-center gap-1 font-mono text-[11px] font-medium tabular-nums', cls)}>
+                    <TrendIcon className="h-3 w-3" />
+                    {s.delta}
+                  </span>
+                )}
+                {s.sub && <span className="truncate text-[11px] text-muted-foreground">{s.sub}</span>}
+              </div>
+            )}
           </div>
         );
       })}

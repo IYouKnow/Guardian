@@ -9,12 +9,16 @@ export const platformMeta = {
   status: 'operational',
 };
 
-export const overviewStats = [
-  { id: 'users', label: 'Active Users', value: '12,847', delta: '+3.2%', trend: 'up', sub: '248 new this week', icon: 'users' },
-  { id: 'storage', label: 'Storage Used', value: '847 TB', delta: '+12 TB', trend: 'up', sub: '71% of allocated', icon: 'database' },
-  { id: 'backups', label: 'Backups Today', value: '1,204', delta: '+8.1%', trend: 'up', sub: '3 failed · retrying', icon: 'archive' },
-  { id: 'uptime', label: 'Platform Uptime', value: '99.98%', delta: '30d', trend: 'flat', sub: 'avg 142ms response', icon: 'activity' },
-];
+// Placeholder card: there is no backups endpoint yet, so this value is not real.
+export const backupsMetric = {
+  id: 'backups',
+  label: 'Backups Today',
+  value: '1,204',
+  delta: '+8.1%',
+  trend: 'up',
+  sub: '3 failed · retrying',
+  icon: 'archive',
+};
 
 export const activitySeries = [
   { day: 'Mon', uploads: 4200, downloads: 2800, backups: 1800 },
@@ -34,14 +38,6 @@ export const recentActivity = [
   { id: 'a5', user: 'Priya Nair', email: 'priya.n@guardian.io', action: 'uploaded', target: 'design-system.zip', size: '128 MB', time: '52 min ago', type: 'upload' },
   { id: 'a6', user: 'Liam Murphy', email: 'liam.m@guardian.io', action: 'backed up', target: 'vault://work/projects', size: '6.2 GB', time: '1 hr ago', type: 'backup' },
   { id: 'a7', user: 'Yuki Tanaka', email: 'yuki.t@guardian.io', action: 'logged in', target: 'from 203.0.113.42', size: '—', time: '1 hr ago', type: 'auth' },
-];
-
-export const serverHealth = [
-  { id: 's1', name: 'api-gateway-01', region: 'eu-west-1', cpu: 34, mem: 58, disk: 41, status: 'healthy', latency: 42 },
-  { id: 's2', name: 'vault-store-02', region: 'eu-west-1', cpu: 67, mem: 72, disk: 88, status: 'warning', latency: 96 },
-  { id: 's3', name: 'backup-svc-03', region: 'us-east-1', cpu: 22, mem: 44, disk: 33, status: 'healthy', latency: 58 },
-  { id: 's4', name: 'auth-svc-01', region: 'eu-west-1', cpu: 18, mem: 39, disk: 27, status: 'healthy', latency: 31 },
-  { id: 's5', name: 'index-svc-02', region: 'ap-southeast-1', cpu: 81, mem: 64, disk: 52, status: 'critical', latency: 184 },
 ];
 
 export const users = [
