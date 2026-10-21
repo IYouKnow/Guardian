@@ -80,6 +80,30 @@ func initSystemDB(path string) (*sql.DB, error) {
 		downloads INTEGER NOT NULL DEFAULT 0,
 		signins INTEGER NOT NULL DEFAULT 0
 	);
+
+	CREATE TABLE IF NOT EXISTS backups (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		filename TEXT NOT NULL DEFAULT '',
+		size INTEGER NOT NULL DEFAULT 0,
+		vaults INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT 'success',
+		trigger TEXT NOT NULL DEFAULT 'manual',
+		schedule_id INTEGER,
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS backup_schedules (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL DEFAULT '',
+		interval_minutes INTEGER NOT NULL DEFAULT 1440,
+		retention_days INTEGER NOT NULL DEFAULT 30,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		last_run DATETIME,
+		next_run DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err = db.Exec(query)
 

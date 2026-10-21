@@ -54,6 +54,37 @@ export interface TrafficPoint {
     signins: number;
 }
 
+export interface BackupRecord {
+    id: number;
+    filename: string;
+    size: number;
+    vaults: number;
+    status: 'success' | 'failed';
+    trigger: 'manual' | 'schedule';
+    schedule_id: number | null;
+    duration_ms: number;
+    error: string;
+    created_at: string;
+}
+
+export interface BackupSchedule {
+    id: number;
+    name: string;
+    interval_minutes: number;
+    retention_days: number;
+    enabled: boolean;
+    last_run: string | null;
+    next_run: string | null;
+    created_at: string;
+}
+
+export interface CreateScheduleRequest {
+    name: string;
+    interval_minutes: number;
+    retention_days: number;
+    enabled?: boolean;
+}
+
 export interface AdminUser {
     id: number;
     username: string;
@@ -132,6 +163,39 @@ export const adminApi = {
     async getTraffic(days = 7): Promise<TrafficPoint[]> {
         const response = await apiClient.get<TrafficPoint[]>('/api/admin/traffic', { params: { days } });
         return response.data;
+    },
+
+    async getBackups(limit = 50): Promise<BackupRecord[]> {
+        const response = await apiClient.get<BackupRecord[]>('/api/admin/backups', { params: { limit } });
+        return response.data;
+    },
+
+    async createBackup(): Promise<BackupRecord> {
+        const response = await apiClient.post<BackupRecord>('/api/admin/backups');
+        return response.data;
+    },
+
+    async deleteBackup(id: number): Promise<void> {
+        await apiClient.delete(`/api/admin/backups/${id}`);
+    },
+
+    async getSchedules(): Promise<BackupSchedule[]> {
+        const response = await apiClient.get<BackupSchedule[]>('/api/admin/backup-schedules');
+        return response.data;
+    },
+
+    async createSchedule(data: CreateScheduleRequest): Promise<BackupSchedule> {
+        const response = await apiClient.post<BackupSchedule>('/api/admin/backup-schedules', data);
+        return response.data;
+    },
+
+    async updateSchedule(id: number, data: Partial<CreateScheduleRequest>): Promise<BackupSchedule> {
+        const response = await apiClient.put<BackupSchedule>(`/api/admin/backup-schedules/${id}`, data);
+        return response.data;
+    },
+
+    async deleteSchedule(id: number): Promise<void> {
+        await apiClient.delete(`/api/admin/backup-schedules/${id}`);
     },
 
     // Mock endpoints - to be implemented later

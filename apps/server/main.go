@@ -154,6 +154,15 @@ func main() {
 	mux.HandleFunc("GET /api/admin/activity", server.withAdminAuth(server.handleListActivity))
 	mux.HandleFunc("GET /api/admin/traffic", server.withAdminAuth(server.handleTraffic))
 
+	// Admin / Backups
+	mux.HandleFunc("GET /api/admin/backups", server.withAdminAuth(server.handleListBackups))
+	mux.HandleFunc("POST /api/admin/backups", server.withAdminAuth(server.handleCreateBackup))
+	mux.HandleFunc("DELETE /api/admin/backups/{id}", server.withAdminAuth(server.handleDeleteBackup))
+	mux.HandleFunc("GET /api/admin/backup-schedules", server.withAdminAuth(server.handleListSchedules))
+	mux.HandleFunc("POST /api/admin/backup-schedules", server.withAdminAuth(server.handleCreateSchedule))
+	mux.HandleFunc("PUT /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleUpdateSchedule))
+	mux.HandleFunc("DELETE /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleDeleteSchedule))
+
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
 	mux.HandleFunc("PUT /vault/items", server.withUserAuth(server.handleUpsertItems))
@@ -267,6 +276,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				server.checkpointAllDBs()
+				server.runDueBackups()
 				server.authIPLimiter.sweep()
 				server.authLockouts.sweep()
 			case <-maintenanceDone:
