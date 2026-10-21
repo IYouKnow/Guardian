@@ -4,20 +4,20 @@ import MetricRail, { type MetricRailItem } from '@next/components/MetricRail';
 import ActivityChart from '@next/components/ActivityChart';
 import { Card } from '@next/components/ui/card';
 import { Button } from '@next/components/ui/button';
-import { backupsMetric, recentActivity } from '@next/lib/mockData';
+import { backupsMetric } from '@next/lib/mockData';
 import { useOverviewData } from '@next/lib/useOverviewData';
-import { formatBytes, formatUptime, parseBytes } from '@next/lib/format';
+import { formatBytes, formatRelativeTime, formatUptime, parseBytes } from '@next/lib/format';
 import { withinDays } from '@next/lib/csv';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const activityBar: Record<string, string> = {
-  upload: 'bg-emerald-400',
-  restore: 'bg-sky-400',
-  share: 'bg-violet-400',
-  delete: 'bg-rose-400',
-  backup: 'bg-amber-400',
   auth: 'bg-zinc-400',
+  user: 'bg-emerald-400',
+  invite: 'bg-sky-400',
+  setting: 'bg-violet-400',
+  vault: 'bg-amber-400',
+  system: 'bg-zinc-400',
 };
 
 interface PanelHeaderProps {
@@ -39,7 +39,8 @@ function PanelHeader({ title, subtitle, right }: PanelHeaderProps) {
 }
 
 export default function Overview() {
-  const { platform, users, loading } = useOverviewData();
+  const { platform, users, activity, loading } = useOverviewData();
+  const events = activity ?? [];
 
   const metrics = useMemo<MetricRailItem[]>(() => {
     const list = users ?? [];
@@ -131,20 +132,25 @@ export default function Overview() {
         <Card className="flex flex-col rounded-sm">
           <PanelHeader
             title="Activity Log"
-            subtitle={`${recentActivity.length} events`}
+            subtitle={`${events.length} events`}
             right={<button className="font-mono text-[10px] uppercase tracking-wider text-primary hover:underline">View all</button>}
           />
           <div className="scrollbar-thin flex-1 divide-y divide-border/60 overflow-y-auto lg:max-h-[336px]">
-            {recentActivity.map((a) => (
+            {events.length === 0 && (
+              <p className="px-5 py-10 text-center font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                {loading ? 'Loading…' : 'No activity yet'}
+              </p>
+            )}
+            {events.map((a) => (
               <div key={a.id} className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-background/50">
-                <span className={cn('h-6 w-[2px] shrink-0', activityBar[a.type] || activityBar.auth)} />
+                <span className={cn('h-6 w-[2px] shrink-0', activityBar[a.category] || activityBar.system)} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] leading-snug text-muted-foreground">
-                    <span className="font-medium text-foreground">{a.user}</span> {a.action}{' '}
-                    <span className="font-medium text-foreground">{a.target}</span>
+                    <span className="font-medium text-foreground">{a.actor || 'system'}</span> {a.action}{' '}
+                    {a.target && <span className="font-medium text-foreground">{a.target}</span>}
                   </p>
                   <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
-                    {a.time}{a.size !== '—' && ` · ${a.size}`}
+                    {formatRelativeTime(a.created_at)}
                   </p>
                 </div>
               </div>

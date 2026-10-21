@@ -64,6 +64,15 @@ func initSystemDB(path string) (*sql.DB, error) {
 		used_by TEXT,
 		FOREIGN KEY(created_by) REFERENCES users(id)
 	);
+
+	CREATE TABLE IF NOT EXISTS activity_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		actor TEXT NOT NULL DEFAULT '',
+		action TEXT NOT NULL,
+		target TEXT NOT NULL DEFAULT '',
+		category TEXT NOT NULL DEFAULT 'system',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err = db.Exec(query)
 

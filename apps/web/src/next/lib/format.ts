@@ -1,3 +1,5 @@
+import { formatDistanceToNowStrict } from 'date-fns';
+
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
 
 /** Parses a human-readable size like "1.23 GB" back into bytes. */
@@ -27,4 +29,11 @@ export function formatUptime(seconds: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`;
   if (minutes > 0) return `${minutes}m`;
   return `${seconds}s`;
+}
+
+/** Renders an ISO timestamp as `2 min ago`, empty when unparseable. */
+export function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+  return `${formatDistanceToNowStrict(date)} ago`;
 }

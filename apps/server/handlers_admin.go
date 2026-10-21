@@ -181,6 +181,8 @@ func (s *Server) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 		inv.UsedBy = usedByStr.String
 	}
 
+	s.recordActivity(s.usernameByID(userID), "generated an invite", token, "invite")
+
 	writeJSON(w, http.StatusCreated, inv)
 }
 
@@ -199,7 +201,8 @@ func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
 
 	// Rule: Only delete if not used
 	var useCount int
-	err = s.systemDB.QueryRow("SELECT use_count FROM invites WHERE id = ?", id).Scan(&useCount)
+	var token string
+	err = s.systemDB.QueryRow("SELECT use_count, token FROM invites WHERE id = ?", id).Scan(&useCount, &token)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Invite not found", http.StatusNotFound)
 		return
@@ -218,6 +221,8 @@ func (s *Server) handleDeleteInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to delete invite", http.StatusInternalServerError)
 		return
 	}
+
+	s.recordActivity(s.actorName(r), "revoked an invite", token, "invite")
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -336,6 +341,8 @@ func (s *Server) handleUpdateSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.recordActivity(s.actorName(r), "updated a setting", req.Key, "setting")
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Setting updated"})
 }
 
@@ -450,6 +457,8 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	s.recordActivity(s.actorName(r), "updated a user", s.usernameByID(id), "user")
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "User updated"})
 }

@@ -38,6 +38,15 @@ export interface PlatformInfo {
     users: number;
 }
 
+export interface ActivityEntry {
+    id: number;
+    actor: string;
+    action: string;
+    target: string;
+    category: string;
+    created_at: string;
+}
+
 export interface AdminUser {
     id: number;
     username: string;
@@ -105,6 +114,11 @@ export const adminApi = {
 
     async getPlatformInfo(): Promise<PlatformInfo> {
         const response = await apiClient.get<PlatformInfo>('/api/admin/platform');
+        return response.data;
+    },
+
+    async getActivity(limit = 20): Promise<ActivityEntry[]> {
+        const response = await apiClient.get<ActivityEntry[]>('/api/admin/activity', { params: { limit } });
         return response.data;
     },
 

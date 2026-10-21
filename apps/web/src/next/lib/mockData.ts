@@ -30,16 +30,6 @@ export const activitySeries = [
   { day: 'Sun', uploads: 2900, downloads: 2300, backups: 1700 },
 ];
 
-export const recentActivity = [
-  { id: 'a1', user: 'Elena Vasquez', email: 'elena.v@guardian.io', action: 'uploaded', target: 'Q3-financials.pdf', size: '2.4 MB', time: '2 min ago', type: 'upload' },
-  { id: 'a2', user: 'Marcus Chen', email: 'm.chen@guardian.io', action: 'restored', target: 'vault://personal/photos', size: '184 MB', time: '11 min ago', type: 'restore' },
-  { id: 'a3', user: 'Sofia Andersson', email: 'sofia.a@guardian.io', action: 'shared', target: 'contract-final.docx', size: '—', time: '24 min ago', type: 'share' },
-  { id: 'a4', user: 'James Okonkwo', email: 'james.o@guardian.io', action: 'deleted', target: 'temp-screenshots/', size: '47 MB', time: '38 min ago', type: 'delete' },
-  { id: 'a5', user: 'Priya Nair', email: 'priya.n@guardian.io', action: 'uploaded', target: 'design-system.zip', size: '128 MB', time: '52 min ago', type: 'upload' },
-  { id: 'a6', user: 'Liam Murphy', email: 'liam.m@guardian.io', action: 'backed up', target: 'vault://work/projects', size: '6.2 GB', time: '1 hr ago', type: 'backup' },
-  { id: 'a7', user: 'Yuki Tanaka', email: 'yuki.t@guardian.io', action: 'logged in', target: 'from 203.0.113.42', size: '—', time: '1 hr ago', type: 'auth' },
-];
-
 export const users = [
   { id: 'u1', name: 'Elena Vasquez', email: 'elena.v@guardian.io', role: 'admin', status: 'active', plan: 'Enterprise', storage: '184 GB', quota: '1 TB', lastActive: '2 min ago', joined: '2023-04-12', vaults: 14, avatar: 'EV' },
   { id: 'u2', name: 'Marcus Chen', email: 'm.chen@guardian.io', role: 'user', status: 'active', plan: 'Pro', storage: '42 GB', quota: '200 GB', lastActive: '11 min ago', joined: '2023-08-30', vaults: 6, avatar: 'MC' },

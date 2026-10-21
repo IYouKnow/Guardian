@@ -151,6 +151,7 @@ func main() {
 	mux.HandleFunc("GET /api/admin/settings", server.withAdminAuth(server.handleListSettings))
 	mux.HandleFunc("PUT /api/admin/settings", server.withAdminAuth(server.handleUpdateSetting))
 	mux.HandleFunc("GET /api/admin/platform", server.withAdminAuth(server.handlePlatformInfo))
+	mux.HandleFunc("GET /api/admin/activity", server.withAdminAuth(server.handleListActivity))
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))
@@ -176,6 +177,16 @@ func main() {
 
 	// Catch-all for SPA: Serve index.html for any route not matched above
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Unmatched API paths must 404 rather than fall through to the SPA shell.
+		// Serving index.html with a 200 here hands clients HTML instead of JSON
+		// and silently masks a missing or renamed route.
+		for _, prefix := range []string{"/api/", "/auth/", "/vault/", "/ws/"} {
+			if strings.HasPrefix(r.URL.Path, prefix) {
+				http.Error(w, "Not found", http.StatusNotFound)
+				return
+			}
+		}
+
 		// Clean the path to prevent directory traversal
 		// Use path.Clean (not filepath.Clean) because fs.FS expects forward slashes
 		cleanPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")

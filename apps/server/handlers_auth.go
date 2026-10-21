@@ -277,6 +277,12 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	action := "created an account"
+	if isAdmin {
+		action = "created the admin account"
+	}
+	s.recordActivity(req.Username, action, "", "user")
+
 	writeJSON(w, http.StatusCreated, map[string]string{"message": "User registered successfully"})
 }
 
@@ -361,6 +367,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Update last login
 	s.systemDB.Exec("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", id)
+
+	s.recordActivity(req.Username, "signed in", "", "auth")
 
 	writeJSON(w, http.StatusOK, AuthResponse{Token: token, Username: req.Username, IsAdmin: isAdmin, Salt: salt})
 }
