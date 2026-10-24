@@ -36,6 +36,7 @@ type Server struct {
 	authLockouts   *lockoutTracker
 	trustedProxies []netip.Prefix
 	allowedOrigins originAllowlist
+	remote         remoteUploader // nil when no remote destination is available
 	startedAt      time.Time
 }
 
@@ -126,6 +127,10 @@ func main() {
 		startedAt:      time.Now(),
 	}
 
+	// Remote backup destination: the Google Drive uploader. It stays inert until
+	// an admin connects an account, and resolves credentials per upload.
+	server.remote = &driveUploader{server: server}
+
 	mux := http.NewServeMux()
 
 	// 6. Define Routes
@@ -162,6 +167,17 @@ func main() {
 	mux.HandleFunc("POST /api/admin/backup-schedules", server.withAdminAuth(server.handleCreateSchedule))
 	mux.HandleFunc("PUT /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleUpdateSchedule))
 	mux.HandleFunc("DELETE /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleDeleteSchedule))
+
+	// Admin / Remote backup destination (Google Drive)
+	mux.HandleFunc("GET /api/admin/backup-destination", server.withAdminAuth(server.handleGetBackupDestination))
+	mux.HandleFunc("PUT /api/admin/backup-destination", server.withAdminAuth(server.handleUpdateBackupDestination))
+	mux.HandleFunc("DELETE /api/admin/backup-destination", server.withAdminAuth(server.handleDeleteBackupDestination))
+	mux.HandleFunc("POST /api/admin/backup-destination/connect", server.withAdminAuth(server.handleStartGoogleOAuth))
+	// The operator-supplied Google OAuth client (Settings → Backup & Sync).
+	mux.HandleFunc("GET /api/admin/backup-destination/integration", server.withAdminAuth(server.handleGetBackupIntegration))
+	mux.HandleFunc("PUT /api/admin/backup-destination/integration", server.withAdminAuth(server.handleUpdateBackupIntegration))
+	// Google's OAuth redirect target: authenticated by the state parameter, not a bearer token.
+	mux.HandleFunc("GET /api/admin/backup-destination/google/callback", server.handleGoogleOAuthCallback)
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))

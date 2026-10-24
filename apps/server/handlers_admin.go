@@ -308,6 +308,10 @@ func (s *Server) handleListSettings(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&k, &v); err != nil {
 			continue
 		}
+		// The sealed Google client secret is never exposed through the generic list.
+		if k == googleClientSecretSetting {
+			continue
+		}
 		settings[k] = v
 	}
 

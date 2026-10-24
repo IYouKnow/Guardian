@@ -78,31 +78,6 @@ export const perUserQuotas = [
   { id: 'q10', name: 'James Okonkwo', plan: 'Free', used: 1.2, quota: 5, pct: 24 },
 ];
 
-export const backupProviders = [
-  { id: 'p1', name: 'AWS S3 Glacier', type: 'Cold Storage', status: 'connected', region: 'eu-west-1', lastSync: '8 min ago', backups: 4827, health: 99, icon: 'cloud' },
-  { id: 'p2', name: 'Google Cloud Storage', type: 'Nearline', status: 'connected', region: 'us-east-1', lastSync: '14 min ago', backups: 3120, health: 98, icon: 'cloud' },
-  { id: 'p3', name: 'Backblaze B2', type: 'Hot Storage', status: 'connected', region: 'eu-central-1', lastSync: '3 min ago', backups: 1844, health: 100, icon: 'database' },
-  { id: 'p4', name: 'Azure Blob Archive', type: 'Cold Storage', status: 'degraded', region: 'eu-west-1', lastSync: '2 hr ago', backups: 968, health: 71, icon: 'cloud' },
-  { id: 'p5', name: 'Local NAS', type: 'On-Premise', status: 'disconnected', region: '—', lastSync: '3 days ago', backups: 0, health: 0, icon: 'server' },
-];
-
-export const backupHistory = [
-  { id: 'b1', vault: 'elena.v/personal', provider: 'AWS S3 Glacier', size: '6.2 GB', status: 'success', duration: '2m 14s', time: '8 min ago' },
-  { id: 'b2', vault: 'marcus.c/work', provider: 'Backblaze B2', size: '1.8 GB', status: 'success', duration: '47s', time: '14 min ago' },
-  { id: 'b3', vault: 'sofia.a/media', provider: 'Google Cloud Storage', size: '24 GB', status: 'success', duration: '8m 02s', time: '23 min ago' },
-  { id: 'b4', vault: 'priya.n/projects', provider: 'AWS S3 Glacier', size: '12 GB', status: 'failed', duration: '—', time: '31 min ago' },
-  { id: 'b5', vault: 'liam.m/archive', provider: 'Azure Blob Archive', size: '880 MB', status: 'partial', duration: '3m 41s', time: '46 min ago' },
-  { id: 'b6', vault: 'amara.d/shared', provider: 'Backblaze B2', size: '4.4 GB', status: 'success', duration: '1m 58s', time: '1 hr ago' },
-  { id: 'b7', vault: 'isabella.r/finance', provider: 'AWS S3 Glacier', size: '18 GB', status: 'success', duration: '6m 12s', time: '1 hr ago' },
-];
-
-export const backupSchedules = [
-  { id: 'sch1', name: 'Nightly Personal Vaults', cron: '0 2 * * *', targets: 'All personal vaults', provider: 'AWS S3 Glacier', retention: '30 days', enabled: true },
-  { id: 'sch2', name: 'Weekly Team Archives', cron: '0 3 * * 0', targets: 'Team workspaces', provider: 'Google Cloud Storage', retention: '90 days', enabled: true },
-  { id: 'sch3', name: 'Hourly Hot Backups', cron: '0 * * * *', targets: 'Critical vaults', provider: 'Backblaze B2', retention: '7 days', enabled: true },
-  { id: 'sch4', name: 'Monthly Cold Archive', cron: '0 4 1 * *', targets: 'All vaults', provider: 'Azure Blob Archive', retention: '365 days', enabled: false },
-];
-
 export const currentAdmin = {
   name: 'Elena Vasquez',
   email: 'elena.v@guardian.io',

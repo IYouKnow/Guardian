@@ -189,6 +189,110 @@ function PlatformInfoPanel() {
   );
 }
 
+// Operator-supplied Google OAuth client used by the Backups page to connect
+// Google Drive. The secret is write-only: the API reports only whether one is
+// stored, never its value.
+function GoogleBackupSettings() {
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [configured, setConfigured] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await adminApi.getBackupIntegration();
+      setClientId(data.client_id);
+      setConfigured(data.client_secret_configured);
+      setClientSecret('');
+    } catch {
+      toast.error('Failed to load the Google backup settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async () => {
+    if (!clientId.trim()) {
+      toast.error('A client ID is required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const secret = clientSecret.trim();
+      const data = await adminApi.updateBackupIntegration(
+        secret ? { client_id: clientId.trim(), client_secret: secret } : { client_id: clientId.trim() },
+      );
+      setConfigured(data.client_secret_configured);
+      setClientSecret('');
+      toast.success('Google client saved');
+    } catch (error) {
+      const err = error as { response?: { data?: unknown } };
+      toast.error(typeof err.response?.data === 'string' ? err.response.data : 'Failed to save the Google client');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title="Google Drive backups" subtitle="OAuth client used to upload snapshots">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-eyebrow">Client ID</Label>
+          <Input
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            disabled={loading}
+            placeholder="1234567890-abc.apps.googleusercontent.com"
+            className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-eyebrow">Client secret</Label>
+          <Input
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            disabled={loading}
+            placeholder={configured ? '•••••••• stored — leave blank to keep' : 'Paste the client secret'}
+            className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
+          />
+          <p className="font-mono text-[10px] text-muted-foreground">
+            {configured ? 'A secret is stored, sealed at rest. It is never displayed; enter a new one to replace it.' : 'Not set yet.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={save}
+            disabled={saving || loading}
+            className="h-9 gap-1.5 rounded-sm bg-primary font-mono text-[11px] uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save
+          </Button>
+          <Button
+            variant="outline"
+            onClick={load}
+            disabled={loading}
+            className="h-9 rounded-sm border-border bg-transparent font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          >
+            <RotateCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          In the Google Cloud console create an OAuth client of type <span className="text-foreground">Desktop app</span>, add the{' '}
+          <code className="font-mono text-[11px] text-foreground">drive.file</code>{' '}
+          scope, and leave the redirect URIs empty. Then connect Drive from the <span className="text-foreground">Backups</span> page.
+        </p>
+      </div>
+    </Section>
+  );
+}
+
 export default function Settings() {
   const { mode, setTheme, accentColor, setAccentColor } = useTheme();
   const [twoFactor, setTwoFactor] = useState(true);
@@ -208,6 +312,7 @@ export default function Settings() {
         <TabsList className="h-auto gap-1 rounded-sm border-border bg-card p-1">
           <TabsTrigger value="appearance" className={tabTrigger}>Appearance</TabsTrigger>
           <TabsTrigger value="server" className={tabTrigger}>Server</TabsTrigger>
+          <TabsTrigger value="backup" className={tabTrigger}>Backup &amp; Sync</TabsTrigger>
           <TabsTrigger value="security" className={tabTrigger}>Security</TabsTrigger>
         </TabsList>
 
@@ -273,6 +378,10 @@ export default function Settings() {
           <ServerSettings />
 
           <PlatformInfoPanel />
+        </TabsContent>
+
+        <TabsContent value="backup" className="space-y-5">
+          <GoogleBackupSettings />
         </TabsContent>
 
         <TabsContent value="security" className="space-y-5">

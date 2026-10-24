@@ -2,13 +2,17 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 // --- Configuration ---
@@ -247,6 +251,27 @@ func loadEnv() {
 			}
 		}
 	}
+}
+
+// backupSecretInfo separates the at-rest encryption key from the JWT signing
+// key, so one secret yields independent keys for the two purposes. It seals the
+// stored Google refresh token and the optional operator-supplied backup key.
+const backupSecretInfo = "guardian-backup-token"
+
+// tokenEncryptionKey derives a 32-byte AES-256 key from JWT_SECRET for sealing
+// secrets held at rest (the OAuth refresh token and the optional backup key). It
+// is derived (never the raw secret) so the signing key is not used directly as a
+// cipher key.
+func tokenEncryptionKey() ([]byte, error) {
+	secret := strings.TrimSpace(SecretKey)
+	if secret == "" {
+		return nil, errors.New("JWT_SECRET is not set")
+	}
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(hkdf.New(sha256.New, []byte(secret), nil, []byte(backupSecretInfo)), key); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 type Config struct {

@@ -33,16 +33,18 @@ const (
 
 // BackupRecord is one row of the backup history.
 type BackupRecord struct {
-	ID         int64     `json:"id"`
-	Filename   string    `json:"filename"`
-	Size       int64     `json:"size"`
-	Vaults     int       `json:"vaults"`
-	Status     string    `json:"status"`
-	Trigger    string    `json:"trigger"`
-	ScheduleID *int      `json:"schedule_id"`
-	DurationMs int64     `json:"duration_ms"`
-	Error      string    `json:"error"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID           int64     `json:"id"`
+	Filename     string    `json:"filename"`
+	Size         int64     `json:"size"`
+	Vaults       int       `json:"vaults"`
+	Status       string    `json:"status"`
+	Trigger      string    `json:"trigger"`
+	ScheduleID   *int      `json:"schedule_id"`
+	DurationMs   int64     `json:"duration_ms"`
+	Error        string    `json:"error"`
+	RemoteStatus string    `json:"remote_status"`
+	RemoteError  string    `json:"remote_error"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // BackupSchedule is a recurring snapshot definition.
@@ -191,15 +193,32 @@ func (s *Server) createBackup(trigger string, scheduleID *int) (BackupRecord, er
 		s.logger.Println("createBackup:", zipErr)
 	}
 
+	// Decide the remote upload before inserting so the row carries its initial
+	// status: an enabled Drive destination makes it 'pending' until the
+	// background upload finishes.
+	uploadRemote := false
+	if zipErr == nil {
+		var status, errMsg string
+		uploadRemote, status, errMsg = s.remotePlan()
+		rec.RemoteStatus = status
+		rec.RemoteError = errMsg
+	}
+
 	res, err := s.systemDB.Exec(`
-		INSERT INTO backups (filename, size, vaults, status, trigger, schedule_id, duration_ms, error)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, rec.Filename, rec.Size, rec.Vaults, rec.Status, rec.Trigger, scheduleID, rec.DurationMs, rec.Error)
+		INSERT INTO backups (filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, rec.Filename, rec.Size, rec.Vaults, rec.Status, rec.Trigger, scheduleID, rec.DurationMs, rec.Error, rec.RemoteStatus, rec.RemoteError)
 	if err != nil {
 		return rec, err
 	}
 	id, _ := res.LastInsertId()
 	rec.ID = id
+
+	// Upload off the request path: the HTTP WriteTimeout is 30s and a Drive
+	// upload of a full snapshot can exceed it.
+	if uploadRemote {
+		go s.uploadBackup(id, dest, rec.Filename)
+	}
 
 	stored, err := s.backupByID(id)
 	if err != nil {
@@ -213,11 +232,11 @@ func (s *Server) backupByID(id int64) (BackupRecord, error) {
 	var rec BackupRecord
 	var scheduleID sql.NullInt64
 	err := s.systemDB.QueryRow(`
-		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, created_at
+		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error, created_at
 		FROM backups WHERE id = ?
 	`, id).Scan(
 		&rec.ID, &rec.Filename, &rec.Size, &rec.Vaults, &rec.Status,
-		&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.CreatedAt,
+		&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt,
 	)
 	if err != nil {
 		return BackupRecord{}, err
@@ -239,7 +258,7 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := s.systemDB.Query(`
-		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, created_at
+		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error, created_at
 		FROM backups ORDER BY id DESC LIMIT ?
 	`, limit)
 	if err != nil {
@@ -255,7 +274,7 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 		var scheduleID sql.NullInt64
 		if err := rows.Scan(
 			&rec.ID, &rec.Filename, &rec.Size, &rec.Vaults, &rec.Status,
-			&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.CreatedAt,
+			&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt,
 		); err != nil {
 			s.logger.Println("handleListBackups: scan error:", err)
 			continue

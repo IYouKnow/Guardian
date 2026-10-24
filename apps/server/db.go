@@ -104,6 +104,20 @@ func initSystemDB(path string) (*sql.DB, error) {
 		next_run DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS remote_destinations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		provider TEXT NOT NULL UNIQUE,
+		account_email TEXT NOT NULL DEFAULT '',
+		folder_name TEXT NOT NULL DEFAULT '',
+		folder_id TEXT NOT NULL DEFAULT '',
+		refresh_token_enc TEXT NOT NULL DEFAULT '',
+		backup_key_enc TEXT NOT NULL DEFAULT '',
+		enabled INTEGER NOT NULL DEFAULT 1,
+		connected_at DATETIME,
+		last_sync DATETIME,
+		last_error TEXT NOT NULL DEFAULT ''
+	);
 	`
 	_, err = db.Exec(query)
 
@@ -116,6 +130,9 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE users ADD COLUMN salt TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE users ADD COLUMN max_ws_per_ip INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE backups ADD COLUMN remote_status TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE backups ADD COLUMN remote_error TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE remote_destinations ADD COLUMN backup_key_enc TEXT NOT NULL DEFAULT ''")
 
 	db.Exec(`
 		CREATE TABLE IF NOT EXISTS server_settings (

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@next/components/ui/command';
-import { navItems, users, backupProviders } from '@next/lib/mockData';
+import { navItems, users } from '@next/lib/mockData';
 import { Icon } from '@next/components/Icon';
 import { authApi } from '@/api/auth';
 import { Search, ArrowRight } from 'lucide-react';
@@ -60,17 +60,12 @@ export default function CommandPalette({ open, onOpenChange }: CommandPalettePro
               ))}
             </CommandGroup>
 
-            <CommandGroup heading="Backup Providers">
-              {backupProviders.slice(0, 4).map((p) => (
-                <CommandItem key={p.id} onSelect={() => go('/backups')} className="gap-3 rounded-sm">
-                  <Icon name={p.icon} className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1">{p.name}</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{p.status}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-
             <CommandGroup heading="Actions">
+              <CommandItem onSelect={() => go('/backups')} className="gap-3 rounded-sm">
+                <Icon name="HardDrive" className="h-4 w-4 text-muted-foreground" />
+                <span>Backups &amp; Google Drive</span>
+                <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+              </CommandItem>
               <CommandItem onSelect={() => go('/invitations')} className="gap-3 rounded-sm">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <span>Invite new user</span>

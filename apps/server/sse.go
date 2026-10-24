@@ -82,6 +82,27 @@ func (h *SSEHub) BroadcastToUser(userID int, eventType string) {
 	}
 }
 
+// BroadcastAll sends an event to every connected client across all users. Used
+// for server-wide changes (e.g. backup history) that any admin may have open.
+func (h *SSEHub) BroadcastAll(eventType string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	eventData, err := json.Marshal(SSEEvent{Type: eventType, Timestamp: time.Now().Unix()})
+	if err != nil {
+		return
+	}
+
+	for _, userClients := range h.clients {
+		for ch := range userClients {
+			select {
+			case ch <- string(eventData):
+			default:
+			}
+		}
+	}
+}
+
 // shutdown closes all client channels to unblock connections
 func (h *SSEHub) shutdown() {
 	h.mu.Lock()
