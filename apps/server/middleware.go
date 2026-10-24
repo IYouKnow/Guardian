@@ -120,6 +120,25 @@ func (s *Server) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// withUserBackupAccess authenticates the caller and requires the operator to
+// have enabled user-initiated backups. It gates the per-user backup routes that
+// expose only the caller's own vault snapshots.
+func (s *Server) withUserBackupAccess(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, err := s.validateToken(r)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !s.usersCanBackup() {
+			http.Error(w, "User backups are disabled", http.StatusForbidden)
+			return
+		}
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		next(w, r.WithContext(ctx))
+	}
+}
+
 // withAuthRateLimit throttles auth routes by client IP. It runs before the body
 // is read so oversized/expensive requests are rejected early.
 func (s *Server) withAuthRateLimit(next http.HandlerFunc) http.HandlerFunc {

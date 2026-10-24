@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { adminApi, type ActivityEntry, type AdminUser, type PlatformInfo, type TrafficPoint } from '@/api/admin';
+import { adminApi, type ActivityEntry, type AdminUser, type BackupRecord, type PlatformInfo, type TrafficPoint } from '@/api/admin';
 
 export interface OverviewData {
   platform: PlatformInfo | null;
   users: AdminUser[] | null;
+  backups: BackupRecord[] | null;
   activity: ActivityEntry[] | null;
   traffic: TrafficPoint[] | null;
   loading: boolean;
@@ -22,6 +23,7 @@ export interface OverviewData {
 export function useOverviewData(): OverviewData {
   const [platform, setPlatform] = useState<PlatformInfo | null>(null);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [backups, setBackups] = useState<BackupRecord[] | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[] | null>(null);
   const [traffic, setTraffic] = useState<TrafficPoint[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,16 +33,20 @@ export function useOverviewData(): OverviewData {
     Promise.allSettled([
       adminApi.getPlatformInfo(),
       adminApi.getUsers(),
+      adminApi.getBackups(),
       adminApi.getActivity(),
       adminApi.getTraffic(),
     ])
-      .then(([info, list, events, series]) => {
+      .then(([info, list, snapshots, events, series]) => {
         if (!active) return;
         if (info.status === 'fulfilled' && info.value && typeof info.value === 'object') {
           setPlatform(info.value);
         }
         if (list.status === 'fulfilled' && Array.isArray(list.value)) {
           setUsers(list.value);
+        }
+        if (snapshots.status === 'fulfilled' && Array.isArray(snapshots.value)) {
+          setBackups(snapshots.value);
         }
         if (events.status === 'fulfilled' && Array.isArray(events.value)) {
           setActivity(events.value);
@@ -53,5 +59,5 @@ export function useOverviewData(): OverviewData {
     return () => { active = false; };
   }, []);
 
-  return { platform, users, activity, traffic, loading };
+  return { platform, users, backups, activity, traffic, loading };
 }

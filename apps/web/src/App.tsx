@@ -62,6 +62,16 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
+// RequireBackupAccess admits admins and any user the operator granted backups to
+// (the "Allow users to create backups" setting). Also a UX gate: the server
+// re-checks the same rule on every backup route.
+function RequireBackupAccess() {
+  if (!authApi.canAccessBackups()) {
+    return <Navigate to="/account" replace />;
+  }
+  return <Outlet />;
+}
+
 function App() {
   return (
     <ThemeProvider>
@@ -78,8 +88,10 @@ function App() {
                   <Route path="/users" element={<Users />} />
                   <Route path="/invitations" element={<Invitations />} />
                   <Route path="/storage" element={<Storage />} />
-                  <Route path="/backups" element={<Backups />} />
                   <Route path="/settings" element={<Settings />} />
+                </Route>
+                <Route element={<RequireBackupAccess />}>
+                  <Route path="/backups" element={<Backups />} />
                 </Route>
               </Route>
             </Route>

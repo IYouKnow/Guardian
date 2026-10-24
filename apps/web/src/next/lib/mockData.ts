@@ -9,17 +9,6 @@ export const platformMeta = {
   status: 'operational',
 };
 
-// Placeholder card: there is no backups endpoint yet, so this value is not real.
-export const backupsMetric = {
-  id: 'backups',
-  label: 'Backups Today',
-  value: '1,204',
-  delta: '+8.1%',
-  trend: 'up',
-  sub: '3 failed · retrying',
-  icon: 'archive',
-};
-
 export const users = [
   { id: 'u1', name: 'Elena Vasquez', email: 'elena.v@guardian.io', role: 'admin', status: 'active', plan: 'Enterprise', storage: '184 GB', quota: '1 TB', lastActive: '2 min ago', joined: '2023-04-12', vaults: 14, avatar: 'EV' },
   { id: 'u2', name: 'Marcus Chen', email: 'm.chen@guardian.io', role: 'user', status: 'active', plan: 'Pro', storage: '42 GB', quota: '200 GB', lastActive: '11 min ago', joined: '2023-08-30', vaults: 6, avatar: 'MC' },
@@ -88,13 +77,30 @@ export const currentAdmin = {
 };
 
 // Canonical console paths. `adminOnly` items are hidden from non-admin sessions
-// and their routes are gated by RequireAdmin.
-export const navItems = [
+// and their routes are gated by RequireAdmin. `backupAccess` items are visible
+// to any session that may reach backups (admins, or users when the operator has
+// enabled user backups).
+export interface NavItem {
+  id: string;
+  label: string;
+  path: string;
+  icon: string;
+  adminOnly: boolean;
+  backupAccess?: boolean;
+}
+
+export const navItems: NavItem[] = [
   { id: 'overview', label: 'Overview', path: '/', icon: 'LayoutDashboard', adminOnly: true },
   { id: 'users', label: 'Users', path: '/users', icon: 'Users', adminOnly: true },
   { id: 'invitations', label: 'Invitations', path: '/invitations', icon: 'Mail', adminOnly: true },
   { id: 'storage', label: 'Storage', path: '/storage', icon: 'Database', adminOnly: true },
-  { id: 'backups', label: 'Backups', path: '/backups', icon: 'Archive', adminOnly: true },
+  { id: 'backups', label: 'Backups', path: '/backups', icon: 'Archive', adminOnly: true, backupAccess: true },
   { id: 'settings', label: 'Settings', path: '/settings', icon: 'Settings', adminOnly: true },
   { id: 'account', label: 'Account', path: '/account', icon: 'UserCircle', adminOnly: false },
 ];
+
+// navItemsFor resolves the items a session may see, given its role and whether
+// user backups are enabled.
+export function navItemsFor(isAdmin: boolean, canBackup: boolean): NavItem[] {
+  return navItems.filter((item) => (item.backupAccess ? canBackup : isAdmin || !item.adminOnly));
+}

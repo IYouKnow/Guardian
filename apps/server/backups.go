@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -12,9 +13,11 @@ import (
 	"time"
 )
 
-// Backups are full snapshots of the server's SQLite databases — the system DB
-// plus every per-user vault DB — written as a single .zip on the same host that
-// runs the Guardian server (data/backups/). Nothing is uploaded anywhere.
+// Backups are snapshots of SQLite databases written as a .zip on the same host
+// that runs the Guardian server (data/backups/). An admin backup captures the
+// whole server (system DB plus every per-user vault DB); a user backup captures
+// just that user's vault. Admin backups may be mirrored to the remote
+// destination; user backups are never uploaded.
 
 const (
 	backupDefaultLimit  = 50
@@ -106,31 +109,48 @@ func addToZip(zw *zip.Writer, src string) error {
 	return err
 }
 
-// createBackup snapshots every existing DB file into one zip and records the
-// run. A failure is still recorded with status 'failed' so it shows in history.
-func (s *Server) createBackup(trigger string, scheduleID *int) (BackupRecord, error) {
+// createBackup snapshots the selected DB files into one zip and records the run.
+// With ownerID nil it captures the whole server (system.db plus every user
+// vault) and may mirror the archive to the remote destination. With ownerID set
+// it captures only that user's vault and never uploads remotely, so a regular
+// user can never read another account's data. A failure is still recorded with
+// status 'failed' so it shows in history.
+func (s *Server) createBackup(trigger string, scheduleID *int, ownerID *int) (BackupRecord, error) {
 	start := time.Now()
 
 	if err := os.MkdirAll(s.snapshotDir(), 0o755); err != nil {
 		return BackupRecord{}, err
 	}
 
-	// system.db first, then one file per user vault.
-	sources := []string{filepath.Join(s.config.DataDir, "system.db")}
-	rows, err := s.systemDB.Query("SELECT db_path FROM users")
-	if err != nil {
-		return BackupRecord{}, err
-	}
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			continue
+	var sources []string
+	if ownerID != nil {
+		// Per-user snapshot: only this user's vault database.
+		var dbPath string
+		if err := s.systemDB.QueryRow("SELECT db_path FROM users WHERE id = ?", *ownerID).Scan(&dbPath); err != nil {
+			return BackupRecord{}, err
 		}
-		if p != "" {
-			sources = append(sources, filepath.Join(s.config.DataDir, p))
+		if dbPath == "" {
+			return BackupRecord{}, fmt.Errorf("user %d has no vault database", *ownerID)
 		}
+		sources = []string{filepath.Join(s.config.DataDir, dbPath)}
+	} else {
+		// Server-wide snapshot: system.db first, then one file per user vault.
+		sources = append(sources, filepath.Join(s.config.DataDir, "system.db"))
+		rows, err := s.systemDB.Query("SELECT db_path FROM users")
+		if err != nil {
+			return BackupRecord{}, err
+		}
+		for rows.Next() {
+			var p string
+			if err := rows.Scan(&p); err != nil {
+				continue
+			}
+			if p != "" {
+				sources = append(sources, filepath.Join(s.config.DataDir, p))
+			}
+		}
+		rows.Close()
 	}
-	rows.Close()
 
 	files := make([]string, 0, len(sources))
 	vaults := 0
@@ -140,12 +160,20 @@ func (s *Server) createBackup(trigger string, scheduleID *int) (BackupRecord, er
 		}
 		checkpointFile(src)
 		files = append(files, src)
-		if i > 0 {
+		if ownerID != nil {
+			vaults = len(files)
+		} else if i > 0 {
 			vaults++
 		}
 	}
 
-	filename := "backup-" + time.Now().UTC().Format(backupTimeFormat) + ".zip"
+	// The owner is part of the name so two users snapshotting in the same second
+	// don't collide on one archive file.
+	prefix := "backup-"
+	if ownerID != nil {
+		prefix = "backup-u" + strconv.Itoa(*ownerID) + "-"
+	}
+	filename := prefix + time.Now().UTC().Format(backupTimeFormat) + ".zip"
 	dest := filepath.Join(s.snapshotDir(), filename)
 
 	var size int64
@@ -195,19 +223,24 @@ func (s *Server) createBackup(trigger string, scheduleID *int) (BackupRecord, er
 
 	// Decide the remote upload before inserting so the row carries its initial
 	// status: an enabled Drive destination makes it 'pending' until the
-	// background upload finishes.
+	// background upload finishes. Per-user snapshots stay local.
 	uploadRemote := false
-	if zipErr == nil {
+	if zipErr == nil && ownerID == nil {
 		var status, errMsg string
 		uploadRemote, status, errMsg = s.remotePlan()
 		rec.RemoteStatus = status
 		rec.RemoteError = errMsg
 	}
 
+	var ownerArg any
+	if ownerID != nil {
+		ownerArg = *ownerID
+	}
+
 	res, err := s.systemDB.Exec(`
-		INSERT INTO backups (filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, rec.Filename, rec.Size, rec.Vaults, rec.Status, rec.Trigger, scheduleID, rec.DurationMs, rec.Error, rec.RemoteStatus, rec.RemoteError)
+		INSERT INTO backups (filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error, owner_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, rec.Filename, rec.Size, rec.Vaults, rec.Status, rec.Trigger, scheduleID, rec.DurationMs, rec.Error, rec.RemoteStatus, rec.RemoteError, ownerArg)
 	if err != nil {
 		return rec, err
 	}
@@ -248,21 +281,32 @@ func (s *Server) backupByID(id int64) (BackupRecord, error) {
 	return rec, nil
 }
 
-// handleListBackups returns backup history, newest first.
-func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
+// backupListLimit reads the optional ?limit= query parameter, clamped to the
+// allowed range.
+func backupListLimit(r *http.Request) int {
 	limit := backupDefaultLimit
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = min(n, backupMaxLimit)
 		}
 	}
+	return limit
+}
 
-	rows, err := s.systemDB.Query(`
+// respondBackups streams backup history matching where (plus args), newest first.
+func (s *Server) respondBackups(w http.ResponseWriter, limit int, where string, args ...any) {
+	query := `
 		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error, created_at
-		FROM backups ORDER BY id DESC LIMIT ?
-	`, limit)
+		FROM backups`
+	if where != "" {
+		query += " WHERE " + where
+	}
+	query += " ORDER BY id DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := s.systemDB.Query(query, args...)
 	if err != nil {
-		s.logger.Println("handleListBackups: query error:", err)
+		s.logger.Println("respondBackups: query error:", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -276,7 +320,7 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 			&rec.ID, &rec.Filename, &rec.Size, &rec.Vaults, &rec.Status,
 			&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt,
 		); err != nil {
-			s.logger.Println("handleListBackups: scan error:", err)
+			s.logger.Println("respondBackups: scan error:", err)
 			continue
 		}
 		if scheduleID.Valid {
@@ -294,21 +338,47 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, records)
 }
 
-// handleCreateBackup runs an on-demand snapshot.
-func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
-	rec, err := s.createBackup("manual", nil)
+// handleListBackups returns the server-wide backup history, newest first. User
+// snapshots are excluded — they are only ever visible to their owner.
+func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
+	s.respondBackups(w, backupListLimit(r), "owner_id IS NULL")
+}
+
+// usersCanBackup reports whether the operator has enabled user-initiated backups.
+func (s *Server) usersCanBackup() bool {
+	var v string
+	if err := s.systemDB.QueryRow("SELECT value FROM server_settings WHERE key = 'users_can_backup'").Scan(&v); err != nil {
+		return false
+	}
+	return v == "1"
+}
+
+// handleListUserBackups returns the caller's own snapshots, newest first.
+func (s *Server) handleListUserBackups(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+	s.respondBackups(w, backupListLimit(r), "owner_id = ?", userID)
+}
+
+// handleCreateUserBackup snapshots only the caller's vault database.
+func (s *Server) handleCreateUserBackup(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
+	rec, err := s.createBackup("manual", nil, &userID)
 	if err != nil {
-		s.logger.Println("handleCreateBackup:", err)
+		s.logger.Println("handleCreateUserBackup:", err)
 		http.Error(w, "Backup failed", http.StatusInternalServerError)
 		return
 	}
 
-	s.recordActivity(s.actorName(r), "created a backup", rec.Filename, "backup")
+	s.recordActivity(s.actorName(r), "created a vault backup", rec.Filename, "backup")
 	writeJSON(w, http.StatusCreated, rec)
 }
 
-// handleDeleteBackup removes a history row and its archive.
-func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+// handleDeleteUserBackup removes one of the caller's own snapshots. The owner_id
+// filter means a user can never delete another account's backup.
+func (s *Server) handleDeleteUserBackup(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.Error(w, "Invalid backup ID", http.StatusBadRequest)
@@ -316,7 +386,7 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var filename string
-	err = s.systemDB.QueryRow("SELECT filename FROM backups WHERE id = ?", id).Scan(&filename)
+	err = s.systemDB.QueryRow("SELECT filename FROM backups WHERE id = ? AND owner_id = ?", id, userID).Scan(&filename)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Backup not found", http.StatusNotFound)
 		return
@@ -329,7 +399,51 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(s.snapshotDir(), filename)) // best-effort
 	}
 
-	if _, err := s.systemDB.Exec("DELETE FROM backups WHERE id = ?", id); err != nil {
+	if _, err := s.systemDB.Exec("DELETE FROM backups WHERE id = ? AND owner_id = ?", id, userID); err != nil {
+		http.Error(w, "Failed to delete backup", http.StatusInternalServerError)
+		return
+	}
+
+	s.recordActivity(s.actorName(r), "deleted a vault backup", filename, "backup")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleCreateBackup runs an on-demand server-wide snapshot.
+func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
+	rec, err := s.createBackup("manual", nil, nil)
+	if err != nil {
+		s.logger.Println("handleCreateBackup:", err)
+		http.Error(w, "Backup failed", http.StatusInternalServerError)
+		return
+	}
+
+	s.recordActivity(s.actorName(r), "created a backup", rec.Filename, "backup")
+	writeJSON(w, http.StatusCreated, rec)
+}
+
+// handleDeleteBackup removes a server-wide history row and its archive.
+func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "Invalid backup ID", http.StatusBadRequest)
+		return
+	}
+
+	var filename string
+	err = s.systemDB.QueryRow("SELECT filename FROM backups WHERE id = ? AND owner_id IS NULL", id).Scan(&filename)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Backup not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if filename != "" {
+		os.Remove(filepath.Join(s.snapshotDir(), filename)) // best-effort
+	}
+
+	if _, err := s.systemDB.Exec("DELETE FROM backups WHERE id = ? AND owner_id IS NULL", id); err != nil {
 		http.Error(w, "Failed to delete backup", http.StatusInternalServerError)
 		return
 	}
@@ -594,7 +708,7 @@ func (s *Server) runDueBackups() {
 	rows.Close()
 
 	for _, d := range dueList {
-		if _, err := s.createBackup("schedule", &d.id); err != nil {
+		if _, err := s.createBackup("schedule", &d.id, nil); err != nil {
 			s.logger.Printf("runDueBackups: schedule %d (%s) failed: %v", d.id, d.name, err)
 		}
 		interval := clampInt(d.interval, backupIntervalMin, backupIntervalMax)

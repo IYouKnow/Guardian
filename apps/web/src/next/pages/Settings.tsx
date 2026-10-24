@@ -16,7 +16,6 @@ import {
 import { adminApi, type PlatformInfo } from '@/api/admin';
 import { formatUptime } from '@next/lib/format';
 import { toast } from 'sonner';
-import { MockBadge } from '@next/components/MockBadge';
 import { Check, Loader2, Lock, RotateCw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -190,8 +189,8 @@ function PlatformInfoPanel() {
   );
 }
 
-// Whether non-admin users may back up their own data. The flag is persisted, but
-// the per-user backup flow itself is not built yet.
+// Whether non-admin users may back up their own vault. When enabled, the
+// Backups page opens for them with a scoped, own-vault-only view.
 function UserBackupsSettings() {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -232,13 +231,10 @@ function UserBackupsSettings() {
     <Section title="User backups" subtitle="Let non-admin users back up their own data">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <p className="text-[13px] font-medium text-foreground">Allow users to create backups</p>
-            <MockBadge />
-          </div>
+          <p className="text-[13px] font-medium text-foreground">Allow users to create backups</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Each user will be able to back up their own vault to a destination of their own. The setting is saved
-            now; the user-facing backup flow itself is not built yet.
+            Each user can snapshot their own vault on this server. Their history is private and never
+            includes other accounts' data. Admins are unaffected.
           </p>
         </div>
         <Switch checked={enabled} disabled={loading || saving} onCheckedChange={toggle} />

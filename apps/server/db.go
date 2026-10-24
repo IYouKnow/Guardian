@@ -132,6 +132,8 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE backups ADD COLUMN remote_status TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE backups ADD COLUMN remote_error TEXT NOT NULL DEFAULT ''")
+	// owner_id scopes a backup to one user (NULL = server-wide, admin backups).
+	db.Exec("ALTER TABLE backups ADD COLUMN owner_id INTEGER")
 	db.Exec("ALTER TABLE remote_destinations ADD COLUMN backup_key_enc TEXT NOT NULL DEFAULT ''")
 
 	db.Exec(`

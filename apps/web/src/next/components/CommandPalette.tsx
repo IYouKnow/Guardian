@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@next/components/ui/command';
-import { navItems, users } from '@next/lib/mockData';
+import { navItemsFor, users } from '@next/lib/mockData';
 import { Icon } from '@next/components/Icon';
 import { authApi } from '@/api/auth';
 import { Search, ArrowRight } from 'lucide-react';
@@ -14,7 +14,7 @@ interface CommandPaletteProps {
 export default function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const isAdmin = authApi.isAdmin();
-  const items = isAdmin ? navItems : navItems.filter((item) => !item.adminOnly);
+  const items = navItemsFor(isAdmin, authApi.canAccessBackups());
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

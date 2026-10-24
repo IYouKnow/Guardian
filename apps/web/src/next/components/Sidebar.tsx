@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Lock, ChevronsLeft } from 'lucide-react';
-import { navItems, platformMeta } from '@next/lib/mockData';
+import { navItemsFor, platformMeta } from '@next/lib/mockData';
 import { useServerHealth } from '@next/lib/useServerHealth';
 import { Icon } from '@next/components/Icon';
 import { authApi } from '@/api/auth';
@@ -16,8 +16,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const [hovered, setHovered] = useState<string | null>(null);
   const { version } = useServerHealth();
-  // Admin-only nav items are hidden for non-admin sessions (routes are gated too).
-  const items = authApi.isAdmin() ? navItems : navItems.filter((item) => !item.adminOnly);
+  // Admin-only items are hidden for non-admin sessions; Backups stays visible
+  // for users when the operator enabled user backups. Routes are gated too.
+  const items = navItemsFor(authApi.isAdmin(), authApi.canAccessBackups());
 
   return (
     <aside

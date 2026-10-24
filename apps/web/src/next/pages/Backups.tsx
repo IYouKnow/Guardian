@@ -20,7 +20,9 @@ import { MockBadge } from '@next/components/MockBadge';
 import { useBackupsData } from '@next/lib/useBackupsData';
 import { useSSE } from '@/hooks/useSSE';
 import { formatBytes, formatRelativeTime } from '@next/lib/format';
-import { adminApi, type BackupDestination, type BackupSchedule } from '@/api/admin';
+import { adminApi, type BackupDestination, type BackupRecord, type BackupSchedule } from '@/api/admin';
+import { userBackupApi } from '@/api/backups';
+import { authApi } from '@/api/auth';
 import { Icon } from '@next/components/Icon';
 import { Plus, Server, Calendar, MoreHorizontal, Zap, Trash2, Loader2, Archive, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -352,7 +354,93 @@ function RemoteDestination({ destination, loading, onChanged }: RemoteDestinatio
   );
 }
 
+interface BackupHistoryTableProps {
+  rows: BackupRecord[];
+  loading: boolean;
+  // Admins see the remote (Google Drive) upload column; users' snapshots never
+  // upload, so it is hidden for them.
+  showDrive: boolean;
+  pendingId: number | null;
+  onDelete: (id: number) => void;
+}
+
+function BackupHistoryTable({ rows, loading, showDrive, pendingId, onDelete }: BackupHistoryTableProps) {
+  const colSpan = showDrive ? 9 : 8;
+  return (
+    <Card className="overflow-hidden rounded-sm border-border bg-card">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left">
+              <th className="text-eyebrow px-5 py-2.5 font-medium">Backup</th>
+              <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Source</th>
+              <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Vaults</th>
+              <th className="text-eyebrow px-5 py-2.5 font-medium">Size</th>
+              <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Duration</th>
+              <th className="text-eyebrow px-5 py-2.5 font-medium">Status</th>
+              {showDrive && <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Drive</th>}
+              <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Time</th>
+              <th className="px-5 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && rows.length === 0 && (
+              <tr><td colSpan={colSpan} className="px-5 py-16 text-center">
+                <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+              </td></tr>
+            )}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan={colSpan} className="px-5 py-16 text-center">
+                <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
+                  <div className="grid h-11 w-11 place-items-center border border-border text-muted-foreground"><Archive className="h-4 w-4" /></div>
+                  <p className="text-sm font-medium text-foreground">No backups yet</p>
+                  <p className="text-xs text-muted-foreground">Create your first snapshot to see it here.</p>
+                </div>
+              </td></tr>
+            )}
+            {rows.map((b) => (
+              <tr key={b.id} className="border-b border-border/60 transition-colors last:border-0 hover:bg-background/50">
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-6 w-6 place-items-center border border-border text-muted-foreground"><Server className="h-3 w-3" /></span>
+                    <span className="font-mono text-[12px] text-foreground">{b.filename || `backup #${b.id}`}</span>
+                  </div>
+                </td>
+                <td className="hidden px-5 py-3 text-[12px] capitalize text-muted-foreground md:table-cell">{b.trigger === 'schedule' ? 'Scheduled' : 'Manual'}</td>
+                <td className="hidden px-5 py-3 font-mono text-[11px] tabular-nums text-muted-foreground lg:table-cell">{b.vaults}</td>
+                <td className="px-5 py-3 font-mono text-[11px] tabular-nums text-foreground">{formatBytes(b.size)}</td>
+                <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground lg:table-cell">{formatDuration(b.duration_ms)}</td>
+                <td className="px-5 py-3"><StatusBadge status={b.status} /></td>
+                {showDrive && <td className="hidden px-5 py-3 md:table-cell"><DriveBadge status={b.remote_status} /></td>}
+                <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground lg:table-cell">{formatRelativeTime(b.created_at)}</td>
+                <td className="px-5 py-3 text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button disabled={pendingId === b.id} className="grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground">
+                        {pendingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="rounded-sm border-border bg-card">
+                      <DropdownMenuItem
+                        onSelect={() => onDelete(b.id)}
+                        className="gap-2 font-mono text-[11px] uppercase tracking-wider text-rose-400 focus:text-rose-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete backup
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 export default function Backups() {
+  const isAdmin = authApi.isAdmin();
   const { backups, schedules, destination, loading, refresh } = useBackupsData();
   const [searchParams, setSearchParams] = useSearchParams();
   const { lastEvent } = useSSE();
@@ -389,7 +477,7 @@ export default function Backups() {
   const createBackup = async () => {
     setCreating(true);
     try {
-      const rec = await adminApi.createBackup();
+      const rec = isAdmin ? await adminApi.createBackup() : await userBackupApi.create();
       if (rec.status === 'failed') {
         toast.error('Backup failed');
       } else {
@@ -406,7 +494,11 @@ export default function Backups() {
   const deleteBackup = async (id: number) => {
     setPendingId(id);
     try {
-      await adminApi.deleteBackup(id);
+      if (isAdmin) {
+        await adminApi.deleteBackup(id);
+      } else {
+        await userBackupApi.remove(id);
+      }
       toast.success('Backup deleted');
       await refresh();
     } catch {
@@ -468,6 +560,28 @@ export default function Backups() {
 
   const rows = backups ?? [];
 
+  // Regular users get a scoped view: only their own vault snapshots, with no
+  // schedules or remote destination. Admins keep the full server-wide page.
+  if (!isAdmin) {
+    return (
+      <div className="animate-fade-in-up">
+        <PageHeader
+          eyebrow="Vault"
+          title="Backups"
+          description="Snapshot your encrypted vault to this server. Only your own data is included, and only you can see these backups."
+          badge={<span className={countPill}>{rows.length} backups</span>}
+          actions={
+            <Button size="sm" onClick={createBackup} disabled={creating} className={primaryBtn}>
+              {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />} Create backup
+            </Button>
+          }
+        />
+
+        <BackupHistoryTable rows={rows} loading={loading} showDrive={false} pendingId={pendingId} onDelete={deleteBackup} />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in-up">
       <PageHeader
@@ -504,75 +618,7 @@ export default function Backups() {
         </TabsList>
 
         <TabsContent value="history">
-          <Card className="overflow-hidden rounded-sm border-border bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <th className="text-eyebrow px-5 py-2.5 font-medium">Backup</th>
-                    <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Source</th>
-                    <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Vaults</th>
-                    <th className="text-eyebrow px-5 py-2.5 font-medium">Size</th>
-                    <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Duration</th>
-                    <th className="text-eyebrow px-5 py-2.5 font-medium">Status</th>
-                    <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Drive</th>
-                    <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Time</th>
-                    <th className="px-5 py-2.5"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading && rows.length === 0 && (
-                    <tr><td colSpan={9} className="px-5 py-16 text-center">
-                      <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-                    </td></tr>
-                  )}
-                  {!loading && rows.length === 0 && (
-                    <tr><td colSpan={9} className="px-5 py-16 text-center">
-                      <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
-                        <div className="grid h-11 w-11 place-items-center border border-border text-muted-foreground"><Archive className="h-4 w-4" /></div>
-                        <p className="text-sm font-medium text-foreground">No backups yet</p>
-                        <p className="text-xs text-muted-foreground">Create your first snapshot to see it here.</p>
-                      </div>
-                    </td></tr>
-                  )}
-                  {rows.map((b) => (
-                    <tr key={b.id} className="border-b border-border/60 transition-colors last:border-0 hover:bg-background/50">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <span className="grid h-6 w-6 place-items-center border border-border text-muted-foreground"><Server className="h-3 w-3" /></span>
-                          <span className="font-mono text-[12px] text-foreground">{b.filename || `backup #${b.id}`}</span>
-                        </div>
-                      </td>
-                      <td className="hidden px-5 py-3 text-[12px] capitalize text-muted-foreground md:table-cell">{b.trigger === 'schedule' ? 'Scheduled' : 'Manual'}</td>
-                      <td className="hidden px-5 py-3 font-mono text-[11px] tabular-nums text-muted-foreground lg:table-cell">{b.vaults}</td>
-                      <td className="px-5 py-3 font-mono text-[11px] tabular-nums text-foreground">{formatBytes(b.size)}</td>
-                      <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground lg:table-cell">{formatDuration(b.duration_ms)}</td>
-                      <td className="px-5 py-3"><StatusBadge status={b.status} /></td>
-                      <td className="hidden px-5 py-3 md:table-cell"><DriveBadge status={b.remote_status} /></td>
-                      <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground lg:table-cell">{formatRelativeTime(b.created_at)}</td>
-                      <td className="px-5 py-3 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button disabled={pendingId === b.id} className="grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground">
-                              {pendingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-sm border-border bg-card">
-                            <DropdownMenuItem
-                              onSelect={() => deleteBackup(b.id)}
-                              className="gap-2 font-mono text-[11px] uppercase tracking-wider text-rose-400 focus:text-rose-300"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete backup
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <BackupHistoryTable rows={rows} loading={loading} showDrive pendingId={pendingId} onDelete={deleteBackup} />
         </TabsContent>
 
         <TabsContent value="schedules" className="space-y-4">

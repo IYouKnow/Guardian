@@ -4,7 +4,6 @@ import MetricRail, { type MetricRailItem } from '@next/components/MetricRail';
 import ActivityChart from '@next/components/ActivityChart';
 import { Card } from '@next/components/ui/card';
 import { Button } from '@next/components/ui/button';
-import { backupsMetric } from '@next/lib/mockData';
 import { useOverviewData } from '@next/lib/useOverviewData';
 import { formatBytes, formatDayLabel, formatRelativeTime, formatUptime, parseBytes } from '@next/lib/format';
 import { withinDays } from '@next/lib/csv';
@@ -39,7 +38,7 @@ function PanelHeader({ title, subtitle, right }: PanelHeaderProps) {
 }
 
 export default function Overview() {
-  const { platform, users, activity, traffic, loading } = useOverviewData();
+  const { platform, users, backups, activity, traffic, loading } = useOverviewData();
   const events = activity ?? [];
   const chartData = useMemo(
     () => (traffic ?? []).map((p) => ({ ...p, day: formatDayLabel(p.day) })),
@@ -53,6 +52,27 @@ export default function Overview() {
     const usedBytes = list.reduce((sum, u) => sum + parseBytes(u.used_space), 0);
     const overheadBytes = list.reduce((sum, u) => sum + parseBytes(u.used_space_overhead), 0);
     const unavailable = loading ? 'loading…' : 'unavailable';
+
+    // Backups created since local midnight, split from yesterday for the trend.
+    const snapshots = backups ?? [];
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const createdBetween = (from: Date, before?: Date) =>
+      snapshots.filter((b) => {
+        const t = new Date(b.created_at).getTime();
+        return !isNaN(t) && t >= from.getTime() && (!before || t < before.getTime());
+      });
+    const today = createdBetween(startOfToday);
+    const yesterday = createdBetween(startOfYesterday, startOfToday);
+    const failedToday = today.filter((b) => b.status === 'failed').length;
+    const backupDelta = today.length - yesterday.length;
+    const backupSub = snapshots.length === 0
+      ? 'No backups yet'
+      : failedToday > 0
+        ? `${failedToday} failed · ${snapshots.length} total`
+        : `${snapshots.length} total`;
 
     return [
       {
@@ -71,7 +91,15 @@ export default function Overview() {
         value: users ? formatBytes(usedBytes) : '—',
         sub: users ? `${list.length} vaults · ${formatBytes(overheadBytes)} overhead` : unavailable,
       },
-      backupsMetric,
+      {
+        id: 'backups',
+        label: 'Backups Today',
+        icon: 'archive',
+        value: backups ? today.length.toLocaleString() : '—',
+        delta: backups && backupDelta !== 0 ? (backupDelta > 0 ? `+${backupDelta}` : String(backupDelta)) : undefined,
+        trend: backupDelta > 0 ? 'up' : backupDelta < 0 ? 'down' : 'flat',
+        sub: backups ? backupSub : unavailable,
+      },
       {
         id: 'uptime',
         label: 'Platform Uptime',
@@ -80,7 +108,7 @@ export default function Overview() {
         sub: platform ? `${platform.environment} · v${platform.version}` : unavailable,
       },
     ];
-  }, [platform, users, loading]);
+  }, [platform, users, backups, loading]);
 
   return (
     <div className="animate-fade-in-up">

@@ -168,6 +168,11 @@ func main() {
 	mux.HandleFunc("PUT /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleUpdateSchedule))
 	mux.HandleFunc("DELETE /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleDeleteSchedule))
 
+	// User / Backups (own vault only; enabled by the users_can_backup setting)
+	mux.HandleFunc("GET /api/backups", server.withUserBackupAccess(server.handleListUserBackups))
+	mux.HandleFunc("POST /api/backups", server.withUserBackupAccess(server.handleCreateUserBackup))
+	mux.HandleFunc("DELETE /api/backups/{id}", server.withUserBackupAccess(server.handleDeleteUserBackup))
+
 	// Admin / Remote backup destination (Google Drive)
 	mux.HandleFunc("GET /api/admin/backup-destination", server.withAdminAuth(server.handleGetBackupDestination))
 	mux.HandleFunc("PUT /api/admin/backup-destination", server.withAdminAuth(server.handleUpdateBackupDestination))

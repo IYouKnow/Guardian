@@ -9,12 +9,14 @@ export interface AuthResponse {
     token: string;
     username: string;
     is_admin: boolean;
+    can_backup: boolean;
 }
 
 export interface MeResponse {
     id: number;
     username: string;
     is_admin: boolean;
+    can_backup: boolean;
 }
 
 export interface RegisterRequest {
@@ -37,6 +39,7 @@ export const authApi = {
         localStorage.setItem('guardian_user', JSON.stringify({
             username: response.data.username,
             is_admin: response.data.is_admin,
+            can_backup: response.data.can_backup,
         }));
 
         return response.data;
@@ -68,6 +71,7 @@ export const authApi = {
         localStorage.setItem('guardian_user', JSON.stringify({
             username: response.data.username,
             is_admin: response.data.is_admin,
+            can_backup: response.data.can_backup,
         }));
         return response.data;
     },
@@ -89,6 +93,13 @@ export const authApi = {
     isAdmin(): boolean {
         const user = this.getStoredUser();
         return user?.is_admin || false;
+    },
+
+    // Whether the session may open the Backups page: always for admins, and for
+    // regular users only when the operator enabled user backups.
+    canAccessBackups(): boolean {
+        const user = this.getStoredUser();
+        return !!user?.is_admin || !!user?.can_backup;
     },
 
     getToken(): string | null {
