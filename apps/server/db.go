@@ -141,6 +141,7 @@ func initSystemDB(path string) (*sql.DB, error) {
 		)
 	`)
 	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('max_ws_per_ip_default', '0')")
+	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('users_can_backup', '0')")
 
 	return db, err
 }

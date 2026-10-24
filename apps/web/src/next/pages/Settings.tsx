@@ -16,6 +16,7 @@ import {
 import { adminApi, type PlatformInfo } from '@/api/admin';
 import { formatUptime } from '@next/lib/format';
 import { toast } from 'sonner';
+import { MockBadge } from '@next/components/MockBadge';
 import { Check, Loader2, Lock, RotateCw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -189,6 +190,85 @@ function PlatformInfoPanel() {
   );
 }
 
+// Whether non-admin users may back up their own data. The flag is persisted, but
+// the per-user backup flow itself is not built yet.
+function UserBackupsSettings() {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await adminApi.getSettings();
+      setEnabled(data.users_can_backup === '1');
+    } catch {
+      toast.error('Failed to load the backup settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggle = async (next: boolean) => {
+    const previous = enabled;
+    setEnabled(next);
+    setSaving(true);
+    try {
+      await adminApi.updateSetting('users_can_backup', next ? '1' : '0');
+      toast.success(next ? 'User backups enabled' : 'User backups disabled');
+    } catch {
+      setEnabled(previous);
+      toast.error('Failed to update the setting');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title="User backups" subtitle="Let non-admin users back up their own data">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-[13px] font-medium text-foreground">Allow users to create backups</p>
+            <MockBadge />
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Each user will be able to back up their own vault to a destination of their own. The setting is saved
+            now; the user-facing backup flow itself is not built yet.
+          </p>
+        </div>
+        <Switch checked={enabled} disabled={loading || saving} onCheckedChange={toggle} />
+      </div>
+    </Section>
+  );
+}
+
+// Numbered setup guide for the Google OAuth client, shown above the form.
+const GOOGLE_SETUP_STEPS: ReactNode[] = [
+  <>In the Google Cloud Console, create (or pick) a project and enable the <span className="text-foreground">Google Drive API</span>.</>,
+  <>Create an OAuth client of type <span className="text-foreground">Desktop app</span> — not <span className="text-foreground">Web application</span>.</>,
+  <>On the <span className="text-foreground">OAuth consent screen</span>, add the scope <code className="font-mono text-[11px] text-foreground">https://www.googleapis.com/auth/drive.file</code> and publish the app (it is non-sensitive, so Google requires no review).</>,
+  <>Paste the <span className="text-foreground">Client ID</span> and <span className="text-foreground">Client secret</span> below, then Save.</>,
+  <>Open <span className="text-foreground">Backups</span> and click <span className="text-foreground">Connect Google Drive</span> to approve access.</>,
+];
+
+function SetupSteps({ steps }: { steps: ReactNode[] }) {
+  return (
+    <ol className="space-y-2.5 border border-border bg-background/50 p-4">
+      {steps.map((step, i) => (
+        <li key={i} className="flex gap-3">
+          <span className="mt-[1px] grid h-5 w-5 shrink-0 place-items-center border border-border font-mono text-[10px] text-muted-foreground">{i + 1}</span>
+          <span className="text-xs text-muted-foreground">{step}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 // Operator-supplied Google OAuth client used by the Backups page to connect
 // Google Drive. The secret is write-only: the API reports only whether one is
 // stored, never its value.
@@ -240,8 +320,12 @@ function GoogleBackupSettings() {
   };
 
   return (
-    <Section title="Google Drive backups" subtitle="OAuth client used to upload snapshots">
+    <Section title="Google Drive" subtitle="OAuth client used to upload snapshots">
       <div className="space-y-4">
+        <div>
+          <p className="text-eyebrow mb-3">Setup steps</p>
+          <SetupSteps steps={GOOGLE_SETUP_STEPS} />
+        </div>
         <div className="space-y-1.5">
           <Label className="text-eyebrow">Client ID</Label>
           <Input
@@ -283,10 +367,8 @@ function GoogleBackupSettings() {
             <RotateCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          In the Google Cloud console create an OAuth client of type <span className="text-foreground">Desktop app</span>, add the{' '}
-          <code className="font-mono text-[11px] text-foreground">drive.file</code>{' '}
-          scope, and leave the redirect URIs empty. Then connect Drive from the <span className="text-foreground">Backups</span> page.
+        <p className="font-mono text-[10px] text-muted-foreground">
+          Leave the redirect URIs empty — Desktop clients accept any loopback port.
         </p>
       </div>
     </Section>
@@ -381,6 +463,8 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="backup" className="space-y-5">
+          <UserBackupsSettings />
+
           <GoogleBackupSettings />
         </TabsContent>
 
