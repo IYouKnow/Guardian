@@ -15,8 +15,11 @@ import {
 } from '@next/lib/appearance';
 import { adminApi, type PlatformInfo } from '@/api/admin';
 import { formatUptime } from '@next/lib/format';
+import { CHANGELOG, KIND_LABELS, KIND_STYLES, LATEST_VERSION, type Release } from '@next/lib/changelog';
+import { useServerHealth } from '@next/lib/useServerHealth';
 import { toast } from 'sonner';
-import { Check, Loader2, Lock, RotateCw, Save } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { Check, Loader2, Lock, Package, RotateCw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const themeLabels: Record<string, string> = {
@@ -371,6 +374,120 @@ function GoogleBackupSettings() {
   );
 }
 
+function Tag({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 border px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider', className)}>
+      {children}
+    </span>
+  );
+}
+
+function formatReleaseDate(iso: string) {
+  try {
+    return format(parseISO(iso), 'MMM d, yyyy');
+  } catch {
+    return iso;
+  }
+}
+
+function ReleaseRow({ release, running, isLatest, isLast }: { release: Release; running: boolean; isLatest: boolean; isLast: boolean }) {
+  return (
+    <li className="relative pl-7">
+      <span
+        className={cn(
+          'absolute left-[3px] top-[7px] h-2.5 w-2.5 rounded-full ring-4 ring-card',
+          running ? 'bg-primary' : isLatest ? 'bg-foreground/40' : 'bg-border',
+        )}
+      />
+      {!isLast && <span className="absolute left-[7px] top-4 bottom-0 w-px bg-border" />}
+      <div className={cn('pb-7', isLast && 'pb-0')}>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="font-mono text-[13px] font-medium text-foreground">v{release.version}</span>
+          {running && <Tag className="border-primary/40 bg-primary/[0.08] text-primary">Running</Tag>}
+          {isLatest && !running && <Tag className="border-border bg-muted text-muted-foreground">Latest</Tag>}
+          <span className="font-mono text-[11px] text-muted-foreground">{formatReleaseDate(release.date)}</span>
+        </div>
+        <p className="mt-1.5 text-[13px] text-muted-foreground">{release.summary}</p>
+        <ul className="mt-3 space-y-2">
+          {release.changes.map((change, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <Tag className={cn('mt-px shrink-0', KIND_STYLES[change.kind])}>{KIND_LABELS[change.kind]}</Tag>
+              <span className="text-[13px] leading-relaxed text-foreground/90">{change.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </li>
+  );
+}
+
+// Current server version (live from /health) plus the hand-maintained release
+// history defined in @next/lib/changelog.
+function UpdatesPanel() {
+  const { version } = useServerHealth();
+  const current = version.replace(/^v/i, '');
+  const latest = LATEST_VERSION;
+  const known = CHANGELOG.some((r) => r.version === current);
+  const upToDate = !!current && current === latest;
+
+  let statusBadge: ReactNode;
+  let hint: string;
+  if (!current) {
+    statusBadge = <Tag className="border-border bg-muted text-muted-foreground">Checking…</Tag>;
+    hint = 'Contacting the server…';
+  } else if (current === 'dev') {
+    statusBadge = <Tag className="border-zinc-500/35 bg-zinc-500/[0.08] text-zinc-400">Dev build</Tag>;
+    hint = 'Untagged development build — not on a release channel.';
+  } else if (upToDate) {
+    statusBadge = <Tag className="border-emerald-500/35 bg-emerald-500/[0.08] text-emerald-400">Up to date</Tag>;
+    hint = 'You are running the latest release.';
+  } else if (known) {
+    statusBadge = <Tag className="border-amber-500/35 bg-amber-500/[0.08] text-amber-400">Update available</Tag>;
+    hint = `A newer release, v${latest}, is available.`;
+  } else {
+    statusBadge = <Tag className="border-border bg-muted text-muted-foreground">Unrecognized</Tag>;
+    hint = 'This version is not in the release history.';
+  }
+
+  return (
+    <div className="space-y-5">
+      <Section title="Current version" subtitle="Reported by the running server">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <span className="grid h-11 w-11 shrink-0 place-items-center border border-border bg-background text-muted-foreground">
+              <Package className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-heading text-[22px] font-semibold leading-none text-foreground">{current ? `v${current}` : '—'}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            {statusBadge}
+            {!!current && current !== 'dev' && !upToDate && (
+              <span className="font-mono text-[11px] text-muted-foreground">latest v{latest}</span>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Release history" subtitle="What changed in each version">
+        <ol>
+          {CHANGELOG.map((release, i) => (
+            <ReleaseRow
+              key={release.version}
+              release={release}
+              running={release.version === current}
+              isLatest={release.version === latest}
+              isLast={i === CHANGELOG.length - 1}
+            />
+          ))}
+        </ol>
+      </Section>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { mode, setTheme, accentColor, setAccentColor } = useTheme();
   const [twoFactor, setTwoFactor] = useState(true);
@@ -392,6 +509,7 @@ export default function Settings() {
           <TabsTrigger value="server" className={tabTrigger}>Server</TabsTrigger>
           <TabsTrigger value="backup" className={tabTrigger}>Backup &amp; Sync</TabsTrigger>
           <TabsTrigger value="security" className={tabTrigger}>Security</TabsTrigger>
+          <TabsTrigger value="updates" className={tabTrigger}>Updates</TabsTrigger>
         </TabsList>
 
         <TabsContent value="appearance" className="space-y-5">
@@ -471,6 +589,10 @@ export default function Settings() {
             <Row label="Encryption at rest" desc="AES-256 encryption for all stored vault data." control={<span className="border border-emerald-500/35 bg-emerald-500/[0.08] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-emerald-400">Enabled</span>} />
             <Row label="Audit logging" desc="Record all admin actions for compliance." control={<span className="border border-emerald-500/35 bg-emerald-500/[0.08] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-emerald-400">Enabled</span>} />
           </Section>
+        </TabsContent>
+
+        <TabsContent value="updates" className="space-y-5">
+          <UpdatesPanel />
         </TabsContent>
       </Tabs>
     </div>
