@@ -98,12 +98,12 @@ const adminBackupsItem: NavItem = { id: 'admin-backups', label: 'Backups', path:
 const accountItem: NavItem = { id: 'account', label: 'Account', path: '/account', icon: 'UserCircle' };
 
 const adminItems: NavItem[] = [
-  { id: 'overview', label: 'Overview', path: '/', icon: 'LayoutDashboard' },
-  { id: 'users', label: 'Users', path: '/users', icon: 'Users' },
-  { id: 'invitations', label: 'Invitations', path: '/invitations', icon: 'Mail' },
-  { id: 'storage', label: 'Storage', path: '/storage', icon: 'Database' },
+  { id: 'overview', label: 'Overview', path: '/admin', icon: 'LayoutDashboard' },
+  { id: 'users', label: 'Users', path: '/admin/users', icon: 'Users' },
+  { id: 'invitations', label: 'Invitations', path: '/admin/invitations', icon: 'Mail' },
+  { id: 'storage', label: 'Storage', path: '/admin/storage', icon: 'Database' },
   adminBackupsItem,
-  { id: 'settings', label: 'Settings', path: '/settings', icon: 'Settings' },
+  { id: 'settings', label: 'Settings', path: '/admin/settings', icon: 'Settings' },
 ];
 
 // Flat list of every console path, for lookups such as the TopBar breadcrumb.

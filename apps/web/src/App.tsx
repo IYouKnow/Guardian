@@ -87,12 +87,12 @@ function App() {
               <Route element={<ConsoleLayout />}>
                 <Route path="/account" element={<Account />} />
                 <Route element={<RequireAdmin />}>
-                  <Route path="/" element={<Overview />} />
-                  <Route path="/users" element={<Users />} />
-                  <Route path="/invitations" element={<Invitations />} />
-                  <Route path="/storage" element={<Storage />} />
+                  <Route path="/admin" element={<Overview />} />
+                  <Route path="/admin/users" element={<Users />} />
+                  <Route path="/admin/invitations" element={<Invitations />} />
+                  <Route path="/admin/storage" element={<Storage />} />
                   <Route path="/admin/backups" element={<Backups variant="admin" />} />
-                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/admin/settings" element={<Settings />} />
                 </Route>
                 <Route element={<RequireBackupAccess />}>
                   <Route path="/backups" element={<Backups variant="personal" />} />
@@ -100,19 +100,25 @@ function App() {
               </Route>
             </Route>
 
-            {/* Legacy URLs kept working for existing links/bookmarks. */}
-            <Route path="/dashboard" element={<Navigate to="/" replace />} />
-            <Route path="/invites" element={<Navigate to="/invitations" replace />} />
+            {/* Legacy URLs kept working for existing links/bookmarks. The admin
+                pages moved under /admin; the old flat paths redirect there. */}
+            <Route path="/" element={<Navigate to="/admin" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/admin" replace />} />
+            <Route path="/users" element={<Navigate to="/admin/users" replace />} />
+            <Route path="/invitations" element={<Navigate to="/admin/invitations" replace />} />
+            <Route path="/invites" element={<Navigate to="/admin/invitations" replace />} />
+            <Route path="/storage" element={<Navigate to="/admin/storage" replace />} />
+            <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
             <Route path="/backup" element={<Navigate to="/backups" replace />} />
-            <Route path="/next" element={<Navigate to="/" replace />} />
-            <Route path="/next/users" element={<Navigate to="/users" replace />} />
-            <Route path="/next/invitations" element={<Navigate to="/invitations" replace />} />
-            <Route path="/next/storage" element={<Navigate to="/storage" replace />} />
+            <Route path="/next" element={<Navigate to="/admin" replace />} />
+            <Route path="/next/users" element={<Navigate to="/admin/users" replace />} />
+            <Route path="/next/invitations" element={<Navigate to="/admin/invitations" replace />} />
+            <Route path="/next/storage" element={<Navigate to="/admin/storage" replace />} />
             <Route path="/next/backups" element={<Navigate to="/backups" replace />} />
-            <Route path="/next/settings" element={<Navigate to="/settings" replace />} />
+            <Route path="/next/settings" element={<Navigate to="/admin/settings" replace />} />
             <Route path="/next/account" element={<Navigate to="/account" replace />} />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </BrowserRouter>
       </ConsoleThemeProvider>

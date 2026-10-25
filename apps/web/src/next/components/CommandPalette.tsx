@@ -56,7 +56,7 @@ export default function CommandPalette({ open, onOpenChange }: CommandPalettePro
           <>
             <CommandGroup heading="Users">
               {users.slice(0, 5).map((u) => (
-                <CommandItem key={u.id} onSelect={() => go('/users')} className="gap-3 rounded-sm">
+                <CommandItem key={u.id} onSelect={() => go('/admin/users')} className="gap-3 rounded-sm">
                   <span className="grid h-6 w-6 place-items-center border border-border bg-primary/10 font-mono text-[10px] font-semibold text-primary">{u.avatar}</span>
                   <span className="flex-1">{u.name}</span>
                   <span className="font-mono text-[10px] text-muted-foreground">{u.email}</span>
@@ -70,12 +70,12 @@ export default function CommandPalette({ open, onOpenChange }: CommandPalettePro
                 <span>Backups &amp; Google Drive</span>
                 <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
               </CommandItem>
-              <CommandItem onSelect={() => go('/invitations')} className="gap-3 rounded-sm">
+              <CommandItem onSelect={() => go('/admin/invitations')} className="gap-3 rounded-sm">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <span>Invite new user</span>
                 <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
               </CommandItem>
-              <CommandItem onSelect={() => go('/settings')} className="gap-3 rounded-sm">
+              <CommandItem onSelect={() => go('/admin/settings')} className="gap-3 rounded-sm">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <span>Open settings</span>
                 <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />

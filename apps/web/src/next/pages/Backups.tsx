@@ -229,7 +229,7 @@ function RemoteDestination({ destination, loading, onChanged }: RemoteDestinatio
                 <p className="text-[13px] font-medium text-foreground">Add your Google OAuth client first</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Set the client ID and secret in{' '}
-                  <Link to="/settings" className="text-foreground underline underline-offset-2">Settings → Backup &amp; Sync</Link>
+                  <Link to="/admin/settings" className="text-foreground underline underline-offset-2">Settings → Backup &amp; Sync</Link>
                   , then connect here.
                 </p>
               </div>
