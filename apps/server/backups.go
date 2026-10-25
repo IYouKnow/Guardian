@@ -47,6 +47,7 @@ type BackupRecord struct {
 	Error        string    `json:"error"`
 	RemoteStatus string    `json:"remote_status"`
 	RemoteError  string    `json:"remote_error"`
+	Owner        string    `json:"owner"` // owning username; empty for server-wide snapshots
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -265,11 +266,13 @@ func (s *Server) backupByID(id int64) (BackupRecord, error) {
 	var rec BackupRecord
 	var scheduleID sql.NullInt64
 	err := s.systemDB.QueryRow(`
-		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error, created_at
-		FROM backups WHERE id = ?
+		SELECT b.id, b.filename, b.size, b.vaults, b.status, b.trigger, b.schedule_id, b.duration_ms, b.error, b.remote_status, b.remote_error, b.created_at, COALESCE(u.username, '')
+		FROM backups b
+		LEFT JOIN users u ON u.id = b.owner_id
+		WHERE b.id = ?
 	`, id).Scan(
 		&rec.ID, &rec.Filename, &rec.Size, &rec.Vaults, &rec.Status,
-		&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt,
+		&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt, &rec.Owner,
 	)
 	if err != nil {
 		return BackupRecord{}, err
@@ -294,14 +297,16 @@ func backupListLimit(r *http.Request) int {
 }
 
 // respondBackups streams backup history matching where (plus args), newest first.
+// Each row carries its owning username so an admin list can label user snapshots.
 func (s *Server) respondBackups(w http.ResponseWriter, limit int, where string, args ...any) {
 	query := `
-		SELECT id, filename, size, vaults, status, trigger, schedule_id, duration_ms, error, remote_status, remote_error, created_at
-		FROM backups`
+		SELECT b.id, b.filename, b.size, b.vaults, b.status, b.trigger, b.schedule_id, b.duration_ms, b.error, b.remote_status, b.remote_error, b.created_at, COALESCE(u.username, '')
+		FROM backups b
+		LEFT JOIN users u ON u.id = b.owner_id`
 	if where != "" {
 		query += " WHERE " + where
 	}
-	query += " ORDER BY id DESC LIMIT ?"
+	query += " ORDER BY b.id DESC LIMIT ?"
 	args = append(args, limit)
 
 	rows, err := s.systemDB.Query(query, args...)
@@ -318,7 +323,7 @@ func (s *Server) respondBackups(w http.ResponseWriter, limit int, where string, 
 		var scheduleID sql.NullInt64
 		if err := rows.Scan(
 			&rec.ID, &rec.Filename, &rec.Size, &rec.Vaults, &rec.Status,
-			&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt,
+			&rec.Trigger, &scheduleID, &rec.DurationMs, &rec.Error, &rec.RemoteStatus, &rec.RemoteError, &rec.CreatedAt, &rec.Owner,
 		); err != nil {
 			s.logger.Println("respondBackups: scan error:", err)
 			continue
@@ -338,10 +343,10 @@ func (s *Server) respondBackups(w http.ResponseWriter, limit int, where string, 
 	writeJSON(w, http.StatusOK, records)
 }
 
-// handleListBackups returns the server-wide backup history, newest first. User
-// snapshots are excluded — they are only ever visible to their owner.
+// handleListBackups returns the full backup history, newest first: server-wide
+// snapshots plus every user's, each labelled with its owner.
 func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
-	s.respondBackups(w, backupListLimit(r), "owner_id IS NULL")
+	s.respondBackups(w, backupListLimit(r), "")
 }
 
 // usersCanBackup reports whether the operator has enabled user-initiated backups.
@@ -356,7 +361,7 @@ func (s *Server) usersCanBackup() bool {
 // handleListUserBackups returns the caller's own snapshots, newest first.
 func (s *Server) handleListUserBackups(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(int)
-	s.respondBackups(w, backupListLimit(r), "owner_id = ?", userID)
+	s.respondBackups(w, backupListLimit(r), "b.owner_id = ?", userID)
 }
 
 // handleCreateUserBackup snapshots only the caller's vault database.
@@ -421,7 +426,8 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, rec)
 }
 
-// handleDeleteBackup removes a server-wide history row and its archive.
+// handleDeleteBackup removes a history row and its archive. Admins may delete any
+// backup — server-wide or a user's.
 func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -430,7 +436,7 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var filename string
-	err = s.systemDB.QueryRow("SELECT filename FROM backups WHERE id = ? AND owner_id IS NULL", id).Scan(&filename)
+	err = s.systemDB.QueryRow("SELECT filename FROM backups WHERE id = ?", id).Scan(&filename)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Backup not found", http.StatusNotFound)
 		return
@@ -443,7 +449,7 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 		os.Remove(filepath.Join(s.snapshotDir(), filename)) // best-effort
 	}
 
-	if _, err := s.systemDB.Exec("DELETE FROM backups WHERE id = ? AND owner_id IS NULL", id); err != nil {
+	if _, err := s.systemDB.Exec("DELETE FROM backups WHERE id = ?", id); err != nil {
 		http.Error(w, "Failed to delete backup", http.StatusInternalServerError)
 		return
 	}

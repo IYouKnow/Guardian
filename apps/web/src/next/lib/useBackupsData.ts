@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi, type BackupDestination, type BackupRecord, type BackupSchedule } from '@/api/admin';
 import { userBackupApi } from '@/api/backups';
-import { authApi } from '@/api/auth';
+
+export type BackupsVariant = 'personal' | 'admin';
 
 export interface BackupsData {
   backups: BackupRecord[] | null;
@@ -12,24 +13,22 @@ export interface BackupsData {
 }
 
 /**
- * Loads the data behind the Backups page. Admins get the server-wide view
- * (history, schedules and the Google Drive destination). Regular users with
- * backups enabled get only their own snapshots, so schedules and the remote
- * destination stay empty for them.
+ * Loads the data behind the Backups page. The `personal` variant reads the
+ * caller's own vault snapshots; the `admin` variant reads the full history across
+ * all users plus schedules and the Google Drive destination.
  *
  * The requests settle independently and each payload is shape-checked, so a
  * single failure (an expired session, an old server without the routes) only
  * leaves that panel on its placeholder instead of blanking the page.
  */
-export function useBackupsData(): BackupsData {
-  const isAdmin = authApi.isAdmin();
+export function useBackupsData(variant: BackupsVariant): BackupsData {
   const [backups, setBackups] = useState<BackupRecord[] | null>(null);
   const [schedules, setSchedules] = useState<BackupSchedule[] | null>(null);
   const [destination, setDestination] = useState<BackupDestination | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!isAdmin) {
+    if (variant === 'personal') {
       const [list] = await Promise.allSettled([userBackupApi.list()]);
       if (list.status === 'fulfilled' && Array.isArray(list.value)) setBackups(list.value);
       setSchedules([]);
@@ -45,7 +44,7 @@ export function useBackupsData(): BackupsData {
     if (list.status === 'fulfilled' && Array.isArray(list.value)) setBackups(list.value);
     if (sched.status === 'fulfilled' && Array.isArray(sched.value)) setSchedules(sched.value);
     if (dest.status === 'fulfilled' && dest.value) setDestination(dest.value);
-  }, [isAdmin]);
+  }, [variant]);
 
   useEffect(() => {
     let active = true;

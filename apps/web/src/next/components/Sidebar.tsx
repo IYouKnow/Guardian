@@ -18,7 +18,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { version } = useServerHealth();
   // Personal holds every account's own items; the Admin section is added for
   // admins. Routes are gated by RequireAdmin / RequireBackupAccess as well.
-  const sections = navSectionsFor(authApi.isAdmin(), authApi.canAccessBackups());
+  const sections = navSectionsFor(authApi.isAdmin(), authApi.canBackup());
 
   return (
     <aside

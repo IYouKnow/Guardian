@@ -66,6 +66,7 @@ export interface BackupRecord {
     error: string;
     remote_status: '' | 'pending' | 'uploaded' | 'failed';
     remote_error: string;
+    owner: string;
     created_at: string;
 }
 

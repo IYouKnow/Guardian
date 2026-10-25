@@ -62,14 +62,17 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
-// RequireBackupAccess admits admins and any user the operator granted backups to
-// (the "Allow users to create backups" setting). Also a UX gate: the server
-// re-checks the same rule on every backup route.
+// RequireBackupAccess gates the personal (own-vault) backups view, which the
+// operator enables with "Allow users to create backups". A UX gate: the server
+// re-checks the setting on every personal backup route. Admin access to the
+// server-wide view is gated by RequireAdmin instead.
 function RequireBackupAccess() {
-  if (!authApi.canAccessBackups()) {
-    return <Navigate to="/account" replace />;
+  if (authApi.canBackup()) {
+    return <Outlet />;
   }
-  return <Outlet />;
+  // Admins who reach the personal URL without user backups enabled still have
+  // the server-wide view.
+  return <Navigate to={authApi.isAdmin() ? '/admin/backups' : '/account'} replace />;
 }
 
 function App() {
@@ -88,10 +91,11 @@ function App() {
                   <Route path="/users" element={<Users />} />
                   <Route path="/invitations" element={<Invitations />} />
                   <Route path="/storage" element={<Storage />} />
+                  <Route path="/admin/backups" element={<Backups variant="admin" />} />
                   <Route path="/settings" element={<Settings />} />
                 </Route>
                 <Route element={<RequireBackupAccess />}>
-                  <Route path="/backups" element={<Backups />} />
+                  <Route path="/backups" element={<Backups variant="personal" />} />
                 </Route>
               </Route>
             </Route>

@@ -95,11 +95,12 @@ export const authApi = {
         return user?.is_admin || false;
     },
 
-    // Whether the session may open the Backups page: always for admins, and for
-    // regular users only when the operator enabled user backups.
-    canAccessBackups(): boolean {
+    // Whether the operator enabled user backups (the personal, own-vault view).
+    // This is the same for every account, admins included; admin access to the
+    // server-wide view comes from isAdmin().
+    canBackup(): boolean {
         const user = this.getStoredUser();
-        return !!user?.is_admin || !!user?.can_backup;
+        return !!user?.can_backup;
     },
 
     getToken(): string | null {

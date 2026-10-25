@@ -69,9 +69,14 @@ func TestCreateUserBackupSnapshotsOwnVaultOnly(t *testing.T) {
 		t.Fatalf("user backup entries = %v, want alice.db", names)
 	}
 
-	// The admin history is server-wide and must not leak the user's snapshot.
-	if got := listBackups(t, s, ""); len(got) != 0 {
-		t.Fatalf("admin list len = %d, want 0 (user backups are owner-scoped)", len(got))
+	// The admin history lists every backup, labelling the user's snapshot with its
+	// owner.
+	adminList := listBackups(t, s, "")
+	if len(adminList) != 1 {
+		t.Fatalf("admin list len = %d, want 1", len(adminList))
+	}
+	if adminList[0].Owner != "alice" {
+		t.Fatalf("admin list owner = %q, want alice", adminList[0].Owner)
 	}
 }
 

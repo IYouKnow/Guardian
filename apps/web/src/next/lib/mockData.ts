@@ -77,8 +77,9 @@ export const currentAdmin = {
 };
 
 // Canonical console paths. The sidebar groups them into a Personal section
-// (every account's own area, including Backups) and an Admin section (platform
-// management, admins only).
+// (every account's own area) and an Admin section (platform management, admins
+// only). Backups appears in both when applicable: the Personal entry is the
+// account's own vault, the Admin entry is the full history across all users.
 export interface NavItem {
   id: string;
   label: string;
@@ -92,7 +93,8 @@ export interface NavSection {
   items: NavItem[];
 }
 
-const backupsItem: NavItem = { id: 'backups', label: 'Backups', path: '/backups', icon: 'Archive' };
+const personalBackupsItem: NavItem = { id: 'backups', label: 'Backups', path: '/backups', icon: 'Archive' };
+const adminBackupsItem: NavItem = { id: 'admin-backups', label: 'Backups', path: '/admin/backups', icon: 'Archive' };
 const accountItem: NavItem = { id: 'account', label: 'Account', path: '/account', icon: 'UserCircle' };
 
 const adminItems: NavItem[] = [
@@ -100,18 +102,19 @@ const adminItems: NavItem[] = [
   { id: 'users', label: 'Users', path: '/users', icon: 'Users' },
   { id: 'invitations', label: 'Invitations', path: '/invitations', icon: 'Mail' },
   { id: 'storage', label: 'Storage', path: '/storage', icon: 'Database' },
+  adminBackupsItem,
   { id: 'settings', label: 'Settings', path: '/settings', icon: 'Settings' },
 ];
 
 // Flat list of every console path, for lookups such as the TopBar breadcrumb.
-export const navItems: NavItem[] = [...adminItems, backupsItem, accountItem];
+export const navItems: NavItem[] = [...adminItems, personalBackupsItem, accountItem];
 
 // navSectionsFor resolves the sidebar groups for a session. Personal holds the
-// account's own items — Backups (when the session may back up) and Account — and
+// account's own items — Backups (when user backups are enabled) and Account — and
 // the Admin section is added for admins.
 export function navSectionsFor(isAdmin: boolean, canBackup: boolean): NavSection[] {
   const personal: NavItem[] = [];
-  if (canBackup) personal.push(backupsItem);
+  if (canBackup) personal.push(personalBackupsItem);
   personal.push(accountItem);
 
   const sections: NavSection[] = [{ id: 'personal', label: 'Personal', items: personal }];

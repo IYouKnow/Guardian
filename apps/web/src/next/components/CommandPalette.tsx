@@ -14,7 +14,7 @@ interface CommandPaletteProps {
 export default function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const isAdmin = authApi.isAdmin();
-  const sections = navSectionsFor(isAdmin, authApi.canAccessBackups());
+  const sections = navSectionsFor(isAdmin, authApi.canBackup());
   // Continuous numbering across the sections.
   const navOrder = new Map(sections.flatMap((s) => s.items).map((item, i) => [item.id, i + 1] as const));
 

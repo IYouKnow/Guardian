@@ -17,12 +17,11 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@next/components/ui/dialog';
 import { MockBadge } from '@next/components/MockBadge';
-import { useBackupsData } from '@next/lib/useBackupsData';
+import { useBackupsData, type BackupsVariant } from '@next/lib/useBackupsData';
 import { useSSE } from '@/hooks/useSSE';
 import { formatBytes, formatRelativeTime } from '@next/lib/format';
 import { adminApi, type BackupDestination, type BackupRecord, type BackupSchedule } from '@/api/admin';
 import { userBackupApi } from '@/api/backups';
-import { authApi } from '@/api/auth';
 import { Icon } from '@next/components/Icon';
 import { Plus, Server, Calendar, MoreHorizontal, Zap, Trash2, Loader2, Archive, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -357,15 +356,16 @@ function RemoteDestination({ destination, loading, onChanged }: RemoteDestinatio
 interface BackupHistoryTableProps {
   rows: BackupRecord[];
   loading: boolean;
-  // Admins see the remote (Google Drive) upload column; users' snapshots never
-  // upload, so it is hidden for them.
-  showDrive: boolean;
+  // The admin view lists every user's snapshots, so it shows the owner and Drive
+  // columns; the personal view shows only the caller's own vault.
+  variant: 'personal' | 'admin';
   pendingId: number | null;
   onDelete: (id: number) => void;
 }
 
-function BackupHistoryTable({ rows, loading, showDrive, pendingId, onDelete }: BackupHistoryTableProps) {
-  const colSpan = showDrive ? 9 : 8;
+function BackupHistoryTable({ rows, loading, variant, pendingId, onDelete }: BackupHistoryTableProps) {
+  const admin = variant === 'admin';
+  const colSpan = admin ? 10 : 8;
   return (
     <Card className="overflow-hidden rounded-sm border-border bg-card">
       <div className="overflow-x-auto">
@@ -373,12 +373,13 @@ function BackupHistoryTable({ rows, loading, showDrive, pendingId, onDelete }: B
           <thead>
             <tr className="border-b border-border text-left">
               <th className="text-eyebrow px-5 py-2.5 font-medium">Backup</th>
+              {admin && <th className="text-eyebrow px-5 py-2.5 font-medium">Owner</th>}
               <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Source</th>
               <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Vaults</th>
               <th className="text-eyebrow px-5 py-2.5 font-medium">Size</th>
               <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Duration</th>
               <th className="text-eyebrow px-5 py-2.5 font-medium">Status</th>
-              {showDrive && <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Drive</th>}
+              {admin && <th className="text-eyebrow hidden px-5 py-2.5 font-medium md:table-cell">Drive</th>}
               <th className="text-eyebrow hidden px-5 py-2.5 font-medium lg:table-cell">Time</th>
               <th className="px-5 py-2.5"></th>
             </tr>
@@ -406,12 +407,13 @@ function BackupHistoryTable({ rows, loading, showDrive, pendingId, onDelete }: B
                     <span className="font-mono text-[12px] text-foreground">{b.filename || `backup #${b.id}`}</span>
                   </div>
                 </td>
+                {admin && <td className="px-5 py-3"><span className="font-mono text-[11px] text-muted-foreground">{b.owner || 'Server'}</span></td>}
                 <td className="hidden px-5 py-3 text-[12px] capitalize text-muted-foreground md:table-cell">{b.trigger === 'schedule' ? 'Scheduled' : 'Manual'}</td>
                 <td className="hidden px-5 py-3 font-mono text-[11px] tabular-nums text-muted-foreground lg:table-cell">{b.vaults}</td>
                 <td className="px-5 py-3 font-mono text-[11px] tabular-nums text-foreground">{formatBytes(b.size)}</td>
                 <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground lg:table-cell">{formatDuration(b.duration_ms)}</td>
                 <td className="px-5 py-3"><StatusBadge status={b.status} /></td>
-                {showDrive && <td className="hidden px-5 py-3 md:table-cell"><DriveBadge status={b.remote_status} /></td>}
+                {admin && <td className="hidden px-5 py-3 md:table-cell"><DriveBadge status={b.remote_status} /></td>}
                 <td className="hidden px-5 py-3 font-mono text-[11px] text-muted-foreground lg:table-cell">{formatRelativeTime(b.created_at)}</td>
                 <td className="px-5 py-3 text-right">
                   <DropdownMenu>
@@ -439,9 +441,9 @@ function BackupHistoryTable({ rows, loading, showDrive, pendingId, onDelete }: B
   );
 }
 
-export default function Backups() {
-  const isAdmin = authApi.isAdmin();
-  const { backups, schedules, destination, loading, refresh } = useBackupsData();
+export default function Backups({ variant }: { variant: BackupsVariant }) {
+  const isAdminView = variant === 'admin';
+  const { backups, schedules, destination, loading, refresh } = useBackupsData(variant);
   const [searchParams, setSearchParams] = useSearchParams();
   const { lastEvent } = useSSE();
 
@@ -477,7 +479,7 @@ export default function Backups() {
   const createBackup = async () => {
     setCreating(true);
     try {
-      const rec = isAdmin ? await adminApi.createBackup() : await userBackupApi.create();
+      const rec = isAdminView ? await adminApi.createBackup() : await userBackupApi.create();
       if (rec.status === 'failed') {
         toast.error('Backup failed');
       } else {
@@ -494,7 +496,7 @@ export default function Backups() {
   const deleteBackup = async (id: number) => {
     setPendingId(id);
     try {
-      if (isAdmin) {
+      if (isAdminView) {
         await adminApi.deleteBackup(id);
       } else {
         await userBackupApi.remove(id);
@@ -560,9 +562,9 @@ export default function Backups() {
 
   const rows = backups ?? [];
 
-  // Regular users get a scoped view: only their own vault snapshots, with no
-  // schedules or remote destination. Admins keep the full server-wide page.
-  if (!isAdmin) {
+  // The personal view is the account's own vault: no schedules, no remote
+  // destination, and no other users' snapshots. The admin view below covers all.
+  if (variant === 'personal') {
     return (
       <div className="animate-fade-in-up">
         <PageHeader
@@ -577,7 +579,7 @@ export default function Backups() {
           }
         />
 
-        <BackupHistoryTable rows={rows} loading={loading} showDrive={false} pendingId={pendingId} onDelete={deleteBackup} />
+        <BackupHistoryTable rows={rows} loading={loading} variant="personal" pendingId={pendingId} onDelete={deleteBackup} />
       </div>
     );
   }
@@ -587,7 +589,7 @@ export default function Backups() {
       <PageHeader
         eyebrow="Infrastructure"
         title="Backups"
-        description="Snapshot the local vault databases to disk, and optionally mirror an encrypted copy to Google Drive."
+        description="Server-wide snapshots and every user's vault backups, with an optional encrypted mirror to Google Drive."
         badge={
           <>
             <span className={countPill}>{rows.length} backups</span>
@@ -618,7 +620,7 @@ export default function Backups() {
         </TabsList>
 
         <TabsContent value="history">
-          <BackupHistoryTable rows={rows} loading={loading} showDrive pendingId={pendingId} onDelete={deleteBackup} />
+          <BackupHistoryTable rows={rows} loading={loading} variant="admin" pendingId={pendingId} onDelete={deleteBackup} />
         </TabsContent>
 
         <TabsContent value="schedules" className="space-y-4">
