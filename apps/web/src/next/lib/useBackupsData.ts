@@ -44,7 +44,10 @@ export function useBackupsData(variant: BackupsVariant): BackupsData {
 
   useEffect(() => {
     let active = true;
-    load().finally(() => { if (active) setLoading(false); });
+    void (async () => {
+      await load();
+      if (active) setLoading(false);
+    })();
     return () => { active = false; };
   }, [load]);
 
