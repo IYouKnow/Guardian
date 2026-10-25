@@ -14,6 +14,7 @@ import {
   consoleThemeClass,
 } from '@next/lib/appearance';
 import { adminApi, type PlatformInfo } from '@/api/admin';
+import { authApi } from '@/api/auth';
 import { formatUptime } from '@next/lib/format';
 import { CHANGELOG, KIND_LABELS, KIND_STYLES, LATEST_VERSION, type Release } from '@next/lib/changelog';
 import { useServerHealth } from '@next/lib/useServerHealth';
@@ -262,6 +263,13 @@ function BackupsTab() {
     save(true);
     try {
       await adminApi.updateSetting(key, next ? '1' : '0');
+      // Refresh the cached session user so the gated nav and route guards follow
+      // the change immediately instead of waiting for a reload.
+      try {
+        await authApi.me();
+      } catch {
+        // A failed refresh must not undo a successful setting change.
+      }
       toast.success(onMessage);
     } catch {
       setLocal(previous);

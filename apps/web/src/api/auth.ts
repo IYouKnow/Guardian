@@ -32,6 +32,25 @@ export interface SetupStatusResponse {
     status: 'SETUP' | 'READY';
 }
 
+// --- Session-user reactivity ---
+// The console reads the cached session user synchronously (sidebar gating, route
+// guards). Components subscribe to this so a change made elsewhere — such as the
+// operator toggling backups in Settings — is reflected without a reload.
+const userListeners = new Set<() => void>();
+
+export function subscribeUser(listener: () => void): () => void {
+    userListeners.add(listener);
+    return () => { userListeners.delete(listener); };
+}
+
+export function getUserSnapshot(): string {
+    return localStorage.getItem('guardian_user') ?? '';
+}
+
+function emitUserChange(): void {
+    for (const listener of userListeners) listener();
+}
+
 export const authApi = {
     async login(credentials: LoginRequest): Promise<AuthResponse> {
         const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
@@ -44,6 +63,7 @@ export const authApi = {
             can_backup: response.data.can_backup,
             backups_enabled: response.data.backups_enabled,
         }));
+        emitUserChange();
 
         return response.data;
     },
@@ -77,12 +97,14 @@ export const authApi = {
             can_backup: response.data.can_backup,
             backups_enabled: response.data.backups_enabled,
         }));
+        emitUserChange();
         return response.data;
     },
 
     logout() {
         localStorage.removeItem('guardian_token');
         localStorage.removeItem('guardian_user');
+        emitUserChange();
     },
 
     getStoredUser() {

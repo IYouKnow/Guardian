@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Lock, ChevronsLeft } from 'lucide-react';
 import { navSectionsFor, platformMeta } from '@next/lib/mockData';
 import { useServerHealth } from '@next/lib/useServerHealth';
 import { Icon } from '@next/components/Icon';
-import { authApi } from '@/api/auth';
+import { authApi, getUserSnapshot, subscribeUser } from '@/api/auth';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -16,6 +16,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const [hovered, setHovered] = useState<string | null>(null);
   const { version } = useServerHealth();
+  // Re-render when the cached session user changes — e.g. backups toggled in
+  // Settings — so gated nav items appear or disappear immediately.
+  useSyncExternalStore(subscribeUser, getUserSnapshot);
   // Personal holds every account's own items; the Admin section is added for
   // admins. Routes are gated by RequireAdmin / RequireBackupAccess as well.
   const sections = navSectionsFor(authApi.isAdmin(), authApi.canBackup());
