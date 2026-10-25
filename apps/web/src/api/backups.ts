@@ -17,4 +17,13 @@ export const userBackupApi = {
     async remove(id: number): Promise<void> {
         await apiClient.delete(`/api/backups/${id}`);
     },
+
+    async download(id: number): Promise<Blob> {
+        // No client-side timeout: the archive can take longer than the default 10s.
+        const response = await apiClient.get<Blob>(`/api/backups/${id}/download`, {
+            responseType: 'blob',
+            timeout: 0,
+        });
+        return response.data;
+    },
 };

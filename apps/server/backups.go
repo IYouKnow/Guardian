@@ -458,6 +458,75 @@ func (s *Server) handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// serveBackupFile streams a backup archive to the client as a download. A failed
+// run has no archive on disk, so it is reported as unavailable (409) rather than
+// as a missing record.
+func (s *Server) serveBackupFile(w http.ResponseWriter, r *http.Request, rec BackupRecord) {
+	if rec.Filename == "" {
+		http.Error(w, "Backup file is not available", http.StatusConflict)
+		return
+	}
+
+	// Filenames are server-generated, but base-name the stored value anyway so a
+	// crafted row can never escape the snapshot directory.
+	name := filepath.Base(rec.Filename)
+	path := filepath.Join(s.snapshotDir(), name)
+	if _, err := os.Stat(path); err != nil {
+		http.Error(w, "Backup file not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(name))
+	http.ServeFile(w, r, path)
+
+	s.recordActivity(s.actorName(r), "downloaded a backup", name, "backup")
+}
+
+// handleDownloadBackup streams any backup archive; admin only.
+func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "Invalid backup ID", http.StatusBadRequest)
+		return
+	}
+
+	rec, err := s.backupByID(int64(id))
+	if err == sql.ErrNoRows {
+		http.Error(w, "Backup not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	s.serveBackupFile(w, r, rec)
+}
+
+// handleDownloadUserBackup streams one of the caller's own archives. The owner_id
+// filter means a user can never download another account's backup.
+func (s *Server) handleDownloadUserBackup(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "Invalid backup ID", http.StatusBadRequest)
+		return
+	}
+
+	var rec BackupRecord
+	err = s.systemDB.QueryRow("SELECT filename FROM backups WHERE id = ? AND owner_id = ?", id, userID).Scan(&rec.Filename)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Backup not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	s.serveBackupFile(w, r, rec)
+}
+
 // --- Schedules ---
 
 // handleListSchedules returns every schedule, oldest first.

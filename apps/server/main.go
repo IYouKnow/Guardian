@@ -163,6 +163,7 @@ func main() {
 	mux.HandleFunc("GET /api/admin/backups", server.withAdminAuth(server.handleListBackups))
 	mux.HandleFunc("POST /api/admin/backups", server.withAdminAuth(server.handleCreateBackup))
 	mux.HandleFunc("DELETE /api/admin/backups/{id}", server.withAdminAuth(server.handleDeleteBackup))
+	mux.HandleFunc("GET /api/admin/backups/{id}/download", server.withAdminAuth(server.handleDownloadBackup))
 	mux.HandleFunc("GET /api/admin/backup-schedules", server.withAdminAuth(server.handleListSchedules))
 	mux.HandleFunc("POST /api/admin/backup-schedules", server.withAdminAuth(server.handleCreateSchedule))
 	mux.HandleFunc("PUT /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleUpdateSchedule))
@@ -172,6 +173,7 @@ func main() {
 	mux.HandleFunc("GET /api/backups", server.withUserBackupAccess(server.handleListUserBackups))
 	mux.HandleFunc("POST /api/backups", server.withUserBackupAccess(server.handleCreateUserBackup))
 	mux.HandleFunc("DELETE /api/backups/{id}", server.withUserBackupAccess(server.handleDeleteUserBackup))
+	mux.HandleFunc("GET /api/backups/{id}/download", server.withUserBackupAccess(server.handleDownloadUserBackup))
 
 	// Admin / Remote backup destination (Google Drive)
 	mux.HandleFunc("GET /api/admin/backup-destination", server.withAdminAuth(server.handleGetBackupDestination))

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import PageHeader, { StatusBadge } from '@next/components/PageHeader';
+import MetricRail, { type MetricRailItem } from '@next/components/MetricRail';
 import { Card } from '@next/components/ui/card';
 import { Button } from '@next/components/ui/button';
 import { Switch } from '@next/components/ui/switch';
@@ -20,10 +21,11 @@ import { MockBadge } from '@next/components/MockBadge';
 import { useBackupsData, type BackupsVariant } from '@next/lib/useBackupsData';
 import { useSSE } from '@/hooks/useSSE';
 import { formatBytes, formatRelativeTime } from '@next/lib/format';
+import { downloadBlob } from '@next/lib/csv';
 import { adminApi, type BackupDestination, type BackupRecord, type BackupSchedule } from '@/api/admin';
 import { userBackupApi } from '@/api/backups';
 import { Icon } from '@next/components/Icon';
-import { Plus, Server, Calendar, MoreHorizontal, Zap, Trash2, Loader2, Archive, AlertTriangle, Info, Eye, EyeOff } from 'lucide-react';
+import { Plus, Server, Calendar, MoreHorizontal, Zap, Trash2, Loader2, Archive, AlertTriangle, Info, Eye, EyeOff, Search, RotateCw, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -353,17 +355,90 @@ function RemoteDestination({ destination, loading, onChanged }: RemoteDestinatio
   );
 }
 
+const filterTrigger = 'h-9 rounded-sm border-border bg-card font-mono text-[11px] uppercase tracking-wider text-muted-foreground';
+
+interface HistoryToolbarProps {
+  query: string;
+  onQueryChange: (value: string) => void;
+  status: string;
+  onStatusChange: (value: string) => void;
+  source: string;
+  onSourceChange: (value: string) => void;
+  drive: string;
+  onDriveChange: (value: string) => void;
+  // The Drive column only exists in the admin view, so its filter follows suit.
+  showDrive: boolean;
+  loading: boolean;
+  onRefresh: () => void;
+}
+
+// Client-side search + filters over the already-loaded history rows.
+function HistoryToolbar({
+  query, onQueryChange, status, onStatusChange, source, onSourceChange,
+  drive, onDriveChange, showDrive, loading, onRefresh,
+}: HistoryToolbarProps) {
+  return (
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="relative flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search by filename or owner…"
+          className="h-9 max-w-sm rounded-sm border-border bg-card pl-9 text-[13px]"
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={status} onValueChange={onStatusChange}>
+          <SelectTrigger className={cn(filterTrigger, 'w-[132px]')}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={source} onValueChange={onSourceChange}>
+          <SelectTrigger className={cn(filterTrigger, 'w-[128px]')}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            <SelectItem value="manual">Manual</SelectItem>
+            <SelectItem value="schedule">Scheduled</SelectItem>
+          </SelectContent>
+        </Select>
+        {showDrive && (
+          <Select value={drive} onValueChange={onDriveChange}>
+            <SelectTrigger className={cn(filterTrigger, 'w-[132px]')}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any Drive</SelectItem>
+              <SelectItem value="uploaded">Uploaded</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="failed">Drive failed</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        <Button variant="outline" size="sm" onClick={onRefresh} className={cn(eyebrowBtn, 'gap-1.5')}>
+          <RotateCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} /> Refresh
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface BackupHistoryTableProps {
   rows: BackupRecord[];
+  // Total rows before filtering, so an empty filtered table reads differently.
+  totalCount: number;
   loading: boolean;
   // The admin view lists every user's snapshots, so it shows the owner and Drive
   // columns; the personal view shows only the caller's own vault.
   variant: 'personal' | 'admin';
   pendingId: number | null;
+  downloadingId: number | null;
   onDelete: (id: number) => void;
+  onDownload: (rec: BackupRecord) => void;
 }
 
-function BackupHistoryTable({ rows, loading, variant, pendingId, onDelete }: BackupHistoryTableProps) {
+function BackupHistoryTable({ rows, totalCount, loading, variant, pendingId, downloadingId, onDelete, onDownload }: BackupHistoryTableProps) {
   const admin = variant === 'admin';
   const colSpan = admin ? 10 : 8;
   return (
@@ -394,8 +469,8 @@ function BackupHistoryTable({ rows, loading, variant, pendingId, onDelete }: Bac
               <tr><td colSpan={colSpan} className="px-5 py-16 text-center">
                 <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
                   <div className="grid h-11 w-11 place-items-center border border-border text-muted-foreground"><Archive className="h-4 w-4" /></div>
-                  <p className="text-sm font-medium text-foreground">No backups yet</p>
-                  <p className="text-xs text-muted-foreground">Create your first snapshot to see it here.</p>
+                  <p className="text-sm font-medium text-foreground">{totalCount > 0 ? 'No matching backups' : 'No backups yet'}</p>
+                  <p className="text-xs text-muted-foreground">{totalCount > 0 ? 'Try a different search or filter.' : 'Create your first snapshot to see it here.'}</p>
                 </div>
               </td></tr>
             )}
@@ -418,11 +493,18 @@ function BackupHistoryTable({ rows, loading, variant, pendingId, onDelete }: Bac
                 <td className="px-5 py-3 text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button disabled={pendingId === b.id} className="grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground">
-                        {pendingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                      <button disabled={pendingId === b.id || downloadingId === b.id} className="grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground">
+                        {pendingId === b.id || downloadingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="rounded-sm border-border bg-card">
+                      <DropdownMenuItem
+                        disabled={!b.filename}
+                        onSelect={() => onDownload(b)}
+                        className="gap-2 font-mono text-[11px] uppercase tracking-wider focus:text-foreground"
+                      >
+                        <Download className="h-3.5 w-3.5" /> Download
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onSelect={() => onDelete(b.id)}
                         className="gap-2 font-mono text-[11px] uppercase tracking-wider text-rose-400 focus:text-rose-300"
@@ -449,6 +531,12 @@ export default function Backups({ variant }: { variant: BackupsVariant }) {
 
   const [creating, setCreating] = useState(false);
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [driveFilter, setDriveFilter] = useState('all');
 
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -510,6 +598,20 @@ export default function Backups({ variant }: { variant: BackupsVariant }) {
     }
   };
 
+  const downloadBackup = async (rec: BackupRecord) => {
+    if (!rec.filename) return;
+    setDownloadingId(rec.id);
+    try {
+      const blob = isAdminView ? await adminApi.downloadBackup(rec.id) : await userBackupApi.download(rec.id);
+      downloadBlob(rec.filename, blob);
+      toast.success('Backup downloaded');
+    } catch {
+      toast.error('Failed to download backup');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const toggleSchedule = async (sc: BackupSchedule) => {
     setPendingId(sc.id);
     try {
@@ -562,6 +664,45 @@ export default function Backups({ variant }: { variant: BackupsVariant }) {
 
   const rows = backups ?? [];
 
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (backups ?? []).filter((b) => {
+      const matchesQuery = !q
+        || (b.filename || '').toLowerCase().includes(q)
+        || (b.owner || '').toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
+      const matchesSource = sourceFilter === 'all' || b.trigger === sourceFilter;
+      const matchesDrive = !isAdminView || driveFilter === 'all' || b.remote_status === driveFilter;
+      return matchesQuery && matchesStatus && matchesSource && matchesDrive;
+    });
+  }, [backups, query, statusFilter, sourceFilter, driveFilter, isAdminView]);
+
+  const stats = useMemo<MetricRailItem[]>(() => {
+    const list = backups ?? [];
+    const total = list.length;
+    const totalSize = list.reduce((acc, b) => acc + (b.size || 0), 0);
+    const ok = list.filter((b) => b.status === 'success').length;
+    const rate = total ? Math.round((ok / total) * 100) : 0;
+    const latest = list[0]?.created_at;
+    return [
+      { id: 'count', label: 'Snapshots', value: String(total), sub: 'in history' },
+      { id: 'size', label: 'Stored', value: formatBytes(totalSize), sub: 'on this server' },
+      { id: 'rate', label: 'Success rate', value: `${rate}%`, sub: total ? `${ok} of ${total} ok` : 'no runs yet' },
+      { id: 'last', label: 'Last backup', value: latest ? formatRelativeTime(latest) : '—', sub: latest ? 'most recent run' : 'none yet' },
+    ];
+  }, [backups]);
+
+  const toolbar = (
+    <HistoryToolbar
+      query={query} onQueryChange={setQuery}
+      status={statusFilter} onStatusChange={setStatusFilter}
+      source={sourceFilter} onSourceChange={setSourceFilter}
+      drive={driveFilter} onDriveChange={setDriveFilter}
+      showDrive={isAdminView}
+      loading={loading} onRefresh={refresh}
+    />
+  );
+
   // The personal view is the account's own vault: no schedules, no remote
   // destination, and no other users' snapshots. The admin view below covers all.
   if (variant === 'personal') {
@@ -579,7 +720,20 @@ export default function Backups({ variant }: { variant: BackupsVariant }) {
           }
         />
 
-        <BackupHistoryTable rows={rows} loading={loading} variant="personal" pendingId={pendingId} onDelete={deleteBackup} />
+        <div className="mb-6"><MetricRail items={stats} /></div>
+
+        {toolbar}
+
+        <BackupHistoryTable
+          rows={filteredRows}
+          totalCount={rows.length}
+          loading={loading}
+          variant="personal"
+          pendingId={pendingId}
+          downloadingId={downloadingId}
+          onDelete={deleteBackup}
+          onDownload={downloadBackup}
+        />
       </div>
     );
   }
@@ -610,6 +764,8 @@ export default function Backups({ variant }: { variant: BackupsVariant }) {
         }
       />
 
+      <div className="mb-6"><MetricRail items={stats} /></div>
+
       <RemoteDestination destination={destination} loading={loading} onChanged={refresh} />
 
       <Tabs defaultValue="history" className="space-y-5">
@@ -620,7 +776,17 @@ export default function Backups({ variant }: { variant: BackupsVariant }) {
         </TabsList>
 
         <TabsContent value="history">
-          <BackupHistoryTable rows={rows} loading={loading} variant="admin" pendingId={pendingId} onDelete={deleteBackup} />
+          {toolbar}
+          <BackupHistoryTable
+            rows={filteredRows}
+            totalCount={rows.length}
+            loading={loading}
+            variant="admin"
+            pendingId={pendingId}
+            downloadingId={downloadingId}
+            onDelete={deleteBackup}
+            onDownload={downloadBackup}
+          />
         </TabsContent>
 
         <TabsContent value="schedules" className="space-y-4">

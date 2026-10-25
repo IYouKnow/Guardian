@@ -1,3 +1,16 @@
+/** Triggers a browser download of an in-memory blob. */
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 /** Triggers a client-side CSV download. Values are quoted/escaped as needed. */
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]): void {
   const escape = (value: string | number): string => {
@@ -10,16 +23,7 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
     ...rows.map((row) => row.map(escape).join(',')),
   ].join('\n');
 
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadBlob(filename, new Blob([content], { type: 'text/csv;charset=utf-8;' }));
 }
 
 /** `guardian-users-export-2026-10-20.csv` */

@@ -206,6 +206,16 @@ export const adminApi = {
         await apiClient.delete(`/api/admin/backups/${id}`);
     },
 
+    async downloadBackup(id: number): Promise<Blob> {
+        // No client-side timeout: a full-server archive can take longer than the
+        // default 10s to stream.
+        const response = await apiClient.get<Blob>(`/api/admin/backups/${id}/download`, {
+            responseType: 'blob',
+            timeout: 0,
+        });
+        return response.data;
+    },
+
     async getSchedules(): Promise<BackupSchedule[]> {
         const response = await apiClient.get<BackupSchedule[]>('/api/admin/backup-schedules');
         return response.data;

@@ -2,6 +2,8 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -152,6 +154,109 @@ func TestDeleteBackupUnknownIs404(t *testing.T) {
 	s.handleDeleteBackup(rr, r)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+}
+
+func TestDownloadBackupServesArchive(t *testing.T) {
+	s, _ := newBackupTestServer(t)
+	rec := createBackupViaHandler(t, s)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/admin/backups/1/download", nil)
+	r.SetPathValue("id", strconv.FormatInt(rec.ID, 10))
+	rr := httptest.NewRecorder()
+	s.handleDownloadBackup(rr, r)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/zip" {
+		t.Fatalf("content-type = %q, want application/zip", ct)
+	}
+	wantCD := `attachment; filename="` + rec.Filename + `"`
+	if cd := rr.Header().Get("Content-Disposition"); cd != wantCD {
+		t.Fatalf("content-disposition = %q, want %q", cd, wantCD)
+	}
+
+	onDisk, err := os.ReadFile(filepath.Join(s.snapshotDir(), rec.Filename))
+	if err != nil {
+		t.Fatalf("read archive: %v", err)
+	}
+	if !bytes.Equal(rr.Body.Bytes(), onDisk) {
+		t.Fatalf("body (%d bytes) does not match archive (%d bytes)", rr.Body.Len(), len(onDisk))
+	}
+}
+
+func TestDownloadBackupUnknownIs404(t *testing.T) {
+	s, _ := newBackupTestServer(t)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/admin/backups/999/download", nil)
+	r.SetPathValue("id", "999")
+	rr := httptest.NewRecorder()
+	s.handleDownloadBackup(rr, r)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+}
+
+func TestDownloadBackupMissingFileIs404(t *testing.T) {
+	s, _ := newBackupTestServer(t)
+	rec := createBackupViaHandler(t, s)
+
+	if err := os.Remove(filepath.Join(s.snapshotDir(), rec.Filename)); err != nil {
+		t.Fatalf("remove archive: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/api/admin/backups/1/download", nil)
+	r.SetPathValue("id", strconv.FormatInt(rec.ID, 10))
+	rr := httptest.NewRecorder()
+	s.handleDownloadBackup(rr, r)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+}
+
+// A failed run records no archive, so the row exists but there is nothing to send.
+func TestDownloadFailedBackupIsConflict(t *testing.T) {
+	s, _ := newBackupTestServer(t)
+
+	res, err := s.systemDB.Exec(
+		`INSERT INTO backups (filename, size, vaults, status, trigger, duration_ms, error) VALUES ('', 0, 0, 'failed', 'manual', 0, 'boom')`)
+	if err != nil {
+		t.Fatalf("insert failed backup: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	r := httptest.NewRequest(http.MethodGet, "/api/admin/backups/1/download", nil)
+	r.SetPathValue("id", strconv.FormatInt(id, 10))
+	rr := httptest.NewRecorder()
+	s.handleDownloadBackup(rr, r)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rr.Code)
+	}
+}
+
+func TestDownloadUserBackupEnforcesOwnership(t *testing.T) {
+	s, userID := newBackupTestServer(t)
+
+	rec, err := s.createBackup("manual", nil, &userID)
+	if err != nil {
+		t.Fatalf("create user backup: %v", err)
+	}
+
+	download := func(asUser int) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/api/backups/1/download", nil)
+		r = r.WithContext(context.WithValue(r.Context(), userIDKey, asUser))
+		r.SetPathValue("id", strconv.FormatInt(rec.ID, 10))
+		rr := httptest.NewRecorder()
+		s.handleDownloadUserBackup(rr, r)
+		return rr
+	}
+
+	if rr := download(userID); rr.Code != http.StatusOK {
+		t.Fatalf("own download status = %d, want 200", rr.Code)
+	}
+	if rr := download(userID + 999); rr.Code != http.StatusNotFound {
+		t.Fatalf("foreign download status = %d, want 404", rr.Code)
 	}
 }
 
