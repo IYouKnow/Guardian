@@ -21,6 +21,21 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.4.0',
+    date: '2026-10-25',
+    summary: 'Per-user backups with per-user Google Drive mirroring, downloads, and a guided setup.',
+    changes: [
+      { kind: 'added', text: 'Per-user vault backups — every account can snapshot its own vault to the server, with a private history.' },
+      { kind: 'added', text: 'Google Drive mirroring per user: each account links its own Drive, and only its own snapshot is uploaded.' },
+      { kind: 'added', text: 'Download any snapshot as a .zip — admins across all accounts, users for their own vault.' },
+      { kind: 'added', text: 'Backup history gains search, status/source/Drive filters, and summary stats.' },
+      { kind: 'added', text: 'Settings -> Updates tab showing the running server version and release history.' },
+      { kind: 'improved', text: 'Settings -> Backups is now a single setup flow: enable backups, allow user backups, and configure the Google Drive client with the exact redirect URI to register.' },
+      { kind: 'improved', text: 'Sidebar split into Personal and Admin sections, with console routes under /admin.' },
+      { kind: 'security', text: 'Drive refresh tokens and backup keys are sealed at rest, and disconnecting revokes the Google grant.' },
+    ],
+  },
+  {
     version: '0.3.0',
     date: '2026-10-21',
     summary: 'Live platform data, telemetry, and scheduled backups.',
