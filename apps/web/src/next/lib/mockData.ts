@@ -76,31 +76,45 @@ export const currentAdmin = {
   lastLogin: '2 min ago · 203.0.113.42',
 };
 
-// Canonical console paths. `adminOnly` items are hidden from non-admin sessions
-// and their routes are gated by RequireAdmin. `backupAccess` items are visible
-// to any session that may reach backups (admins, or users when the operator has
-// enabled user backups).
+// Canonical console paths. The sidebar groups them into a Personal section
+// (every account's own area, including Backups) and an Admin section (platform
+// management, admins only).
 export interface NavItem {
   id: string;
   label: string;
   path: string;
   icon: string;
-  adminOnly: boolean;
-  backupAccess?: boolean;
 }
 
-export const navItems: NavItem[] = [
-  { id: 'overview', label: 'Overview', path: '/', icon: 'LayoutDashboard', adminOnly: true },
-  { id: 'users', label: 'Users', path: '/users', icon: 'Users', adminOnly: true },
-  { id: 'invitations', label: 'Invitations', path: '/invitations', icon: 'Mail', adminOnly: true },
-  { id: 'storage', label: 'Storage', path: '/storage', icon: 'Database', adminOnly: true },
-  { id: 'backups', label: 'Backups', path: '/backups', icon: 'Archive', adminOnly: true, backupAccess: true },
-  { id: 'settings', label: 'Settings', path: '/settings', icon: 'Settings', adminOnly: true },
-  { id: 'account', label: 'Account', path: '/account', icon: 'UserCircle', adminOnly: false },
+export interface NavSection {
+  id: 'personal' | 'admin';
+  label: string;
+  items: NavItem[];
+}
+
+const backupsItem: NavItem = { id: 'backups', label: 'Backups', path: '/backups', icon: 'Archive' };
+const accountItem: NavItem = { id: 'account', label: 'Account', path: '/account', icon: 'UserCircle' };
+
+const adminItems: NavItem[] = [
+  { id: 'overview', label: 'Overview', path: '/', icon: 'LayoutDashboard' },
+  { id: 'users', label: 'Users', path: '/users', icon: 'Users' },
+  { id: 'invitations', label: 'Invitations', path: '/invitations', icon: 'Mail' },
+  { id: 'storage', label: 'Storage', path: '/storage', icon: 'Database' },
+  { id: 'settings', label: 'Settings', path: '/settings', icon: 'Settings' },
 ];
 
-// navItemsFor resolves the items a session may see, given its role and whether
-// user backups are enabled.
-export function navItemsFor(isAdmin: boolean, canBackup: boolean): NavItem[] {
-  return navItems.filter((item) => (item.backupAccess ? canBackup : isAdmin || !item.adminOnly));
+// Flat list of every console path, for lookups such as the TopBar breadcrumb.
+export const navItems: NavItem[] = [...adminItems, backupsItem, accountItem];
+
+// navSectionsFor resolves the sidebar groups for a session. Personal holds the
+// account's own items — Backups (when the session may back up) and Account — and
+// the Admin section is added for admins.
+export function navSectionsFor(isAdmin: boolean, canBackup: boolean): NavSection[] {
+  const personal: NavItem[] = [];
+  if (canBackup) personal.push(backupsItem);
+  personal.push(accountItem);
+
+  const sections: NavSection[] = [{ id: 'personal', label: 'Personal', items: personal }];
+  if (isAdmin) sections.push({ id: 'admin', label: 'Admin', items: adminItems });
+  return sections;
 }

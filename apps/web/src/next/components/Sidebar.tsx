@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Lock, ChevronsLeft } from 'lucide-react';
-import { navItemsFor, platformMeta } from '@next/lib/mockData';
+import { navSectionsFor, platformMeta } from '@next/lib/mockData';
 import { useServerHealth } from '@next/lib/useServerHealth';
 import { Icon } from '@next/components/Icon';
 import { authApi } from '@/api/auth';
@@ -16,9 +16,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const [hovered, setHovered] = useState<string | null>(null);
   const { version } = useServerHealth();
-  // Admin-only items are hidden for non-admin sessions; Backups stays visible
-  // for users when the operator enabled user backups. Routes are gated too.
-  const items = navItemsFor(authApi.isAdmin(), authApi.canAccessBackups());
+  // Personal holds every account's own items; the Admin section is added for
+  // admins. Routes are gated by RequireAdmin / RequireBackupAccess as well.
+  const sections = navSectionsFor(authApi.isAdmin(), authApi.canAccessBackups());
 
   return (
     <aside
@@ -46,37 +46,45 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav */}
       <nav className="scrollbar-thin flex-1 overflow-y-auto py-4">
-        {!collapsed && <p className="text-eyebrow px-4 pb-3">Console</p>}
-        <div className={cn('space-y-px', collapsed ? 'px-2' : 'px-2')}>
-          {items.map((item) => {
-            const active = location.pathname === item.path;
-            return (
-              <NavLink
-                key={item.id}
-                to={item.path}
-                onMouseEnter={() => setHovered(item.id)}
-                onMouseLeave={() => setHovered(null)}
-                title={collapsed ? item.label : undefined}
-                className={cn(
-                  'group relative flex items-center gap-3 py-2 text-[13px] font-medium transition-colors duration-150',
-                  collapsed ? 'justify-center px-0' : 'px-2.5',
-                  active
-                    ? 'bg-sidebar-accent text-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
-                )}
-              >
-                {active && <span className="absolute left-0 top-0 h-full w-[2px] bg-primary" />}
-                <Icon name={item.icon} className={cn('h-[17px] w-[17px] shrink-0', active && 'text-primary')} />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-                {collapsed && hovered === item.id && (
-                  <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap border border-border bg-popover px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-popover-foreground">
-                    {item.label}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
-        </div>
+        {sections.map((section, index) => (
+          <div key={section.id} className={cn(index > 0 && 'mt-5')}>
+            {!collapsed ? (
+              <p className="text-eyebrow px-4 pb-3">{section.label}</p>
+            ) : (
+              index > 0 && <div className="mx-3 mb-3 border-t border-sidebar-border" />
+            )}
+            <div className="space-y-px px-2">
+              {section.items.map((item) => {
+                const active = location.pathname === item.path;
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    onMouseEnter={() => setHovered(item.id)}
+                    onMouseLeave={() => setHovered(null)}
+                    title={collapsed ? item.label : undefined}
+                    className={cn(
+                      'group relative flex items-center gap-3 py-2 text-[13px] font-medium transition-colors duration-150',
+                      collapsed ? 'justify-center px-0' : 'px-2.5',
+                      active
+                        ? 'bg-sidebar-accent text-foreground'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
+                    )}
+                  >
+                    {active && <span className="absolute left-0 top-0 h-full w-[2px] bg-primary" />}
+                    <Icon name={item.icon} className={cn('h-[17px] w-[17px] shrink-0', active && 'text-primary')} />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                    {collapsed && hovered === item.id && (
+                      <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap border border-border bg-popover px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-popover-foreground">
+                        {item.label}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Status footer */}

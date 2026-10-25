@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@next/components/ui/command';
-import { navItemsFor, users } from '@next/lib/mockData';
+import { navSectionsFor, users } from '@next/lib/mockData';
 import { Icon } from '@next/components/Icon';
 import { authApi } from '@/api/auth';
 import { Search, ArrowRight } from 'lucide-react';
@@ -14,7 +14,9 @@ interface CommandPaletteProps {
 export default function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const isAdmin = authApi.isAdmin();
-  const items = navItemsFor(isAdmin, authApi.canAccessBackups());
+  const sections = navSectionsFor(isAdmin, authApi.canAccessBackups());
+  // Continuous numbering across the sections.
+  const navOrder = new Map(sections.flatMap((s) => s.items).map((item, i) => [item.id, i + 1] as const));
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -38,15 +40,17 @@ export default function CommandPalette({ open, onOpenChange }: CommandPalettePro
       <CommandList className="max-h-[420px]">
         <CommandEmpty className="font-mono text-[11px] uppercase tracking-wider">No results found.</CommandEmpty>
 
-        <CommandGroup heading="Navigate">
-          {items.map((item, i) => (
-            <CommandItem key={item.id} onSelect={() => go(item.path)} className="gap-3 rounded-sm">
-              <span className="w-4 font-mono text-[10px] tabular-nums text-muted-foreground/50">{String(i + 1).padStart(2, '0')}</span>
-              <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
-              <span>{item.label}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
+        {sections.map((section) => (
+          <CommandGroup key={section.id} heading={section.label}>
+            {section.items.map((item) => (
+              <CommandItem key={item.id} onSelect={() => go(item.path)} className="gap-3 rounded-sm">
+                <span className="w-4 font-mono text-[10px] tabular-nums text-muted-foreground/50">{String(navOrder.get(item.id) ?? 0).padStart(2, '0')}</span>
+                <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
+                <span>{item.label}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
 
         {isAdmin && (
           <>
