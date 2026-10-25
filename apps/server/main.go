@@ -169,22 +169,26 @@ func main() {
 	mux.HandleFunc("PUT /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleUpdateSchedule))
 	mux.HandleFunc("DELETE /api/admin/backup-schedules/{id}", server.withAdminAuth(server.handleDeleteSchedule))
 
-	// User / Backups (own vault only; enabled by the users_can_backup setting)
+	// User / Backups (own vault only; enabled by the backups_enabled and
+	// users_can_backup settings)
 	mux.HandleFunc("GET /api/backups", server.withUserBackupAccess(server.handleListUserBackups))
 	mux.HandleFunc("POST /api/backups", server.withUserBackupAccess(server.handleCreateUserBackup))
 	mux.HandleFunc("DELETE /api/backups/{id}", server.withUserBackupAccess(server.handleDeleteUserBackup))
 	mux.HandleFunc("GET /api/backups/{id}/download", server.withUserBackupAccess(server.handleDownloadUserBackup))
 
-	// Admin / Remote backup destination (Google Drive)
-	mux.HandleFunc("GET /api/admin/backup-destination", server.withAdminAuth(server.handleGetBackupDestination))
-	mux.HandleFunc("PUT /api/admin/backup-destination", server.withAdminAuth(server.handleUpdateBackupDestination))
-	mux.HandleFunc("DELETE /api/admin/backup-destination", server.withAdminAuth(server.handleDeleteBackupDestination))
-	mux.HandleFunc("POST /api/admin/backup-destination/connect", server.withAdminAuth(server.handleStartGoogleOAuth))
-	// The operator-supplied Google OAuth client (Settings → Backup & Sync).
+	// Per-user Google Drive destination: every account links its own Drive, so a
+	// snapshot only ever leaves the host for the account that owns it.
+	mux.HandleFunc("GET /api/backups/destination", server.withUserBackupAccess(server.handleGetUserDestination))
+	mux.HandleFunc("PUT /api/backups/destination", server.withUserBackupAccess(server.handleUpdateUserDestination))
+	mux.HandleFunc("DELETE /api/backups/destination", server.withUserBackupAccess(server.handleDeleteUserDestination))
+	mux.HandleFunc("POST /api/backups/destination/connect", server.withUserBackupAccess(server.handleStartUserGoogleOAuth))
+	// Google's OAuth redirect target: authenticated by the state parameter, not a bearer token.
+	mux.HandleFunc("GET /api/backup-destination/google/callback", server.handleGoogleOAuthCallback)
+
+	// Admin / Google OAuth client (Settings → Backups). The per-user Drive
+	// destination itself is configured by each user under /api/backups/destination.
 	mux.HandleFunc("GET /api/admin/backup-destination/integration", server.withAdminAuth(server.handleGetBackupIntegration))
 	mux.HandleFunc("PUT /api/admin/backup-destination/integration", server.withAdminAuth(server.handleUpdateBackupIntegration))
-	// Google's OAuth redirect target: authenticated by the state parameter, not a bearer token.
-	mux.HandleFunc("GET /api/admin/backup-destination/google/callback", server.handleGoogleOAuthCallback)
 
 	// Vault Operations (Protected)
 	mux.HandleFunc("GET /vault/items", server.withUserAuth(server.handleListItems))

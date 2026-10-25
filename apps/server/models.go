@@ -71,18 +71,20 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	Token     string `json:"token"`
-	Username  string `json:"username"`
-	IsAdmin   bool   `json:"is_admin"`
-	CanBackup bool   `json:"can_backup"`
-	Salt      string `json:"salt"`
+	Token          string `json:"token"`
+	Username       string `json:"username"`
+	IsAdmin        bool   `json:"is_admin"`
+	CanBackup      bool   `json:"can_backup"`
+	BackupsEnabled bool   `json:"backups_enabled"`
+	Salt           string `json:"salt"`
 }
 
 type MeResponse struct {
-	ID        int    `json:"id"`
-	Username  string `json:"username"`
-	IsAdmin   bool   `json:"is_admin"`
-	CanBackup bool   `json:"can_backup"`
+	ID             int    `json:"id"`
+	Username       string `json:"username"`
+	IsAdmin        bool   `json:"is_admin"`
+	CanBackup      bool   `json:"can_backup"`
+	BackupsEnabled bool   `json:"backups_enabled"`
 }
 
 type VaultItem struct {

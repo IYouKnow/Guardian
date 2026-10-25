@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { adminApi, type BackupDestination, type BackupRecord, type BackupSchedule } from '@/api/admin';
-import { userBackupApi } from '@/api/backups';
+import { adminApi, type BackupRecord, type BackupSchedule } from '@/api/admin';
+import { userBackupApi, type BackupDestination } from '@/api/backups';
 
 export type BackupsVariant = 'personal' | 'admin';
 
@@ -14,8 +14,8 @@ export interface BackupsData {
 
 /**
  * Loads the data behind the Backups page. The `personal` variant reads the
- * caller's own vault snapshots; the `admin` variant reads the full history across
- * all users plus schedules and the Google Drive destination.
+ * caller's own vault snapshots plus their own Google Drive destination; the
+ * `admin` variant reads the full history across all users plus schedules.
  *
  * The requests settle independently and each payload is shape-checked, so a
  * single failure (an expired session, an old server without the routes) only
@@ -29,21 +29,17 @@ export function useBackupsData(variant: BackupsVariant): BackupsData {
 
   const load = useCallback(async () => {
     if (variant === 'personal') {
-      const [list] = await Promise.allSettled([userBackupApi.list()]);
+      const [list, dest] = await Promise.allSettled([userBackupApi.list(), userBackupApi.getDestination()]);
       if (list.status === 'fulfilled' && Array.isArray(list.value)) setBackups(list.value);
+      if (dest.status === 'fulfilled' && dest.value) setDestination(dest.value);
       setSchedules([]);
-      setDestination(null);
       return;
     }
 
-    const [list, sched, dest] = await Promise.allSettled([
-      adminApi.getBackups(),
-      adminApi.getSchedules(),
-      adminApi.getBackupDestination(),
-    ]);
+    const [list, sched] = await Promise.allSettled([adminApi.getBackups(), adminApi.getSchedules()]);
     if (list.status === 'fulfilled' && Array.isArray(list.value)) setBackups(list.value);
     if (sched.status === 'fulfilled' && Array.isArray(sched.value)) setSchedules(sched.value);
-    if (dest.status === 'fulfilled' && dest.value) setDestination(dest.value);
+    setDestination(null);
   }, [variant]);
 
   useEffect(() => {

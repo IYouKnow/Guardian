@@ -105,9 +105,10 @@ func initSystemDB(path string) (*sql.DB, error) {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE IF NOT EXISTS remote_destinations (
+	CREATE TABLE IF NOT EXISTS user_destinations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		provider TEXT NOT NULL UNIQUE,
+		provider TEXT NOT NULL,
+		owner_id INTEGER NOT NULL,
 		account_email TEXT NOT NULL DEFAULT '',
 		folder_name TEXT NOT NULL DEFAULT '',
 		folder_id TEXT NOT NULL DEFAULT '',
@@ -116,7 +117,8 @@ func initSystemDB(path string) (*sql.DB, error) {
 		enabled INTEGER NOT NULL DEFAULT 1,
 		connected_at DATETIME,
 		last_sync DATETIME,
-		last_error TEXT NOT NULL DEFAULT ''
+		last_error TEXT NOT NULL DEFAULT '',
+		UNIQUE(provider, owner_id)
 	);
 	`
 	_, err = db.Exec(query)
@@ -134,7 +136,9 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("ALTER TABLE backups ADD COLUMN remote_error TEXT NOT NULL DEFAULT ''")
 	// owner_id scopes a backup to one user (NULL = server-wide, admin backups).
 	db.Exec("ALTER TABLE backups ADD COLUMN owner_id INTEGER")
-	db.Exec("ALTER TABLE remote_destinations ADD COLUMN backup_key_enc TEXT NOT NULL DEFAULT ''")
+	// The server-wide Google Drive destination was replaced by per-user
+	// destinations (user_destinations); its single-row table is gone.
+	db.Exec("DROP TABLE IF EXISTS remote_destinations")
 
 	db.Exec(`
 		CREATE TABLE IF NOT EXISTS server_settings (
@@ -143,7 +147,9 @@ func initSystemDB(path string) (*sql.DB, error) {
 		)
 	`)
 	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('max_ws_per_ip_default', '0')")
+	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('backups_enabled', '0')")
 	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('users_can_backup', '0')")
+	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('public_url', '')")
 
 	return db, err
 }

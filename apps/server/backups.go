@@ -223,12 +223,13 @@ func (s *Server) createBackup(trigger string, scheduleID *int, ownerID *int) (Ba
 	}
 
 	// Decide the remote upload before inserting so the row carries its initial
-	// status: an enabled Drive destination makes it 'pending' until the
-	// background upload finishes. Per-user snapshots stay local.
+	// status: an enabled per-user Drive destination makes it 'pending' until the
+	// background upload finishes. Server-wide snapshots are never uploaded —
+	// Drive mirroring is per-user.
 	uploadRemote := false
-	if zipErr == nil && ownerID == nil {
+	if zipErr == nil && ownerID != nil {
 		var status, errMsg string
-		uploadRemote, status, errMsg = s.remotePlan()
+		uploadRemote, status, errMsg = s.remotePlanFor(*ownerID)
 		rec.RemoteStatus = status
 		rec.RemoteError = errMsg
 	}
@@ -251,7 +252,7 @@ func (s *Server) createBackup(trigger string, scheduleID *int, ownerID *int) (Ba
 	// Upload off the request path: the HTTP WriteTimeout is 30s and a Drive
 	// upload of a full snapshot can exceed it.
 	if uploadRemote {
-		go s.uploadBackup(id, dest, rec.Filename)
+		go s.uploadBackup(id, *ownerID, dest, rec.Filename)
 	}
 
 	stored, err := s.backupByID(id)
@@ -358,6 +359,16 @@ func (s *Server) usersCanBackup() bool {
 	return v == "1"
 }
 
+// backupsEnabled reports whether the operator has turned the backups feature on.
+// While it is off, the pages are hidden and snapshots are refused.
+func (s *Server) backupsEnabled() bool {
+	var v string
+	if err := s.systemDB.QueryRow("SELECT value FROM server_settings WHERE key = 'backups_enabled'").Scan(&v); err != nil {
+		return false
+	}
+	return v == "1"
+}
+
 // handleListUserBackups returns the caller's own snapshots, newest first.
 func (s *Server) handleListUserBackups(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(int)
@@ -366,6 +377,10 @@ func (s *Server) handleListUserBackups(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateUserBackup snapshots only the caller's vault database.
 func (s *Server) handleCreateUserBackup(w http.ResponseWriter, r *http.Request) {
+	if !s.backupsEnabled() {
+		http.Error(w, "Backups are disabled", http.StatusConflict)
+		return
+	}
 	userID := r.Context().Value(userIDKey).(int)
 
 	rec, err := s.createBackup("manual", nil, &userID)
@@ -415,6 +430,10 @@ func (s *Server) handleDeleteUserBackup(w http.ResponseWriter, r *http.Request) 
 
 // handleCreateBackup runs an on-demand server-wide snapshot.
 func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
+	if !s.backupsEnabled() {
+		http.Error(w, "Backups are disabled", http.StatusConflict)
+		return
+	}
 	rec, err := s.createBackup("manual", nil, nil)
 	if err != nil {
 		s.logger.Println("handleCreateBackup:", err)

@@ -46,10 +46,18 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// can_backup reflects the operator's "Allow users to create backups" setting:
-	// it gates the personal (own-vault) backups view for every account, admins
-	// included. Admin access to the server-wide view is conveyed by is_admin.
-	writeJSON(w, http.StatusOK, MeResponse{ID: id, Username: username, IsAdmin: isAdmin, CanBackup: s.usersCanBackup()})
+	// backups_enabled is the master switch for the whole feature. can_backup is
+	// the effective gate for the personal (own-vault) view: the master switch AND
+	// the operator's "Allow users to create backups" setting. Admin access to the
+	// server-wide view is conveyed by is_admin.
+	backupsEnabled := s.backupsEnabled()
+	writeJSON(w, http.StatusOK, MeResponse{
+		ID:             id,
+		Username:       username,
+		IsAdmin:        isAdmin,
+		CanBackup:      backupsEnabled && s.usersCanBackup(),
+		BackupsEnabled: backupsEnabled,
+	})
 }
 
 func (s *Server) handleValidateInvite(w http.ResponseWriter, r *http.Request) {
@@ -374,5 +382,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.recordActivity(req.Username, "signed in", "", "auth")
 	s.recordTraffic(0, 0, 1)
 
-	writeJSON(w, http.StatusOK, AuthResponse{Token: token, Username: req.Username, IsAdmin: isAdmin, CanBackup: s.usersCanBackup(), Salt: salt})
+	writeJSON(w, http.StatusOK, AuthResponse{
+		Token:          token,
+		Username:       req.Username,
+		IsAdmin:        isAdmin,
+		CanBackup:      s.backupsEnabled() && s.usersCanBackup(),
+		BackupsEnabled: s.backupsEnabled(),
+		Salt:           salt,
+	})
 }

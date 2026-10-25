@@ -130,7 +130,7 @@ func (s *Server) withUserBackupAccess(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !s.usersCanBackup() {
+		if !s.backupsEnabled() || !s.usersCanBackup() {
 			http.Error(w, "User backups are disabled", http.StatusForbidden)
 			return
 		}

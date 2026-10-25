@@ -27,6 +27,13 @@ func enableUserBackups(t *testing.T, s *Server) {
 	}
 }
 
+func enableBackups(t *testing.T, s *Server) {
+	t.Helper()
+	if _, err := s.systemDB.Exec("UPDATE server_settings SET value = '1' WHERE key = 'backups_enabled'"); err != nil {
+		t.Fatalf("enable backups: %v", err)
+	}
+}
+
 func createUserBackup(t *testing.T, s *Server, userID int) BackupRecord {
 	t.Helper()
 	rr := httptest.NewRecorder()
@@ -196,8 +203,20 @@ func TestHandleMeReportsCanBackup(t *testing.T) {
 		t.Fatal("can_backup should be false while the setting is off")
 	}
 
+	// The user-level setting alone is not enough: the master switch must be on.
 	enableUserBackups(t, s)
+	if meOnce().CanBackup {
+		t.Fatal("can_backup should stay false while backups are disabled overall")
+	}
+	if meOnce().BackupsEnabled {
+		t.Fatal("backups_enabled should be false before the master switch is on")
+	}
+
+	enableBackups(t, s)
 	if !meOnce().CanBackup {
-		t.Fatal("can_backup should be true once the setting is on")
+		t.Fatal("can_backup should be true once both settings are on")
+	}
+	if !meOnce().BackupsEnabled {
+		t.Fatal("backups_enabled should be true once the master switch is on")
 	}
 }

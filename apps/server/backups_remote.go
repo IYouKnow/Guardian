@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,26 +36,36 @@ import (
 const (
 	googleDriveProvider     = "google_drive"
 	googleDriveFolderName   = "Guardian Backups"
-	googleDriveCallbackPath = "/api/admin/backup-destination/google/callback"
+	googleDriveCallbackPath = "/api/backup-destination/google/callback"
 	googleDriveUploadSuffix = ".enc"
+	// googleRevokeEndpoint withdraws a user's grant when they disconnect.
+	googleRevokeEndpoint = "https://oauth2.googleapis.com/revoke"
 )
 
 // remoteUploadTimeout bounds a single background upload to Google Drive.
 const remoteUploadTimeout = 30 * time.Minute
 
+// googleRevokeURL is where a disconnect withdraws the grant. It is a variable so
+// tests can point it at a stub instead of reaching Google.
+var googleRevokeURL = googleRevokeEndpoint
+
 // The Google OAuth client is a server setting, not a build-time constant: the
-// operator creates their own Desktop-app client and enters its ID and secret in
-// Settings → Backup & Sync. Keeping it out of the source means no confidential
-// secret ships inside every deployed binary.
+// operator creates their own **Web application** client and enters its ID and
+// secret in Settings → Backups. Keeping it out of the source means no
+// confidential secret ships inside every deployed binary.
 //
 // A secret is required: Google's token endpoint rejects a secretless PKCE
 // exchange with `invalid_request: client_secret is missing`, for both the initial
-// code exchange and refreshes. Register the client as type **Desktop app** with
-// the drive.file scope and no redirect URIs (Desktop clients accept any loopback
-// port).
+// code exchange and refreshes. Because every user links their own Drive from
+// their own browser, the client must be a Web application with the callback
+// registered as an authorized redirect URI — a Desktop client only permits
+// loopback redirects, which resolve to the user's own machine. Google rejects
+// raw-IP and plain-HTTP redirect URIs, so a real domain over HTTPS is required
+// (it may point at a LAN address).
 const (
 	googleClientIDSetting     = "google_drive_client_id"
 	googleClientSecretSetting = "google_drive_client_secret_enc"
+	publicURLSetting          = "public_url"
 )
 
 // minClientSecretLength is a sanity check that the operator pasted a real Google
@@ -301,12 +312,12 @@ type destinationRow struct {
 	LastError       string
 }
 
-func (s *Server) loadDestinationRow() (destinationRow, bool, error) {
+func (s *Server) loadUserDestinationRow(ownerID int) (destinationRow, bool, error) {
 	var row destinationRow
 	err := s.systemDB.QueryRow(`
 		SELECT account_email, folder_name, folder_id, refresh_token_enc, backup_key_enc, enabled, connected_at, last_sync, last_error
-		FROM remote_destinations WHERE provider = ?
-	`, googleDriveProvider).Scan(
+		FROM user_destinations WHERE provider = ? AND owner_id = ?
+	`, googleDriveProvider, ownerID).Scan(
 		&row.AccountEmail, &row.FolderName, &row.FolderID, &row.RefreshTokenEnc, &row.BackupKeyEnc,
 		&row.Enabled, &row.ConnectedAt, &row.LastSync, &row.LastError,
 	)
@@ -319,9 +330,9 @@ func (s *Server) loadDestinationRow() (destinationRow, bool, error) {
 	return row, true, nil
 }
 
-// destinationStatus builds the client-facing view. It reports whether uploads are
-// encrypted (a backup key is set) but never returns the key itself.
-func (s *Server) destinationStatus() (RemoteDestination, error) {
+// userDestinationStatus builds the client-facing view for one user. It reports
+// whether uploads are encrypted (a backup key is set) but never returns the key.
+func (s *Server) userDestinationStatus(ownerID int) (RemoteDestination, error) {
 	out := RemoteDestination{Provider: googleDriveProvider}
 
 	clientID, clientSecret, err := s.googleClientCredentials()
@@ -330,7 +341,7 @@ func (s *Server) destinationStatus() (RemoteDestination, error) {
 	}
 	out.ClientConfigured = clientID != "" && clientSecret != ""
 
-	row, ok, err := s.loadDestinationRow()
+	row, ok, err := s.loadUserDestinationRow(ownerID)
 	if err != nil {
 		return out, err
 	}
@@ -356,60 +367,60 @@ func (s *Server) destinationStatus() (RemoteDestination, error) {
 	return out, nil
 }
 
-// saveDestinationConnected records (or replaces) the connected Drive account. An
-// empty backupKeyEnc preserves a key from a previous connection, so reconnecting
-// never silently downgrades an encrypted destination.
-func (s *Server) saveDestinationConnected(email, folderName, folderID, refreshTokenEnc, backupKeyEnc string) error {
+// saveUserDestinationConnected records (or replaces) one user's connected Drive
+// account. An empty backupKeyEnc preserves a key from a previous connection, so
+// reconnecting never silently downgrades an encrypted destination.
+func (s *Server) saveUserDestinationConnected(ownerID int, email, folderName, folderID, refreshTokenEnc, backupKeyEnc string) error {
 	_, err := s.systemDB.Exec(`
-		INSERT INTO remote_destinations (provider, account_email, folder_name, folder_id, refresh_token_enc, backup_key_enc, enabled, connected_at)
-		VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-		ON CONFLICT(provider) DO UPDATE SET
+		INSERT INTO user_destinations (provider, owner_id, account_email, folder_name, folder_id, refresh_token_enc, backup_key_enc, enabled, connected_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+		ON CONFLICT(provider, owner_id) DO UPDATE SET
 			account_email = excluded.account_email,
 			folder_name = excluded.folder_name,
 			folder_id = excluded.folder_id,
 			refresh_token_enc = excluded.refresh_token_enc,
-			backup_key_enc = CASE WHEN excluded.backup_key_enc = '' THEN remote_destinations.backup_key_enc ELSE excluded.backup_key_enc END,
+			backup_key_enc = CASE WHEN excluded.backup_key_enc = '' THEN user_destinations.backup_key_enc ELSE excluded.backup_key_enc END,
 			enabled = 1,
 			connected_at = CURRENT_TIMESTAMP,
 			last_error = ''
-	`, googleDriveProvider, email, folderName, folderID, refreshTokenEnc, backupKeyEnc)
+	`, googleDriveProvider, ownerID, email, folderName, folderID, refreshTokenEnc, backupKeyEnc)
 	return err
 }
 
-func (s *Server) setDestinationEnabled(enabled bool) error {
+func (s *Server) setUserDestinationEnabled(ownerID int, enabled bool) error {
 	val := 0
 	if enabled {
 		val = 1
 	}
-	_, err := s.systemDB.Exec("UPDATE remote_destinations SET enabled = ? WHERE provider = ?", val, googleDriveProvider)
+	_, err := s.systemDB.Exec("UPDATE user_destinations SET enabled = ? WHERE provider = ? AND owner_id = ?", val, googleDriveProvider, ownerID)
 	return err
 }
 
-func (s *Server) clearDestination() error {
-	_, err := s.systemDB.Exec("DELETE FROM remote_destinations WHERE provider = ?", googleDriveProvider)
+func (s *Server) clearUserDestination(ownerID int) error {
+	_, err := s.systemDB.Exec("DELETE FROM user_destinations WHERE provider = ? AND owner_id = ?", googleDriveProvider, ownerID)
 	return err
 }
 
-// setDestinationSync records the outcome of an upload on the destination row.
-func (s *Server) setDestinationSync(lastErr string) {
+// setUserDestinationSync records the outcome of an upload on one user's row.
+func (s *Server) setUserDestinationSync(ownerID int, lastErr string) {
 	if lastErr == "" {
 		if _, err := s.systemDB.Exec(
-			"UPDATE remote_destinations SET last_sync = CURRENT_TIMESTAMP, last_error = '' WHERE provider = ?",
-			googleDriveProvider,
+			"UPDATE user_destinations SET last_sync = CURRENT_TIMESTAMP, last_error = '' WHERE provider = ? AND owner_id = ?",
+			googleDriveProvider, ownerID,
 		); err != nil {
-			s.logger.Println("setDestinationSync:", err)
+			s.logger.Println("setUserDestinationSync:", err)
 		}
 		return
 	}
 	if _, err := s.systemDB.Exec(
-		"UPDATE remote_destinations SET last_error = ? WHERE provider = ?", lastErr, googleDriveProvider,
+		"UPDATE user_destinations SET last_error = ? WHERE provider = ? AND owner_id = ?", lastErr, googleDriveProvider, ownerID,
 	); err != nil {
-		s.logger.Println("setDestinationSync:", err)
+		s.logger.Println("setUserDestinationSync:", err)
 	}
 }
 
-func (s *Server) destinationRefreshToken() (string, bool, error) {
-	row, ok, err := s.loadDestinationRow()
+func (s *Server) userDestinationRefreshToken(ownerID int) (string, bool, error) {
+	row, ok, err := s.loadUserDestinationRow(ownerID)
 	if err != nil {
 		return "", false, err
 	}
@@ -458,10 +469,10 @@ func sanitizeFolderName(name string) string {
 	return name
 }
 
-// destinationBackupKey returns the operator's archive key, decrypted, when one is
+// userDestinationBackupKey returns one user's archive key, decrypted, when one is
 // set. ok is false when no key is configured (uploads stay unencrypted).
-func (s *Server) destinationBackupKey() (string, bool, error) {
-	row, ok, err := s.loadDestinationRow()
+func (s *Server) userDestinationBackupKey(ownerID int) (string, bool, error) {
+	row, ok, err := s.loadUserDestinationRow(ownerID)
 	if err != nil {
 		return "", false, err
 	}
@@ -477,39 +488,40 @@ func (s *Server) destinationBackupKey() (string, bool, error) {
 
 // --- Remote upload ---
 
-// remoteUploader uploads an already-encrypted snapshot to the destination. It is
-// an interface so tests can inject a fake.
+// remoteUploader uploads an already-encrypted snapshot to one user's
+// destination. It is an interface so tests can inject a fake.
 type remoteUploader interface {
-	Upload(ctx context.Context, name string, body io.Reader) error
+	Upload(ctx context.Context, ownerID int, name string, body io.Reader) error
 }
 
-// remotePlan decides whether a freshly-created snapshot should be uploaded. A
-// destination that is absent, disabled, or disconnected means no upload.
-func (s *Server) remotePlan() (upload bool, status, errMsg string) {
+// remotePlanFor decides whether a freshly-created snapshot owned by ownerID
+// should be uploaded. A destination that is absent, disabled, or disconnected
+// means no upload.
+func (s *Server) remotePlanFor(ownerID int) (upload bool, status, errMsg string) {
 	if s.remote == nil {
 		return false, "", ""
 	}
-	if _, ok, err := s.destinationRefreshToken(); err != nil || !ok {
+	if _, ok, err := s.userDestinationRefreshToken(ownerID); err != nil || !ok {
 		return false, "", ""
 	}
-	row, ok, err := s.loadDestinationRow()
+	row, ok, err := s.loadUserDestinationRow(ownerID)
 	if err != nil || !ok || !row.Enabled {
 		return false, "", ""
 	}
 	return true, "pending", ""
 }
 
-// uploadBackup pushes the finished snapshot to the destination — encrypting it
-// first only when the operator has set a backup key — then records the outcome.
+// uploadBackup pushes one user's finished snapshot to their destination —
+// encrypting it first only when they set a backup key — then records the outcome.
 // It runs in the background so the HTTP request that triggered the snapshot is
 // not held open for the whole upload.
-func (s *Server) uploadBackup(backupID int64, archivePath, filename string) {
+func (s *Server) uploadBackup(backupID int64, ownerID int, archivePath, filename string) {
 	ctx, cancel := context.WithTimeout(context.Background(), remoteUploadTimeout)
 	defer cancel()
 
 	f, err := os.Open(archivePath)
 	if err != nil {
-		s.finishUpload(backupID, err)
+		s.finishUpload(backupID, ownerID, err)
 		return
 	}
 	defer f.Close()
@@ -517,13 +529,13 @@ func (s *Server) uploadBackup(backupID int64, archivePath, filename string) {
 	name := filename
 	var body io.Reader = f
 
-	if key, ok, err := s.destinationBackupKey(); err != nil {
-		s.finishUpload(backupID, err)
+	if key, ok, err := s.userDestinationBackupKey(ownerID); err != nil {
+		s.finishUpload(backupID, ownerID, err)
 		return
 	} else if ok {
 		encrypted, err := encryptArchive(key, f)
 		if err != nil {
-			s.finishUpload(backupID, err)
+			s.finishUpload(backupID, ownerID, err)
 			return
 		}
 		// Closing the read end unblocks the encoder goroutine if the upload aborts.
@@ -534,14 +546,14 @@ func (s *Server) uploadBackup(backupID int64, archivePath, filename string) {
 		name = filename + googleDriveUploadSuffix
 	}
 
-	if err := s.remote.Upload(ctx, name, body); err != nil {
-		s.finishUpload(backupID, err)
+	if err := s.remote.Upload(ctx, ownerID, name, body); err != nil {
+		s.finishUpload(backupID, ownerID, err)
 		return
 	}
-	s.finishUpload(backupID, nil)
+	s.finishUpload(backupID, ownerID, nil)
 }
 
-func (s *Server) finishUpload(backupID int64, uploadErr error) {
+func (s *Server) finishUpload(backupID int64, ownerID int, uploadErr error) {
 	status := "uploaded"
 	msg := ""
 	if uploadErr != nil {
@@ -554,16 +566,16 @@ func (s *Server) finishUpload(backupID int64, uploadErr error) {
 	); err != nil {
 		s.logger.Println("finishUpload: update backup row:", err)
 	}
-	s.setDestinationSync(msg)
+	s.setUserDestinationSync(ownerID, msg)
 	s.sseHub.BroadcastAll("backup_updated")
 }
 
 // driveUploader implements remoteUploader against the Google Drive REST API,
-// resolving the stored refresh token and folder at upload time.
+// resolving the owner's stored refresh token and folder at upload time.
 type driveUploader struct{ server *Server }
 
-func (u *driveUploader) Upload(ctx context.Context, name string, body io.Reader) error {
-	refreshToken, ok, err := u.server.destinationRefreshToken()
+func (u *driveUploader) Upload(ctx context.Context, ownerID int, name string, body io.Reader) error {
+	refreshToken, ok, err := u.server.userDestinationRefreshToken(ownerID)
 	if err != nil {
 		return err
 	}
@@ -571,7 +583,7 @@ func (u *driveUploader) Upload(ctx context.Context, name string, body io.Reader)
 		return errors.New("google drive is not connected")
 	}
 
-	row, ok, err := u.server.loadDestinationRow()
+	row, ok, err := u.server.loadUserDestinationRow(ownerID)
 	if err != nil {
 		return err
 	}
@@ -579,7 +591,7 @@ func (u *driveUploader) Upload(ctx context.Context, name string, body io.Reader)
 		return errors.New("google drive backup folder is not set")
 	}
 
-	conf, err := u.server.googleOAuthConfig()
+	conf, err := u.server.googleOAuthConfig(u.server.oauthRedirectURL(nil))
 	if err != nil {
 		return err
 	}
@@ -666,15 +678,43 @@ func randomURLToken(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// googleRedirectURL is the loopback callback registered on the bundled client.
-// Google permits any loopback port for Desktop clients, so the server's port is
-// enough — no per-install redirect configuration is needed.
-func (s *Server) googleRedirectURL() string {
-	port := s.config.Port
-	if port == "" {
-		port = "8080"
+// publicURL returns the operator-set base URL (trailing slashes trimmed), or "".
+func (s *Server) publicURL() string {
+	var v string
+	if err := s.systemDB.QueryRow("SELECT value FROM server_settings WHERE key = ?", publicURLSetting).Scan(&v); err != nil {
+		return ""
 	}
-	return fmt.Sprintf("http://127.0.0.1:%s%s", port, googleDriveCallbackPath)
+	return strings.TrimRight(strings.TrimSpace(v), "/")
+}
+
+// oauthRedirectURL resolves the callback Google sends the browser back to. It
+// prefers the operator-set public URL; otherwise it derives the scheme and host
+// from the incoming request (honouring a trusted X-Forwarded-Proto). The value
+// must exactly match an authorized redirect URI on the Web-application client.
+//
+// A nil request (a background token refresh, which never sends a redirect URI)
+// falls back to loopback.
+func (s *Server) oauthRedirectURL(r *http.Request) string {
+	if base := s.publicURL(); base != "" {
+		return base + googleDriveCallbackPath
+	}
+
+	scheme := "http"
+	host := ""
+	if r != nil {
+		if s.requestIsHTTPS(r) {
+			scheme = "https"
+		}
+		host = r.Host
+	}
+	if host == "" {
+		port := s.config.Port
+		if port == "" {
+			port = "8080"
+		}
+		host = "127.0.0.1:" + port
+	}
+	return fmt.Sprintf("%s://%s%s", scheme, host, googleDriveCallbackPath)
 }
 
 // googleClientCredentials returns the operator-supplied Google OAuth client. The
@@ -727,7 +767,7 @@ func (s *Server) saveGoogleClient(clientID, clientSecret string) error {
 
 // googleOAuthConfig builds the OAuth config from the stored client, or reports
 // that the operator has not configured one yet.
-func (s *Server) googleOAuthConfig() (*oauth2.Config, error) {
+func (s *Server) googleOAuthConfig(redirectURL string) (*oauth2.Config, error) {
 	clientID, clientSecret, err := s.googleClientCredentials()
 	if err != nil {
 		return nil, err
@@ -738,30 +778,32 @@ func (s *Server) googleOAuthConfig() (*oauth2.Config, error) {
 	return &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		RedirectURL:  s.googleRedirectURL(),
+		RedirectURL:  redirectURL,
 		Scopes:       []string{drive.DriveFileScope},
 		Endpoint:     google.Endpoint,
 	}, nil
 }
 
-// handleGetBackupDestination returns the current destination status.
-func (s *Server) handleGetBackupDestination(w http.ResponseWriter, r *http.Request) {
-	dest, err := s.destinationStatus()
+// handleGetUserDestination returns the caller's own destination status.
+func (s *Server) handleGetUserDestination(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
+	dest, err := s.userDestinationStatus(userID)
 	if err != nil {
-		s.logger.Println("handleGetBackupDestination:", err)
+		s.logger.Println("handleGetUserDestination:", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, dest)
 }
 
-// handleStartGoogleOAuth records the destination settings (an optional backup key
-// and folder name) and returns the Google consent URL for the admin to open. The
+// handleStartUserGoogleOAuth records the caller's destination settings (an
+// optional backup key and folder name) and returns the Google consent URL. The
 // settings body is optional.
-func (s *Server) handleStartGoogleOAuth(w http.ResponseWriter, r *http.Request) {
-	conf, err := s.googleOAuthConfig()
+func (s *Server) handleStartUserGoogleOAuth(w http.ResponseWriter, r *http.Request) {
+	conf, err := s.googleOAuthConfig(s.oauthRedirectURL(r))
 	if err != nil {
-		http.Error(w, "Configure your Google OAuth client in Settings first", http.StatusServiceUnavailable)
+		http.Error(w, "Google Drive is not configured on this server yet", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -825,7 +867,7 @@ func (s *Server) handleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reques
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	conf, err := s.googleOAuthConfig()
+	conf, err := s.googleOAuthConfig(s.oauthRedirectURL(r))
 	if err != nil {
 		s.logger.Println("google oauth config:", err)
 		s.redirectGoogleResult(w, r, "error", "not_configured")
@@ -883,7 +925,7 @@ func (s *Server) handleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if err := s.saveDestinationConnected(email, folderName, folderID, encToken, encKey); err != nil {
+	if err := s.saveUserDestinationConnected(pending.userID, email, folderName, folderID, encToken, encKey); err != nil {
 		s.logger.Println("save destination:", err)
 		s.redirectGoogleResult(w, r, "error", "store_failed")
 		return
@@ -893,10 +935,18 @@ func (s *Server) handleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reques
 	s.redirectGoogleResult(w, r, "connected", "")
 }
 
-// handleDeleteBackupDestination disconnects the destination.
-func (s *Server) handleDeleteBackupDestination(w http.ResponseWriter, r *http.Request) {
-	if err := s.clearDestination(); err != nil {
-		s.logger.Println("handleDeleteBackupDestination:", err)
+// handleDeleteUserDestination disconnects the caller's destination and withdraws
+// the Google grant, so Guardian no longer holds access to their Drive.
+func (s *Server) handleDeleteUserDestination(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
+	// Best-effort revoke before dropping the stored token.
+	if token, ok, err := s.userDestinationRefreshToken(userID); err == nil && ok {
+		s.revokeGoogleToken(token)
+	}
+
+	if err := s.clearUserDestination(userID); err != nil {
+		s.logger.Println("handleDeleteUserDestination:", err)
 		http.Error(w, "Failed to disconnect", http.StatusInternalServerError)
 		return
 	}
@@ -904,9 +954,11 @@ func (s *Server) handleDeleteBackupDestination(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleUpdateBackupDestination toggles the destination. Enabling requires a
-// connected account.
-func (s *Server) handleUpdateBackupDestination(w http.ResponseWriter, r *http.Request) {
+// handleUpdateUserDestination toggles the caller's destination. Enabling requires
+// a connected account.
+func (s *Server) handleUpdateUserDestination(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(int)
+
 	var req struct {
 		Enabled *bool `json:"enabled"`
 	}
@@ -919,7 +971,7 @@ func (s *Server) handleUpdateBackupDestination(w http.ResponseWriter, r *http.Re
 	}
 
 	if *req.Enabled {
-		row, ok, err := s.loadDestinationRow()
+		row, ok, err := s.loadUserDestinationRow(userID)
 		if err != nil {
 			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
@@ -930,8 +982,8 @@ func (s *Server) handleUpdateBackupDestination(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if err := s.setDestinationEnabled(*req.Enabled); err != nil {
-		s.logger.Println("handleUpdateBackupDestination:", err)
+	if err := s.setUserDestinationEnabled(userID, *req.Enabled); err != nil {
+		s.logger.Println("handleUpdateUserDestination:", err)
 		http.Error(w, "Failed to update destination", http.StatusInternalServerError)
 		return
 	}
@@ -942,7 +994,7 @@ func (s *Server) handleUpdateBackupDestination(w http.ResponseWriter, r *http.Re
 	}
 	s.recordActivity(s.actorName(r), action, "", "backup")
 
-	dest, err := s.destinationStatus()
+	dest, err := s.userDestinationStatus(userID)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -950,13 +1002,82 @@ func (s *Server) handleUpdateBackupDestination(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, dest)
 }
 
+// revokeGoogleToken withdraws Guardian's access to the user's Drive. Best-effort:
+// a failure is logged but never blocks the local disconnect.
+func (s *Server) revokeGoogleToken(token string) {
+	if googleRevokeURL == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	body := url.Values{"token": {token}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, googleRevokeURL, strings.NewReader(body))
+	if err != nil {
+		s.logger.Println("revokeGoogleToken: build request:", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.logger.Println("revokeGoogleToken:", err)
+		return
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		s.logger.Println("revokeGoogleToken: unexpected status", resp.StatusCode)
+	}
+}
+
 // backupIntegrationView is the client-facing view of the stored Google client.
-// The secret itself is never returned — only whether one is stored.
-func backupIntegrationView(clientID, clientSecret string) map[string]any {
+// The secret itself is never returned — only whether one is stored. The redirect
+// URI is the exact value the operator must register on the Web-application
+// client, derived the same way the OAuth flow will use it.
+func (s *Server) backupIntegrationView(r *http.Request, clientID, clientSecret string) map[string]any {
 	return map[string]any{
 		"client_id":                clientID,
 		"client_secret_configured": clientSecret != "",
+		"public_url":               s.publicURL(),
+		"redirect_uri":             s.oauthRedirectURL(r),
 	}
+}
+
+// savePublicURL stores the operator's public base URL. An empty value clears it,
+// so the redirect goes back to being derived from each request.
+func (s *Server) savePublicURL(v string) error {
+	_, err := s.systemDB.Exec(`
+		INSERT INTO server_settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, publicURLSetting, strings.TrimSpace(v))
+	return err
+}
+
+// validatePublicURL enforces the part of Google's redirect-URI rules the operator
+// controls here, so a misconfiguration fails at save time rather than as an
+// opaque redirect_uri_mismatch at consent time. The path is ignored — the
+// callback path is appended.
+func validatePublicURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("enter an absolute URL such as https://guardian.example.com")
+	}
+	host := u.Hostname()
+	loopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
+	if loopback {
+		return nil
+	}
+	if net.ParseIP(host) != nil {
+		return errors.New("Google rejects raw IP addresses — use a domain name")
+	}
+	if u.Scheme != "https" {
+		return errors.New("Google requires HTTPS — use an https:// URL")
+	}
+	return nil
 }
 
 // handleGetBackupIntegration reports the operator-supplied Google OAuth client.
@@ -967,27 +1088,26 @@ func (s *Server) handleGetBackupIntegration(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, backupIntegrationView(clientID, clientSecret))
+	writeJSON(w, http.StatusOK, s.backupIntegrationView(r, clientID, clientSecret))
 }
 
 type backupIntegrationRequest struct {
 	ClientID     string  `json:"client_id"`
 	ClientSecret *string `json:"client_secret"`
+	PublicURL    *string `json:"public_url"`
 }
 
-// handleUpdateBackupIntegration stores the operator-supplied Google OAuth client.
-// An omitted or empty secret leaves the stored one untouched, so the console never
-// has to round-trip the value.
+// handleUpdateBackupIntegration stores the operator-supplied Google OAuth client
+// and, when given, the public URL. An empty client ID leaves the stored client
+// untouched (so the public URL can be saved on its own), and an omitted or empty
+// secret leaves the stored one untouched, so the console never has to round-trip
+// the value.
 func (s *Server) handleUpdateBackupIntegration(w http.ResponseWriter, r *http.Request) {
 	var req backupIntegrationRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	clientID := strings.TrimSpace(req.ClientID)
-	if clientID == "" {
-		http.Error(w, "A client ID is required", http.StatusBadRequest)
-		return
-	}
 	clientSecret := ""
 	if req.ClientSecret != nil {
 		clientSecret = strings.TrimSpace(*req.ClientSecret)
@@ -996,20 +1116,43 @@ func (s *Server) handleUpdateBackupIntegration(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
-
-	if err := s.saveGoogleClient(clientID, clientSecret); err != nil {
-		s.logger.Println("handleUpdateBackupIntegration:", err)
-		http.Error(w, "Failed to save the Google client", http.StatusInternalServerError)
+	if clientID == "" && clientSecret != "" {
+		http.Error(w, "A client ID is required alongside the secret", http.StatusBadRequest)
 		return
 	}
-	s.recordActivity(s.actorName(r), "updated the Google OAuth client", "", "backup")
+	if clientID == "" && req.PublicURL == nil {
+		http.Error(w, "Nothing to update", http.StatusBadRequest)
+		return
+	}
+	if req.PublicURL != nil {
+		if err := validatePublicURL(strings.TrimSpace(*req.PublicURL)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if clientID != "" {
+		if err := s.saveGoogleClient(clientID, clientSecret); err != nil {
+			s.logger.Println("handleUpdateBackupIntegration:", err)
+			http.Error(w, "Failed to save the Google client", http.StatusInternalServerError)
+			return
+		}
+		s.recordActivity(s.actorName(r), "updated the Google OAuth client", "", "backup")
+	}
+	if req.PublicURL != nil {
+		if err := s.savePublicURL(*req.PublicURL); err != nil {
+			s.logger.Println("handleUpdateBackupIntegration: save public url:", err)
+			http.Error(w, "Failed to save the public URL", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	storedID, storedSecret, err := s.googleClientCredentials()
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, backupIntegrationView(storedID, storedSecret))
+	writeJSON(w, http.StatusOK, s.backupIntegrationView(r, storedID, storedSecret))
 }
 
 // redirectGoogleResult sends the browser back to the console with an outcome.

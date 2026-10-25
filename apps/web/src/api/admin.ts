@@ -70,28 +70,13 @@ export interface BackupRecord {
     created_at: string;
 }
 
-export interface BackupDestination {
-    provider: string;
-    connected: boolean;
-    enabled: boolean;
-    account_email: string;
-    folder_name: string;
-    folder_id: string;
-    connected_at: string | null;
-    last_sync: string | null;
-    last_error: string;
-    encrypted: boolean;
-    client_configured: boolean;
-}
-
 export interface BackupIntegration {
     client_id: string;
     client_secret_configured: boolean;
-}
-
-export interface BackupDestinationSettings {
-    backup_key?: string;
-    folder_name?: string;
+    public_url: string;
+    // The exact value to register as an authorized redirect URI on the Google
+    // Web-application client; derived the same way the OAuth flow uses it.
+    redirect_uri: string;
 }
 
 export interface BackupSchedule {
@@ -235,31 +220,12 @@ export const adminApi = {
         await apiClient.delete(`/api/admin/backup-schedules/${id}`);
     },
 
-    async getBackupDestination(): Promise<BackupDestination> {
-        const response = await apiClient.get<BackupDestination>('/api/admin/backup-destination');
-        return response.data;
-    },
-
-    async setBackupDestination(enabled: boolean): Promise<BackupDestination> {
-        const response = await apiClient.put<BackupDestination>('/api/admin/backup-destination', { enabled });
-        return response.data;
-    },
-
-    async startGoogleOAuth(settings: BackupDestinationSettings = {}): Promise<{ auth_url: string }> {
-        const response = await apiClient.post<{ auth_url: string }>('/api/admin/backup-destination/connect', settings);
-        return response.data;
-    },
-
-    async disconnectBackupDestination(): Promise<void> {
-        await apiClient.delete('/api/admin/backup-destination');
-    },
-
     async getBackupIntegration(): Promise<BackupIntegration> {
         const response = await apiClient.get<BackupIntegration>('/api/admin/backup-destination/integration');
         return response.data;
     },
 
-    async updateBackupIntegration(data: { client_id: string; client_secret?: string }): Promise<BackupIntegration> {
+    async updateBackupIntegration(data: { client_id: string; client_secret?: string; public_url?: string }): Promise<BackupIntegration> {
         const response = await apiClient.put<BackupIntegration>('/api/admin/backup-destination/integration', data);
         return response.data;
     },

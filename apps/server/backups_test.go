@@ -23,6 +23,13 @@ func newBackupTestServer(t *testing.T) (*Server, int) {
 	s, id := newTestServer(t, "ACTIVE", 0)
 	s.config.DataDir = t.TempDir()
 
+	// The create handlers refuse to run while the feature is off.
+	if _, err := s.systemDB.Exec(
+		"INSERT INTO server_settings (key, value) VALUES ('backups_enabled','1') ON CONFLICT(key) DO UPDATE SET value = '1'",
+	); err != nil {
+		t.Fatalf("enable backups: %v", err)
+	}
+
 	for _, name := range []string{"system.db", "alice.db"} {
 		if err := os.WriteFile(filepath.Join(s.config.DataDir, name), []byte("sqlite-ish bytes"), 0o644); err != nil {
 			t.Fatalf("seed %s: %v", name, err)
@@ -43,6 +50,45 @@ func createBackupViaHandler(t *testing.T, s *Server) BackupRecord {
 		t.Fatalf("decode create: %v", err)
 	}
 	return rec
+}
+
+// createUserBackupViaHandler snapshots the given user's own vault, as the
+// personal backups page does.
+func createUserBackupViaHandler(t *testing.T, s *Server, userID int) BackupRecord {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/backups", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDKey, userID))
+	s.handleCreateUserBackup(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create user backup status = %d, want 201", rr.Code)
+	}
+	var rec BackupRecord
+	if err := json.NewDecoder(rr.Body).Decode(&rec); err != nil {
+		t.Fatalf("decode user create: %v", err)
+	}
+	return rec
+}
+
+func TestCreateBackupRefusedWhileDisabled(t *testing.T) {
+	s, _ := newBackupTestServer(t)
+	if _, err := s.systemDB.Exec("UPDATE server_settings SET value = '0' WHERE key = 'backups_enabled'"); err != nil {
+		t.Fatalf("disable backups: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	s.handleCreateBackup(rr, httptest.NewRequest(http.MethodPost, "/api/admin/backups", nil))
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("admin create while disabled = %d, want 409", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/backups", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDKey, 1))
+	s.handleCreateUserBackup(rr, req)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("user create while disabled = %d, want 409", rr.Code)
+	}
 }
 
 func listBackups(t *testing.T, s *Server, query string) []BackupRecord {

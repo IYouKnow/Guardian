@@ -19,7 +19,7 @@ import { CHANGELOG, KIND_LABELS, KIND_STYLES, LATEST_VERSION, type Release } fro
 import { useServerHealth } from '@next/lib/useServerHealth';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
-import { Check, Loader2, Lock, Package, RotateCw, Save } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Info, Loader2, Lock, Package, RotateCw, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const themeLabels: Record<string, string> = {
@@ -192,69 +192,7 @@ function PlatformInfoPanel() {
   );
 }
 
-// Whether non-admin users may back up their own vault. When enabled, the
-// Backups page opens for them with a scoped, own-vault-only view.
-function UserBackupsSettings() {
-  const [enabled, setEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await adminApi.getSettings();
-      setEnabled(data.users_can_backup === '1');
-    } catch {
-      toast.error('Failed to load the backup settings');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const toggle = async (next: boolean) => {
-    const previous = enabled;
-    setEnabled(next);
-    setSaving(true);
-    try {
-      await adminApi.updateSetting('users_can_backup', next ? '1' : '0');
-      toast.success(next ? 'User backups enabled' : 'User backups disabled');
-    } catch {
-      setEnabled(previous);
-      toast.error('Failed to update the setting');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Section title="User backups" subtitle="Let non-admin users back up their own data">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-[13px] font-medium text-foreground">Allow users to create backups</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Each user can snapshot their own vault on this server. Their history is private and never
-            includes other accounts' data. Admins are unaffected.
-          </p>
-        </div>
-        <Switch checked={enabled} disabled={loading || saving} onCheckedChange={toggle} />
-      </div>
-    </Section>
-  );
-}
-
-// Numbered setup guide for the Google OAuth client, shown above the form.
-const GOOGLE_SETUP_STEPS: ReactNode[] = [
-  <>In the Google Cloud Console, create (or pick) a project and enable the <span className="text-foreground">Google Drive API</span>.</>,
-  <>Create an OAuth client of type <span className="text-foreground">Desktop app</span> — not <span className="text-foreground">Web application</span>.</>,
-  <>On the <span className="text-foreground">OAuth consent screen</span>, add the scope <code className="font-mono text-[11px] text-foreground">https://www.googleapis.com/auth/drive.file</code> and publish the app (it is non-sensitive, so Google requires no review).</>,
-  <>Paste the <span className="text-foreground">Client ID</span> and <span className="text-foreground">Client secret</span> below, then Save.</>,
-  <>Open <span className="text-foreground">Backups</span> and click <span className="text-foreground">Connect Google Drive</span> to approve access.</>,
-];
-
+// Numbered setup guide, shown above the Google Drive form.
 function SetupSteps({ steps }: { steps: ReactNode[] }) {
   return (
     <ol className="space-y-2.5 border border-border bg-background/50 p-4">
@@ -268,25 +206,41 @@ function SetupSteps({ steps }: { steps: ReactNode[] }) {
   );
 }
 
-// Operator-supplied Google OAuth client used by the Backups page to connect
-// Google Drive. The secret is write-only: the API reports only whether one is
-// stored, never its value.
-function GoogleBackupSettings() {
+// The whole backups feature is configured here: the master switch, whether users
+// may back up their own vault, and the Google Drive client that powers per-user
+// offsite copies. It reads as a top-to-bottom setup flow that ends fully working.
+function BackupsTab() {
+  const [loading, setLoading] = useState(true);
+  const [savingMaster, setSavingMaster] = useState(false);
+  const [savingUsers, setSavingUsers] = useState(false);
+  const [savingDrive, setSavingDrive] = useState(false);
+
+  const [masterEnabled, setMasterEnabled] = useState(false);
+  const [usersCanBackup, setUsersCanBackup] = useState(false);
+
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
-  const [configured, setConfigured] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [secretConfigured, setSecretConfigured] = useState(false);
+  const [publicUrl, setPublicUrl] = useState('');
+  const [redirectUri, setRedirectUri] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminApi.getBackupIntegration();
-      setClientId(data.client_id);
-      setConfigured(data.client_secret_configured);
+      const [settings, integration] = await Promise.all([
+        adminApi.getSettings(),
+        adminApi.getBackupIntegration(),
+      ]);
+      setMasterEnabled(settings.backups_enabled === '1');
+      setUsersCanBackup(settings.users_can_backup === '1');
+      setClientId(integration.client_id);
+      setSecretConfigured(integration.client_secret_configured);
+      setPublicUrl(integration.public_url);
+      setRedirectUri(integration.redirect_uri);
       setClientSecret('');
     } catch {
-      toast.error('Failed to load the Google backup settings');
+      toast.error('Failed to load the backup settings');
     } finally {
       setLoading(false);
     }
@@ -296,81 +250,212 @@ function GoogleBackupSettings() {
     load();
   }, [load]);
 
-  const save = async () => {
+  const toggle = async (key: 'backups_enabled' | 'users_can_backup', next: boolean) => {
+    const save = key === 'backups_enabled' ? setSavingMaster : setSavingUsers;
+    const setLocal = key === 'backups_enabled' ? setMasterEnabled : setUsersCanBackup;
+    const previous = key === 'backups_enabled' ? masterEnabled : usersCanBackup;
+    const onMessage = key === 'backups_enabled'
+      ? (next ? 'Backups enabled' : 'Backups disabled')
+      : (next ? 'User backups enabled' : 'User backups disabled');
+
+    setLocal(next);
+    save(true);
+    try {
+      await adminApi.updateSetting(key, next ? '1' : '0');
+      toast.success(onMessage);
+    } catch {
+      setLocal(previous);
+      toast.error('Failed to update the setting');
+    } finally {
+      save(false);
+    }
+  };
+
+  const saveDrive = async () => {
     if (!clientId.trim()) {
       toast.error('A client ID is required');
       return;
     }
-    setSaving(true);
+    setSavingDrive(true);
     try {
       const secret = clientSecret.trim();
-      const data = await adminApi.updateBackupIntegration(
-        secret ? { client_id: clientId.trim(), client_secret: secret } : { client_id: clientId.trim() },
-      );
-      setConfigured(data.client_secret_configured);
+      const data = await adminApi.updateBackupIntegration({
+        client_id: clientId.trim(),
+        ...(secret ? { client_secret: secret } : {}),
+        public_url: publicUrl.trim(),
+      });
+      setClientId(data.client_id);
+      setSecretConfigured(data.client_secret_configured);
+      setPublicUrl(data.public_url);
+      setRedirectUri(data.redirect_uri);
       setClientSecret('');
-      toast.success('Google client saved');
+      toast.success('Google Drive settings saved');
     } catch (error) {
       const err = error as { response?: { data?: unknown } };
-      toast.error(typeof err.response?.data === 'string' ? err.response.data : 'Failed to save the Google client');
+      toast.error(typeof err.response?.data === 'string' ? err.response.data : 'Failed to save the Google Drive settings');
     } finally {
-      setSaving(false);
+      setSavingDrive(false);
     }
   };
 
+  const copyRedirect = async () => {
+    try {
+      await navigator.clipboard.writeText(redirectUri);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Could not copy — select the URI manually');
+    }
+  };
+
+  const driveReady = secretConfigured && !!redirectUri;
+
+  const chips = [
+    { label: 'Backups', value: masterEnabled ? 'Enabled' : 'Disabled', ok: masterEnabled },
+    { label: 'User vaults', value: usersCanBackup ? 'Allowed' : 'Admins only', ok: usersCanBackup },
+    { label: 'Google Drive', value: driveReady ? 'Ready' : 'Not set up', ok: driveReady },
+  ];
+
+  const steps: ReactNode[] = [
+    <>In the Google Cloud Console, create (or pick) a project and enable the <span className="text-foreground">Google Drive API</span>.</>,
+    <>On the <span className="text-foreground">OAuth consent screen</span>, add the scope <code className="font-mono text-[11px] text-foreground">https://www.googleapis.com/auth/drive.file</code> and publish the app (it is non-sensitive, so Google requires no review).</>,
+    <>Create an OAuth client of type <span className="text-foreground">Web application</span>.</>,
+    <>Add the <span className="text-foreground">authorized redirect URI</span> shown above, then paste the <span className="text-foreground">Client ID</span> and <span className="text-foreground">Client secret</span> below and Save.</>,
+    <>Each user then opens <span className="text-foreground">Backups</span> and clicks <span className="text-foreground">Connect Google Drive</span> to link their own account.</>,
+  ];
+
+  const outlineBtn = 'h-9 rounded-sm border-border bg-transparent font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground';
+  const saveBtn = 'h-9 gap-1.5 rounded-sm bg-primary font-mono text-[11px] uppercase tracking-wider text-primary-foreground hover:bg-primary/90';
+
   return (
-    <Section title="Google Drive" subtitle="OAuth client used to upload snapshots">
-      <div className="space-y-4">
-        <div>
-          <p className="text-eyebrow mb-3">Setup steps</p>
-          <SetupSteps steps={GOOGLE_SETUP_STEPS} />
+    <>
+      <Section title="Backups" subtitle="Turn the feature on or off">
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[13px] font-medium text-foreground">Enable backups</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                While this is off the Backups pages are hidden and the server refuses new snapshots.
+              </p>
+            </div>
+            <Switch checked={masterEnabled} disabled={loading || savingMaster} onCheckedChange={(v) => toggle('backups_enabled', v)} />
+          </div>
+
+          {!masterEnabled && (
+            <div className="flex items-start gap-2.5 border border-amber-500/35 bg-amber-500/[0.06] p-3.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <p className="text-xs text-muted-foreground">Backups are off. The admin Backups page shows a warning, and the personal Backups page does not appear in the navigation at all.</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-px border border-border bg-border">
+            {chips.map((c) => (
+              <div key={c.label} className="flex flex-1 items-center gap-2.5 bg-card p-3.5">
+                <span className={cn('h-1.5 w-1.5 shrink-0', c.ok ? 'bg-emerald-400' : 'bg-muted-foreground/40')} />
+                <div className="min-w-0">
+                  <p className="text-eyebrow">{c.label}</p>
+                  <p className="truncate text-[12px] font-medium text-foreground">{c.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-eyebrow">Client ID</Label>
-          <Input
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            disabled={loading}
-            placeholder="1234567890-abc.apps.googleusercontent.com"
-            className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
-          />
+      </Section>
+
+      {masterEnabled && (
+        <Section title="User backups" subtitle="Let non-admin users back up their own data">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[13px] font-medium text-foreground">Allow users to create backups</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Each user can snapshot their own vault on this server. Their history is private and never
+                includes other accounts' data.
+              </p>
+            </div>
+            <Switch checked={usersCanBackup} disabled={loading || savingUsers} onCheckedChange={(v) => toggle('users_can_backup', v)} />
+          </div>
+        </Section>
+      )}
+
+      <Section title="Google Drive" subtitle="Optional offsite copy — one Drive per user">
+        <div className="space-y-4">
+          <div className="flex items-start gap-2.5 border border-amber-500/35 bg-amber-500/[0.06] p-3.5">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <div>
+              <p className="text-[13px] font-medium text-foreground">A domain over HTTPS is required</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Users sign in to Google from their own browsers, and Google rejects raw IP addresses and plain
+                HTTP for that redirect. Guardian must be reachable at a real domain — though it never has to be
+                public: pointing the domain at a LAN address with a DNS-01 certificate works.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-eyebrow">Public URL</Label>
+            <Input
+              value={publicUrl}
+              onChange={(e) => setPublicUrl(e.target.value)}
+              disabled={loading}
+              placeholder="https://guardian.example.com"
+              className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
+            />
+            <p className="font-mono text-[10px] text-muted-foreground">Leave empty to derive it from the address users visit.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-eyebrow">Authorized redirect URI</Label>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={redirectUri} className="h-9 rounded-sm border-border bg-background font-mono text-[12px]" />
+              <Button variant="outline" onClick={copyRedirect} className={cn(outlineBtn, 'shrink-0 gap-1.5')}>
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <p className="font-mono text-[10px] text-muted-foreground">Register this exact value on the Web-application client.</p>
+          </div>
+
+          <div>
+            <p className="text-eyebrow mb-3">Google Cloud Console</p>
+            <SetupSteps steps={steps} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-eyebrow">Client ID</Label>
+            <Input
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              disabled={loading}
+              placeholder="1234567890-abc.apps.googleusercontent.com"
+              className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-eyebrow">Client secret</Label>
+            <Input
+              type="password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              disabled={loading}
+              placeholder={secretConfigured ? '•••••••• stored — leave blank to keep' : 'Paste the client secret'}
+              className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
+            />
+            <p className="font-mono text-[10px] text-muted-foreground">
+              {secretConfigured ? 'A secret is stored, sealed at rest. It is never displayed; enter a new one to replace it.' : 'Not set yet.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button onClick={saveDrive} disabled={savingDrive || loading} className={saveBtn}>
+              {savingDrive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save
+            </Button>
+            <Button variant="outline" onClick={load} disabled={loading} className={outlineBtn}>
+              <RotateCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            </Button>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-eyebrow">Client secret</Label>
-          <Input
-            type="password"
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            disabled={loading}
-            placeholder={configured ? '•••••••• stored — leave blank to keep' : 'Paste the client secret'}
-            className="h-9 rounded-sm border-border bg-background font-mono text-[12px]"
-          />
-          <p className="font-mono text-[10px] text-muted-foreground">
-            {configured ? 'A secret is stored, sealed at rest. It is never displayed; enter a new one to replace it.' : 'Not set yet.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={save}
-            disabled={saving || loading}
-            className="h-9 gap-1.5 rounded-sm bg-primary font-mono text-[11px] uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save
-          </Button>
-          <Button
-            variant="outline"
-            onClick={load}
-            disabled={loading}
-            className="h-9 rounded-sm border-border bg-transparent font-mono text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
-          >
-            <RotateCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-          </Button>
-        </div>
-        <p className="font-mono text-[10px] text-muted-foreground">
-          Leave the redirect URIs empty — Desktop clients accept any loopback port.
-        </p>
-      </div>
-    </Section>
+      </Section>
+    </>
   );
 }
 
@@ -491,7 +576,6 @@ function UpdatesPanel() {
 export default function Settings() {
   const { mode, setTheme, accentColor, setAccentColor } = useTheme();
   const [twoFactor, setTwoFactor] = useState(true);
-  const [autoBackup, setAutoBackup] = useState(true);
 
   const swatchTheme = consoleThemeClass(mode);
 
@@ -577,15 +661,12 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="backup" className="space-y-5">
-          <UserBackupsSettings />
-
-          <GoogleBackupSettings />
+          <BackupsTab />
         </TabsContent>
 
         <TabsContent value="security" className="space-y-5">
           <Section title="Security & access">
             <Row label="Two-factor authentication" desc="Require 2FA for all admin accounts." control={<Switch checked={twoFactor} onCheckedChange={setTwoFactor} />} />
-            <Row label="Automatic backups" desc="Run scheduled backups on connected providers." control={<Switch checked={autoBackup} onCheckedChange={setAutoBackup} />} />
             <Row label="Encryption at rest" desc="AES-256 encryption for all stored vault data." control={<span className="border border-emerald-500/35 bg-emerald-500/[0.08] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-emerald-400">Enabled</span>} />
             <Row label="Audit logging" desc="Record all admin actions for compliance." control={<span className="border border-emerald-500/35 bg-emerald-500/[0.08] px-2 py-[3px] font-mono text-[10px] uppercase tracking-wider text-emerald-400">Enabled</span>} />
           </Section>

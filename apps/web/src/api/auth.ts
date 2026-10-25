@@ -10,6 +10,7 @@ export interface AuthResponse {
     username: string;
     is_admin: boolean;
     can_backup: boolean;
+    backups_enabled: boolean;
 }
 
 export interface MeResponse {
@@ -17,6 +18,7 @@ export interface MeResponse {
     username: string;
     is_admin: boolean;
     can_backup: boolean;
+    backups_enabled: boolean;
 }
 
 export interface RegisterRequest {
@@ -40,6 +42,7 @@ export const authApi = {
             username: response.data.username,
             is_admin: response.data.is_admin,
             can_backup: response.data.can_backup,
+            backups_enabled: response.data.backups_enabled,
         }));
 
         return response.data;
@@ -72,6 +75,7 @@ export const authApi = {
             username: response.data.username,
             is_admin: response.data.is_admin,
             can_backup: response.data.can_backup,
+            backups_enabled: response.data.backups_enabled,
         }));
         return response.data;
     },
@@ -101,6 +105,13 @@ export const authApi = {
     canBackup(): boolean {
         const user = this.getStoredUser();
         return !!user?.can_backup;
+    },
+
+    // The master switch for the whole backups feature. While it is off the
+    // server refuses snapshots and the pages show a "not configured" state.
+    backupsEnabled(): boolean {
+        const user = this.getStoredUser();
+        return !!user?.backups_enabled;
     },
 
     getToken(): string | null {
