@@ -34,39 +34,6 @@ export const invitations = [
   { id: 'i7', email: 'design@guardian.io', role: 'user', plan: 'Pro', sentTo: 'Mia Castell', status: 'accepted', sent: '2026-10-08', expires: '2026-10-15', invitedBy: 'Sofia Andersson' },
 ];
 
-export const storageOverview = {
-  totalAllocated: 1200, // TB
-  totalUsed: 847, // TB
-  byType: [
-    { name: 'Documents', value: 312, color: 'var(--chart-1)' },
-    { name: 'Media', value: 268, color: 'var(--chart-2)' },
-    { name: 'Backups', value: 184, color: 'var(--chart-3)' },
-    { name: 'Archives', value: 56, color: 'var(--chart-4)' },
-    { name: 'Other', value: 27, color: 'var(--chart-5)' },
-  ],
-  growth: [
-    { month: 'May', used: 612 },
-    { month: 'Jun', used: 658 },
-    { month: 'Jul', used: 701 },
-    { month: 'Aug', used: 742 },
-    { month: 'Sep', used: 803 },
-    { month: 'Oct', used: 847 },
-  ],
-};
-
-export const perUserQuotas = [
-  { id: 'q1', name: 'Elena Vasquez', plan: 'Enterprise', used: 184, quota: 1024, pct: 18 },
-  { id: 'q2', name: 'Isabella Rossi', plan: 'Enterprise', used: 210, quota: 1024, pct: 21 },
-  { id: 'q3', name: 'Amara Diallo', plan: 'Team', used: 142, quota: 500, pct: 28 },
-  { id: 'q4', name: 'Priya Nair', plan: 'Team', used: 96, quota: 500, pct: 19 },
-  { id: 'q5', name: 'Sofia Andersson', plan: 'Pro', used: 78, quota: 200, pct: 39 },
-  { id: 'q6', name: 'Marcus Chen', plan: 'Pro', used: 42, quota: 200, pct: 21 },
-  { id: 'q7', name: 'Diego Fernandez', plan: 'Pro', used: 67, quota: 200, pct: 34 },
-  { id: 'q8', name: 'Hannah Kim', plan: 'Pro', used: 54, quota: 200, pct: 27 },
-  { id: 'q9', name: 'Noah Schmidt', plan: 'Free', used: 3.4, quota: 5, pct: 68 },
-  { id: 'q10', name: 'James Okonkwo', plan: 'Free', used: 1.2, quota: 5, pct: 24 },
-];
-
 export const currentAdmin = {
   name: 'Elena Vasquez',
   email: 'elena.v@guardian.io',

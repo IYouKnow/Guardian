@@ -15,7 +15,7 @@ import {
 } from '@next/lib/appearance';
 import { adminApi, type PlatformInfo } from '@/api/admin';
 import { authApi } from '@/api/auth';
-import { formatUptime } from '@next/lib/format';
+import { formatBytes, formatUptime } from '@next/lib/format';
 import { CHANGELOG, KIND_LABELS, KIND_STYLES, LATEST_VERSION, type Release } from '@next/lib/changelog';
 import { useServerHealth } from '@next/lib/useServerHealth';
 import { toast } from 'sonner';
@@ -189,6 +189,116 @@ function PlatformInfoPanel() {
           </div>
         ))}
       </div>
+    </Section>
+  );
+}
+
+// Storage denominator for the Storage page: an admin-set allocation, or the
+// data volume's real capacity when disk mode is selected.
+function StorageSettings() {
+  const [allocationGB, setAllocationGB] = useState('0');
+  const [diskMode, setDiskMode] = useState(false);
+  const [disk, setDisk] = useState<{ total: number; free: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingAlloc, setSavingAlloc] = useState(false);
+  const [savingDisk, setSavingDisk] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [settings, storage] = await Promise.all([adminApi.getSettings(), adminApi.getStorage()]);
+      setAllocationGB(settings.storage_allocation_gb ?? '0');
+      setDiskMode(settings.storage_capacity_source === 'disk');
+      setDisk({ total: storage.disk_total, free: storage.disk_free });
+      setForbidden(false);
+    } catch (error) {
+      const err = error as { response?: { status?: number } };
+      if (err.response?.status === 403) setForbidden(true);
+      else toast.error('Failed to load storage settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const saveAllocation = async () => {
+    setSavingAlloc(true);
+    try {
+      await adminApi.updateSetting('storage_allocation_gb', allocationGB || '0');
+      toast.success('Storage allocation updated');
+    } catch {
+      toast.error('Failed to save the allocation');
+    } finally {
+      setSavingAlloc(false);
+    }
+  };
+
+  const toggleDisk = async (next: boolean) => {
+    const previous = diskMode;
+    setDiskMode(next);
+    setSavingDisk(true);
+    try {
+      await adminApi.updateSetting('storage_capacity_source', next ? 'disk' : 'allocation');
+      toast.success(next ? 'Using full disk capacity' : 'Using configured allocation');
+    } catch {
+      setDiskMode(previous);
+      toast.error('Failed to update the setting');
+    } finally {
+      setSavingDisk(false);
+    }
+  };
+
+  if (forbidden) {
+    return (
+      <Section title="Storage" subtitle="Capacity denominator for the Storage page">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" /> Admin access required to view storage settings.
+        </div>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="Storage" subtitle="Capacity denominator for the Storage page">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[13px] font-medium text-foreground">Use full disk capacity</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {disk && disk.total > 0
+              ? `Show used against the data volume's ${formatBytes(disk.total)} (${formatBytes(disk.free)} free) instead of the configured allocation.`
+              : 'Show used against the data volume capacity instead of the configured allocation. Disk stats are unavailable on this platform, so the allocation is used.'}
+          </p>
+        </div>
+        <Switch checked={diskMode} disabled={loading || savingDisk} onCheckedChange={toggleDisk} />
+      </div>
+
+      <div className={cn('mt-4 flex flex-wrap items-end gap-3', diskMode && 'opacity-50')}>
+        <div className="space-y-1.5">
+          <Label className="text-eyebrow">Allocation (GB)</Label>
+          <Input
+            type="number"
+            min="0"
+            value={allocationGB}
+            onChange={(e) => setAllocationGB(e.target.value)}
+            disabled={loading || diskMode}
+            className="h-9 w-32 rounded-sm border-border bg-background text-center font-mono text-[13px]"
+          />
+        </div>
+        <Button
+          onClick={saveAllocation}
+          disabled={savingAlloc || loading || diskMode}
+          className="h-9 gap-1.5 rounded-sm bg-primary font-mono text-[11px] uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+        >
+          {savingAlloc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save
+        </Button>
+      </div>
+      <p className="mt-3 font-mono text-[10px] text-muted-foreground">
+        0 = no denominator (the Storage page shows measured usage only).
+      </p>
     </Section>
   );
 }
@@ -664,6 +774,8 @@ export default function Settings() {
 
         <TabsContent value="server" className="space-y-5">
           <ServerSettings />
+
+          <StorageSettings />
 
           <PlatformInfoPanel />
         </TabsContent>

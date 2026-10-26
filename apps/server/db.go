@@ -150,6 +150,10 @@ func initSystemDB(path string) (*sql.DB, error) {
 	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('backups_enabled', '0')")
 	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('users_can_backup', '0')")
 	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('public_url', '')")
+	// Storage denominator: an admin-set allocation in GB, or the real data-volume
+	// capacity when storage_capacity_source is 'disk'.
+	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('storage_allocation_gb', '0')")
+	db.Exec("INSERT OR IGNORE INTO server_settings (key, value) VALUES ('storage_capacity_source', 'allocation')")
 
 	return db, err
 }

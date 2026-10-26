@@ -54,6 +54,38 @@ export interface TrafficPoint {
     signins: number;
 }
 
+export interface StorageBreakdownItem {
+    name: string;
+    bytes: number;
+}
+
+export interface StorageUser {
+    id: number;
+    username: string;
+    friendly_name: string;
+    role: string;
+    status: string;
+    db_bytes: number;
+    overhead_bytes: number;
+    total_bytes: number;
+}
+
+export interface StorageGrowthPoint {
+    month: string;
+    bytes: number;
+}
+
+export interface StorageOverview {
+    total_used: number;
+    allocation_bytes: number;
+    capacity_source: 'allocation' | 'disk';
+    disk_total: number;
+    disk_free: number;
+    breakdown: StorageBreakdownItem[];
+    users: StorageUser[];
+    growth: StorageGrowthPoint[];
+}
+
 export interface BackupRecord {
     id: number;
     filename: string;
@@ -174,6 +206,11 @@ export const adminApi = {
 
     async getTraffic(days = 7): Promise<TrafficPoint[]> {
         const response = await apiClient.get<TrafficPoint[]>('/api/admin/traffic', { params: { days } });
+        return response.data;
+    },
+
+    async getStorage(): Promise<StorageOverview> {
+        const response = await apiClient.get<StorageOverview>('/api/admin/storage');
         return response.data;
     },
 

@@ -158,6 +158,7 @@ func main() {
 	mux.HandleFunc("GET /api/admin/platform", server.withAdminAuth(server.handlePlatformInfo))
 	mux.HandleFunc("GET /api/admin/activity", server.withAdminAuth(server.handleListActivity))
 	mux.HandleFunc("GET /api/admin/traffic", server.withAdminAuth(server.handleTraffic))
+	mux.HandleFunc("GET /api/admin/storage", server.withAdminAuth(server.handleStorage))
 
 	// Admin / Backups
 	mux.HandleFunc("GET /api/admin/backups", server.withAdminAuth(server.handleListBackups))

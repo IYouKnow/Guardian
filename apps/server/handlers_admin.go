@@ -255,17 +255,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("handleListUsers: processing user %d (%s)", u.ID, u.Username)
 
 		// Calculate used space (doesn't require opening DB)
-		var dbSize, overheadSize int64
-		userDBPath := filepath.Join(s.config.DataDir, u.DBPath)
-		s.logger.Printf("handleListUsers: checking file size at %s", userDBPath)
-		if info, err := os.Stat(userDBPath); err == nil {
-			dbSize = info.Size()
-		}
-		for _, suffix := range []string{"-wal", "-shm"} {
-			if info, err := os.Stat(userDBPath + suffix); err == nil {
-				overheadSize += info.Size()
-			}
-		}
+		dbSize, overheadSize := fileSizes(filepath.Join(s.config.DataDir, u.DBPath))
 
 		users = append(users, AdminUserResponse{
 			ID:                u.ID,
